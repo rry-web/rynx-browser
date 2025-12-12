@@ -1,0 +1,13 @@
+[package]
+name = "rynx_browser"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+reqwest = { version = "0.12", features = ["blocking", "rustls-tls", "gzip", "brotli", "deflate"] }
+html2md = "0.2"
+ratatui = "0.29"
+crossterm = "0.28"
+tokio = { version = "1", features = ["full"] } # Added Tokio
+regex = "1"
+url = "2.5"
