@@ -34,6 +34,7 @@ cargo run
 | :--- | :--- |
 | **`e`** | Enter **Edit Mode** to type a URL or search query. |
 | **`p`** | Toggle **I2P Mode** (Routes traffic via local proxy `127.0.0.1:4444`). |
+| **`v`** | Toggle Page Source View. |
 | **`q`** | Quit the browser. |
 
 ### Edit Mode (URL Bar)
@@ -54,8 +55,9 @@ _Active after pressing `e`_
 ## Roadmap
 
 This is a hobby project, but I'm interested in:
-1. Finishing my i2pd integration implementation.
-2. Adding integration support for Model Context Protocol as a workaround to the lack of javascript.
+1. Finishing my i2pd integration implementation. 
+    (Done! Just run i2pd first and then activate proxy mode in Rynx)
+2. Adding integration support for Model Context Protocol as a workaround to the lack of javascript. 
 3. Adding clipboard support so you can copy and paste, especially into the address bar.
 4. Having some support for displaying images and downloading videos, though I'm not entirely sure in what form factor yet.
 
