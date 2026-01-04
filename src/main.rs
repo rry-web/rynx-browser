@@ -204,6 +204,15 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                                 let tab = app.current_tab();
                                 if !tab.link_regions.is_empty() {
                                     tab.selected_link_index = (tab.selected_link_index + 1) % tab.link_regions.len();
+                                    // AUTOSCROLL
+                                    let selected = &tab.link_regions[tab.selected_link_index];
+                                    let viewport_height = size.height.saturating_sub(6) as usize; // Adjust based on your UI chunks
+
+                                    if selected.line_index < tab.scroll {
+                                        tab.scroll = selected.line_index;
+                                    } else if selected.line_index >= tab.scroll + viewport_height {
+                                        tab.scroll = selected.line_index - viewport_height + 1;
+                                    }
                                 }
                             }
 

@@ -50,12 +50,33 @@ pub fn ui(f: &mut Frame, app: &App) {
     let total_lines = active_tab.rendered_content.len();
     let end_index = (start_index + content_area_height).min(total_lines);
 
-    let viewport_content = if start_index < total_lines {
+    let mut viewport_content = if start_index < total_lines {
         active_tab.rendered_content[start_index..end_index].to_vec()
     } else {
         Vec::new()
     };
-
+    if !active_tab.link_regions.is_empty() {
+        let selected_link = &active_tab.link_regions[active_tab.selected_link_index];
+        
+        // Only apply highlight if the selected link is in the current scroll view
+        if selected_link.line_index >= start_index && selected_link.line_index < end_index {
+            let relative_line_idx = selected_link.line_index - start_index;
+            let line = &mut viewport_content[relative_line_idx];
+            
+            // Find the spans that fall within the x_start and x_end of the selected link
+            let mut current_x = 0;
+            for span in line.spans.iter_mut() {
+                let span_width = span.width();
+                let span_end = current_x + span_width;
+                
+                // If this span overlaps with the selected link coordinates, highlight it
+                if current_x < selected_link.x_end && span_end > selected_link.x_start {
+                    span.style = span.style.bg(Color::Yellow).fg(Color::Black);
+                }
+                current_x = span_end;
+            }
+        }
+    }
     let status_text = format!("Status: {}", active_tab.status_message);
     let content = Paragraph::new(viewport_content)
         .scroll((0, 0))
