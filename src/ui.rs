@@ -55,10 +55,11 @@ pub fn ui(f: &mut Frame, app: &App) {
     } else {
         Vec::new()
     };
-    if !active_tab.link_regions.is_empty() {
-        let selected_link = &active_tab.link_regions[active_tab.selected_link_index];
+    //if !active_tab.link_regions.is_empty() {
+        //let selected_link = &active_tab.link_regions[active_tab.selected_link_index];
         
         // Only apply highlight if the selected link is in the current scroll view
+        /*
         if selected_link.line_index >= start_index && selected_link.line_index < end_index {
             let relative_line_idx = selected_link.line_index - start_index;
             let line = &mut viewport_content[relative_line_idx];
@@ -76,7 +77,30 @@ pub fn ui(f: &mut Frame, app: &App) {
                 current_x = span_end;
             }
         }
+        */
+    if !active_tab.link_regions.is_empty() {
+        let selected_link = &active_tab.link_regions[active_tab.selected_link_index];
+
+        // Check if the link is within the lines we are currently displaying
+        if selected_link.line_index >= start_index && selected_link.line_index < end_index {
+            let relative_line_idx = selected_link.line_index - start_index;
+
+            // Boundary check to prevent panic if viewport_content is smaller than expected
+            if let Some(line) = viewport_content.get_mut(relative_line_idx) {
+                let mut current_x = 0;
+                for span in line.spans.iter_mut() {
+                    let span_width = span.width();
+                    let span_end = current_x + span_width;
+
+                    if current_x < selected_link.x_end && span_end > selected_link.x_start {
+                        span.style = span.style.bg(Color::Yellow).fg(Color::Black);
+                    }
+                    current_x = span_end;
+                }
+            }
+        }
     }
+    //}
     let status_text = format!("Status: {}", active_tab.status_message);
     let content = Paragraph::new(viewport_content)
         .scroll((0, 0))

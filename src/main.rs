@@ -200,6 +200,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                             }
 
                             // LINK NAVIGATION (Tab)
+                            /*
                             KeyCode::Tab => {
                                 let tab = app.current_tab();
                                 if !tab.link_regions.is_empty() {
@@ -211,6 +212,28 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                                     if selected.line_index < tab.scroll {
                                         tab.scroll = selected.line_index;
                                     } else if selected.line_index >= tab.scroll + viewport_height {
+                                        tab.scroll = selected.line_index - viewport_height + 1;
+                                    }
+                                }
+                            }
+                            */
+                            // main.rs - KeyCode::Tab section
+                            KeyCode::Tab => {
+                                let tab = app.current_tab();
+                                if !tab.link_regions.is_empty() {
+                                    tab.selected_link_index = (tab.selected_link_index + 1) % tab.link_regions.len();
+
+                                    // --- IMPROVED AUTOSCROLL ---
+                                    let selected = &tab.link_regions[tab.selected_link_index];
+                                    // We subtract 6 for the Tab bar (3) and URL bar (3),
+                                    // and another 2 for the borders of the Browser block.
+                                    let viewport_height = size.height.saturating_sub(8) as usize;
+
+                                    if selected.line_index < tab.scroll {
+                                        // If link is above current view, jump to it
+                                        tab.scroll = selected.line_index;
+                                    } else if selected.line_index >= tab.scroll + viewport_height {
+                                        // If link is below, scroll just enough to make it visible at the bottom
                                         tab.scroll = selected.line_index - viewport_height + 1;
                                     }
                                 }
