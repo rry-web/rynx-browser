@@ -14,4 +14,12 @@ pub struct PageMetadata {
 pub enum InputMode {
     Normal,
     Editing,
+    Visual,
+}
+
+pub struct Selection {
+    pub start_line: usize,
+    pub start_char: usize,
+    pub end_line: usize,
+    pub end_char: usize,
 }

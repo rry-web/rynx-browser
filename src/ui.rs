@@ -36,6 +36,7 @@ pub fn ui(f: &mut Frame, app: &App) {
     let input_style = match active_tab.input_mode {
         InputMode::Normal => Style::default(),
         InputMode::Editing => Style::default().fg(Color::Yellow),
+        InputMode::Visual => Style::default().fg(Color::Blue),
     };
 
     let mode_text = if app.i2p_mode { " [I2P MODE ON] " } else { " [Clearweb] " };
@@ -55,29 +56,48 @@ pub fn ui(f: &mut Frame, app: &App) {
     } else {
         Vec::new()
     };
-    //if !active_tab.link_regions.is_empty() {
-        //let selected_link = &active_tab.link_regions[active_tab.selected_link_index];
-        
-        // Only apply highlight if the selected link is in the current scroll view
-        /*
-        if selected_link.line_index >= start_index && selected_link.line_index < end_index {
-            let relative_line_idx = selected_link.line_index - start_index;
-            let line = &mut viewport_content[relative_line_idx];
-            
-            // Find the spans that fall within the x_start and x_end of the selected link
+
+    // --- VISUAL MODE HIGHLIGHTING ---
+    if let (InputMode::Visual, Some(sel)) = (active_tab.input_mode, &active_tab.selection) {
+        // Normalize bounds for rendering
+        let (s_line, s_char, e_line, e_char) = if (sel.start_line, sel.start_char) <= (sel.end_line, sel.end_char) {
+            (sel.start_line, sel.start_char, sel.end_line, sel.end_char)
+        } else {
+            (sel.end_line, sel.end_char, sel.start_line, sel.start_char)
+        };
+
+        for (i, line) in viewport_content.iter_mut().enumerate() {
+            let current_line_idx = start_index + i;
+
+            // Skip lines outside the selection range
+            if current_line_idx < s_line || current_line_idx > e_line {
+                continue;
+            }
+
             let mut current_x = 0;
             for span in line.spans.iter_mut() {
                 let span_width = span.width();
                 let span_end = current_x + span_width;
-                
-                // If this span overlaps with the selected link coordinates, highlight it
-                if current_x < selected_link.x_end && span_end > selected_link.x_start {
-                    span.style = span.style.bg(Color::Yellow).fg(Color::Black);
+
+                // Determine if this specific span falls within the selection boundaries
+                let is_selected = if current_line_idx == s_line && current_line_idx == e_line {
+                    current_x < e_char && span_end > s_char
+                } else if current_line_idx == s_line {
+                    span_end > s_char
+                } else if current_line_idx == e_line {
+                    current_x < e_char
+                } else {
+                    true
+                };
+
+                if is_selected {
+                    span.style = span.style.bg(Color::Blue).fg(Color::White);
                 }
                 current_x = span_end;
             }
         }
-        */
+    }
+
     if !active_tab.link_regions.is_empty() {
         let selected_link = &active_tab.link_regions[active_tab.selected_link_index];
 
@@ -100,7 +120,28 @@ pub fn ui(f: &mut Frame, app: &App) {
             }
         }
     }
-    //}
+
+    // This allows the user to see their starting point before/during selection
+    if active_tab.input_mode == InputMode::Normal || active_tab.input_mode == InputMode::Visual {
+        if active_tab.cursor_line >= start_index && active_tab.cursor_line < end_index {
+            let relative_line_idx = active_tab.cursor_line - start_index;
+            if let Some(line) = viewport_content.get_mut(relative_line_idx) {
+                let mut current_x = 0;
+                for span in line.spans.iter_mut() {
+                    let span_width = span.width();
+                    let span_end = current_x + span_width;
+
+                    // Check if the cursor_char falls within this span
+                    if active_tab.cursor_char >= current_x && active_tab.cursor_char < span_end {
+                        // Apply REVERSED style to the span containing the cursor
+                        span.style = span.style.add_modifier(Modifier::REVERSED);
+                        break; // Stop looking once the cursor position is styled
+                    }
+                    current_x = span_end;
+                }
+            }
+        }
+    }
     let status_text = format!("Status: {}", active_tab.status_message);
     let content = Paragraph::new(viewport_content)
         .scroll((0, 0))

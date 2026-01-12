@@ -148,6 +148,9 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                     let active_mode = app.current_tab().input_mode;
                     match active_mode {
                         InputMode::Normal => match key.code {
+                            // --- VISUAL MODE ---
+                            KeyCode::Char('v') => app.current_tab().enter_visual_mode(),
+
                             // --- TAB CONTROLS ---
                             KeyCode::Char('n') => app.add_tab(None),
                             KeyCode::Char('t') => {
@@ -171,10 +174,13 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
 
                             // --- PAGE CONTROLS (Targeting current_tab) ---
                             KeyCode::Char('q') => return Ok(()),
-                            KeyCode::Char('e') => app.current_tab().input_mode = InputMode::Editing,
+                            KeyCode::Char('e') => {
+                                app.current_tab().input_mode = InputMode::Editing;
+                                app.current_tab().status_message = String::from("EDIT MODE - Type URL and press Enter");
+                            }
                             KeyCode::Down => app.current_tab().scroll = app.current_tab().scroll.saturating_add(1),
                             KeyCode::Up => app.current_tab().scroll = app.current_tab().scroll.saturating_sub(1),
-                            KeyCode::Char('v') => {
+                            KeyCode::Char('V') => {
                                 let active_index = app.active_tab_index;
                                 let tab = app.current_tab();
                                 tab.is_source_view = !tab.is_source_view; // Toggle
@@ -189,6 +195,33 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                                 // Re-render immediately
                                 app.render_tab(active_index, size.width);
                             }
+
+                            // --- VISUAL NAV ---
+                            KeyCode::Char('h') => app.current_tab().cursor_char = app.current_tab().cursor_char.saturating_sub(1),
+                            KeyCode::Char('l') => {
+                                let tab = app.current_tab();
+                                let line_len = tab.rendered_content.get(tab.cursor_line).map(|l| l.width()).unwrap_or(0);
+                                tab.cursor_char = (tab.cursor_char + 1).min(line_len);
+                            }
+                            KeyCode::Char('k') => {
+                                let tab = app.current_tab();
+                                tab.cursor_line = tab.cursor_line.saturating_sub(1);
+                                // Auto-scroll up if cursor goes off-screen
+                                if tab.cursor_line < tab.scroll {
+                                    tab.scroll = tab.cursor_line;
+                                }
+                            }
+                            KeyCode::Char('j') => {
+                                let tab = app.current_tab();
+                                let max_lines = tab.rendered_content.len().saturating_sub(1);
+                                tab.cursor_line = (tab.cursor_line + 1).min(max_lines);
+
+                                // Auto-scroll down if cursor goes off-screen
+                                let viewport_height = size.height.saturating_sub(8) as usize;
+                                if tab.cursor_line >= tab.scroll + viewport_height {
+                                    tab.scroll = tab.cursor_line - viewport_height + 1;
+                                }
+                            }
                             
                             // HISTORY BACK
                             KeyCode::Backspace | KeyCode::Left => {
@@ -200,28 +233,20 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                             }
 
                             // LINK NAVIGATION (Tab)
-                            /*
-                            KeyCode::Tab => {
+                            KeyCode::Tab | KeyCode::BackTab => {
                                 let tab = app.current_tab();
                                 if !tab.link_regions.is_empty() {
-                                    tab.selected_link_index = (tab.selected_link_index + 1) % tab.link_regions.len();
-                                    // AUTOSCROLL
-                                    let selected = &tab.link_regions[tab.selected_link_index];
-                                    let viewport_height = size.height.saturating_sub(6) as usize; // Adjust based on your UI chunks
-
-                                    if selected.line_index < tab.scroll {
-                                        tab.scroll = selected.line_index;
-                                    } else if selected.line_index >= tab.scroll + viewport_height {
-                                        tab.scroll = selected.line_index - viewport_height + 1;
+                                    if key.code == KeyCode::Tab {
+                                        tab.selected_link_index = (tab.selected_link_index + 1) % tab.link_regions.len();
+                                    } 
+                                    else {
+                                        //backward tab traversal
+                                        tab.selected_link_index = if tab.selected_link_index > 0 {
+                                            tab.selected_link_index - 1
+                                        } else {
+                                            tab.link_regions.len() - 1
+                                        };
                                     }
-                                }
-                            }
-                            */
-                            // main.rs - KeyCode::Tab section
-                            KeyCode::Tab => {
-                                let tab = app.current_tab();
-                                if !tab.link_regions.is_empty() {
-                                    tab.selected_link_index = (tab.selected_link_index + 1) % tab.link_regions.len();
 
                                     // --- IMPROVED AUTOSCROLL ---
                                     let selected = &tab.link_regions[tab.selected_link_index];
@@ -278,6 +303,35 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                                 app.submit_request();
                                 app.current_tab().input_mode = InputMode::Normal;
                             }
+                            // COPY LINE (from address bar to clipboard)
+                            KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                let current_input = app.current_tab().url_input.clone();
+                                if let Ok(_) = app.clipboard.set_text(current_input) {
+                                    app.current_tab().status_message = String::from("Address copied to clipboard!");
+                                }
+                            }
+                            // CLEAR LINE (Standard Terminal Shortcut)
+                            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                app.current_tab().url_input.clear();
+                            }
+
+                            // PASTE (Standard Shortcut)
+                            KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                if let Ok(text) = app.clipboard.get_text() {
+                                    // Sanitize to remove newlines for the address bar
+                                    let sanitized = text.replace(|c: char| c == '\n' || c == '\r', "");
+                                    app.current_tab().url_input.push_str(&sanitized);
+                                }
+                            }
+
+                            // COMBINED: CLEAR AND PASTE (Using Ctrl + K)
+                            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                app.current_tab().url_input.clear();
+                                if let Ok(text) = app.clipboard.get_text() {
+                                    let sanitized = text.replace(|c: char| c == '\n' || c == '\r', "");
+                                    app.current_tab().url_input.push_str(&sanitized);
+                                }
+                            }
                             KeyCode::Char(c) => {
                                 app.current_tab().url_input.push(c);
                             }
@@ -286,6 +340,81 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                             }
                             KeyCode::Esc => {
                                 app.current_tab().input_mode = InputMode::Normal;
+                                app.current_tab().status_message = String::from("Ready");
+                            }
+                            _ => {}
+                        },
+                        InputMode::Visual => match key.code {
+                            KeyCode::Char('h') => {
+                                let tab = app.current_tab();
+                                tab.cursor_char = tab.cursor_char.saturating_sub(1);
+                                if let Some(ref mut sel) = tab.selection {
+                                    sel.end_char = tab.cursor_char;
+                                }
+                            }
+                            // MOVE DOWN
+                            KeyCode::Char('j') => {
+                                let tab = app.current_tab();
+                                let max_lines = tab.rendered_content.len().saturating_sub(1);
+                                tab.cursor_line = (tab.cursor_line + 1).min(max_lines);
+
+                                // Ensure cursor_char is valid for the new line
+                                let line_len = tab.rendered_content[tab.cursor_line].width();
+                                tab.cursor_char = tab.cursor_char.min(line_len);
+
+                                if let Some(ref mut sel) = tab.selection {
+                                    sel.end_line = tab.cursor_line;
+                                    sel.end_char = tab.cursor_char;
+                                }
+                            }
+                            // MOVE UP
+                            KeyCode::Char('k') => {
+                                let tab = app.current_tab();
+                                tab.cursor_line = tab.cursor_line.saturating_sub(1);
+
+                                let line_len = tab.rendered_content[tab.cursor_line].width();
+                                tab.cursor_char = tab.cursor_char.min(line_len);
+
+                                if let Some(ref mut sel) = tab.selection {
+                                    sel.end_line = tab.cursor_line;
+                                    sel.end_char = tab.cursor_char;
+                                }
+                            }
+                            // MOVE RIGHT
+                            KeyCode::Char('l') => {
+                                let tab = app.current_tab();
+                                let line_len = tab.rendered_content[tab.cursor_line].width();
+                                tab.cursor_char = (tab.cursor_char + 1).min(line_len);
+
+                                if let Some(ref mut sel) = tab.selection {
+                                    sel.end_char = tab.cursor_char;
+                                }
+                            }
+
+                            // YANK (Copy)
+                            KeyCode::Char('y') => {
+                                // 1. Get the text and finish the borrow of the tab immediately
+                                let text_to_copy = app.current_tab().extract_text_from_selection();
+
+                                if !text_to_copy.is_empty() {
+                                    // 2. Now we can safely borrow the clipboard
+                                    let _ = app.clipboard.set_text(text_to_copy);
+
+                                    // 3. Re-borrow the tab to update status and reset mode
+                                    let tab = app.current_tab();
+                                    tab.status_message = String::from("Text yanked to clipboard!");
+                                    tab.input_mode = InputMode::Normal;
+                                    tab.selection = None;
+                                } else {
+                                    let tab = app.current_tab();
+                                    tab.input_mode = InputMode::Normal;
+                                    tab.selection = None;
+                                }
+                            }
+                            KeyCode::Esc => {
+                                app.current_tab().input_mode = InputMode::Normal;
+                                app.current_tab().selection = None;
+                                app.current_tab().status_message = String::from("Ready");
                             }
                             _ => {}
                         },
@@ -306,6 +435,9 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                                 let visual_line = (mouse.row - 7) as usize;
                                 let real_line_idx = visual_line + tab.scroll;
                                 let click_x = (mouse.column as usize).saturating_sub(1);
+
+                                tab.cursor_line = real_line_idx;
+                                tab.cursor_char = click_x;
 
                                 // 2. Search the Link Regions for a match
                                 // We filter for links on this specific line

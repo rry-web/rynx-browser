@@ -1,4 +1,4 @@
-use crate::models::{LinkRegion, InputMode};
+use crate::models::{LinkRegion, InputMode, Selection};
 use crate::network::{NetworkResponse, parse_html_metadata, strict_redirect_policy, attempt_jump};
 use crate::renderer::DomRenderer;
 
@@ -22,37 +22,81 @@ pub struct BrowserTab {
     pub status_message: String,
     pub html_source: String,
     pub is_source_view: bool,
+    pub cursor_line: usize,
+    pub cursor_char: usize,
+    pub selection: Option<Selection>,
 }
 
 impl BrowserTab {
+    pub fn enter_visual_mode(&mut self) {
+        self.input_mode = InputMode::Visual;
+        self.status_message = String::from("VISUAL MODE - Move cursor to select, 'y' to copy");
+        // Anchor the selection to current cursor position
+        self.selection = Some(Selection {
+            start_line: self.cursor_line,
+            start_char: self.cursor_char,
+            end_line: self.cursor_line,
+            end_char: self.cursor_char,
+        });
+    }
+    pub fn extract_text_from_selection(&self) -> String {
+        let sel = match &self.selection {
+            Some(s) => s,
+            None => return String::new(),
+        };
+
+        // Normalize selection (handle backwards selection)
+        let (s_line, s_char, e_line, e_char) = if (sel.start_line, sel.start_char) <= (sel.end_line, sel.end_char) {
+            (sel.start_line, sel.start_char, sel.end_line, sel.end_char)
+        } else {
+            (sel.end_line, sel.end_char, sel.start_line, sel.start_char)
+        };
+
+        let mut result = String::new();
+        for i in s_line..=e_line {
+            if let Some(line) = self.rendered_content.get(i) {
+                let line_str = line.to_string();
+                let start = if i == s_line { s_char } else { 0 };
+                let end = if i == e_line { e_char } else { line_str.chars().count() };
+
+                //let start = start.min(line_str.len());
+                //let end = end.min(line_str.len());
+                // Map char index to byte index
+                let byte_start = line_str.char_indices().nth(start).map(|(idx, _)| idx).unwrap_or(0);
+                let byte_end = line_str.char_indices().nth(end).map(|(idx, _)| idx).unwrap_or(line_str.len());
+
+                //result.push_str(&line_str[start..end]);
+                result.push_str(&line_str[byte_start..byte_end]);
+                if i < e_line {
+                    result.push('\n');
+                }
+            }
+        }
+        result
+    }
     pub fn new(id: usize, initial_url: String) -> Self {
         let help_html = r#"
             <h1>NAVIGATION</h1>
-            <p><b>Up / Down Arrow:</b> Scroll page by 1 line.</p>
-            <p><b>Scroll Wheel:</b> Scroll page by 3 lines.</p>
-            <p><b>Tab:</b> Cycle selection through links on the screen.</p>
+            <p><b>h / j / k / l:</b> Move cursor (Vim-style). View scrolls to follow.</p>
+            <p><b>Left Click:</b> Position cursor and follow links.</p>
+            <p><b>Up / Down Arrow:</b> Scroll page without moving cursor.</p>
+            <p><b>Tab / Shift + Tab:</b> Cycle through links (Forward / Backward).</p>
             <p><b>Enter:</b> Open the currently selected link.</p>
-            <p><b>Left Click:</b> Open the clicked link.</p>
-            <p><b>Ctrl + Click:</b> Open the clicked link in a New Tab.</p>
-            <p><b>Backspace / Left Arrow:</b> Go back in history.</p>
             <hr>
-            <h1>BROWSER CONTROL</h1>
-            <p><b>t:</b> Open the currently selected link in a New Tab.</p>
-            <p><b>n:</b> Open a blank New Tab.</p>
-            <p><b>w:</b> Close the current tab.</p>
-            <p><b>[ and ]:</b> Switch between Previous / Next tab.</p>
-            <p><b>e:</b> Enter 'Edit Mode' to type a new URL.</p>
-            <p><b>p:</b> Toggle i2p proxy mode.</p>
-            <p><b>q:</b> Quit the browser.</p>
-            <p><b>v:</b> Toggle Page Source View.</p>
+            <h1>CLIPBOARD & VISUAL MODES</h1>
+            <p><b>v:</b> Enter <b>Visual Mode</b> (Character selection).</p>
+            <p><b>y (in Visual):</b> Yank (Copy) selected text to system clipboard.</p>
             <hr>
             <h1>EDIT MODE (Press 'e')</h1>
-            <p><b>Typing:</b> Type a URL or a search query.</p>
-            <p><b>Enter:</b> Submit the request.</p>
-            <p><b>Esc:</b> Cancel and return to Normal Mode.</p>
+            <p><b>Ctrl + u:</b> Clear address bar.</p>
+            <p><b>Ctrl + y:</b> Copy address to clipboard.</p>
+            <p><b>Ctrl + v:</b> Paste from clipboard.</p>
+            <p><b>Ctrl + k:</b> Clear address bar AND paste.</p>
             <hr>
-            <h1>SUPPLEMENTARY NOTES</h1>
-            <p>Weird things may happen on Javascript-heavy sites with anti-AI scraping measures.</p>
+            <h1>BROWSER CONTROL</h1>
+            <p><b>n / w:</b> New Tab / Close Tab.</p>
+            <p><b>[ / ]:</b> Switch between tabs.</p>
+            <p><b>Shift + V:</b> Toggle Page Source View.</p>
         "#;
         let document = Html::parse_document(help_html);
         let mut renderer = DomRenderer::new(100);
@@ -71,6 +115,9 @@ impl BrowserTab {
             status_message: String::from("Ready"),
             html_source: String::new(),
             is_source_view: false,
+            cursor_line: 0,
+            cursor_char: 0,
+            selection: None,
         }
     }
 }
@@ -82,6 +129,7 @@ pub struct App {
     pub tx: mpsc::Sender<NetworkResponse>,
     pub rx: mpsc::Receiver<NetworkResponse>,
     pub i2p_mode: bool,
+    pub clipboard: arboard::Clipboard,
 }
 
 impl App {
@@ -94,6 +142,7 @@ impl App {
             tx,
             rx,
             i2p_mode: false,
+            clipboard: arboard::Clipboard::new().expect("Failed to initialize clipboard"),
         }
     }
 
