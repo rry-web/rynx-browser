@@ -15,13 +15,13 @@ cargo run
 ### Navigation (Normal Mode)
 | Key | Action |
 | :--- | :--- |
-
-| **`h` / `j` / `k` / `l`** | Move cursor (Vim-style). View scrolls to follow. (Few minor issues with horizontal navigation, in progress) |
-| **`Up` / `Down`** | Scroll the page up or down by 1 line. |
-| **`Tab` / `Shift + Tab`** | Cycle through links visible on the screen. (Forward/Backward) |
+| **`h / j / k / l`** | Move cursor (Vim-style). View scrolls to follow. (Few minor issues with horizontal navigation, in progress) |
+| **`Up / Down`** | Scroll the page up or down by 1 line. |
+| **`Tab / Shift + Tab`** | Cycle through links visible on the screen. (Forward/Backward) |
 | **`Enter`** | Open the currently selected link. |
-| **`Backspace`** / **`Left`** | Go back to the previous page in history. |
+| **`Backspace / Left`** | Go back to the previous page in history. |
 | **`d`** | Download the currently selected link. |
+| **`Esc`** | Clear finished or failed downloads. |
 
 ### Tab Management
 | Key | Action |
@@ -56,7 +56,7 @@ _Active after pressing `e`_
 | **`Ctrl + u`** | Clear address bar. |
 | **`Ctrl + y`** | Copy address to clipboard. |
 | **`Ctrl + v`** | Paste from clipboard. |
-| **`Ctrl + v`** | Clear address and paste from clipboard. |
+| **`Ctrl + k`** | Clear address and paste from clipboard. |
 
 
 ### Mouse Support
@@ -67,13 +67,15 @@ _Active after pressing `e`_
 | **`Ctrl` + Click** | Open the clicked link in a **New Tab**. |
 
 ## Roadmap
+- [x] **I2P Integration**: Routes via local proxy `127.0.0.1:4444`.
+- [x] **Download Manager**: Memory-efficient streaming with progress tracking.
+- [x] **Clipboard Support**: Full copy/paste support for URL bar and content.
+- [ ] **MCP Support**: Integration for Model Context Protocol as a JS alternative.
+- [ ] **High-Fidelity Images**: Implementing `ratatui-image` for Sixel/Kitty support.
+- [ ] **Text Input**: For entering usernames, passwords, or messages into text boxes.
+- [ ] **RSS and Gopher Support**: Additional protocols to add support for.
 
-This is a hobby project, but I'm interested in:
-1. Finishing my i2pd integration implementation. 
-    (Done! Just run i2pd first and then activate proxy mode in Rynx)
-2. Adding integration support for Model Context Protocol as a workaround to the lack of javascript. 
-3. Adding clipboard support so you can copy and paste, especially into the address bar.
-4. Having some support for displaying images and downloading videos, though I'm not entirely sure in what form factor yet.
+And many other potential features down the line!
 
 If you want to contribute just poke at me on github and I'll get a notification sent to my email.
 

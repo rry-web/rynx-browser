@@ -78,14 +78,17 @@ impl BrowserTab {
     }
     pub fn new(id: usize, initial_url: String) -> Self {
         let help_html = r#"
-            <h1>NAVIGATION</h1>
+            <h1>NAVIGATION/NORMAL</h1>
             <p><b>h / j / k / l:</b> Move cursor (Vim-style). View scrolls to follow.</p>
             <p><b>Left Click:</b> Position cursor and follow links.</p>
+            <p><b>Ctrl + Left Click:</b> Open link in new tab.</p>
             <p><b>Up / Down Arrow:</b> Scroll page without moving cursor.</p>
+            <p><b>Scroll:</b> Scroll page up/down by 3 lines.</p>
             <p><b>Tab / Shift + Tab:</b> Cycle through links (Forward / Backward).</p>
             <p><b>Enter:</b> Open the currently selected link.</p>
             <p><b>Backspace / Left Arrow:</b> Go back to previous page.</p>
             <p><b>d:</b> Download from the currently selected link.</p>
+            <p><b>Esc:</b> Clear finished or failed download overlays, or return to Normal Mode if in Edit/Visual.</p>
             <hr>
             <h1>CLIPBOARD & VISUAL MODES</h1>
             <p><b>v:</b> Enter <b>Visual Mode</b> (Character selection).</p>
@@ -96,10 +99,13 @@ impl BrowserTab {
             <p><b>Ctrl + y:</b> Copy address to clipboard.</p>
             <p><b>Ctrl + v:</b> Paste from clipboard.</p>
             <p><b>Ctrl + k:</b> Clear address bar AND paste.</p>
+            <p>Non valid URLs will automatically search in Marginalia, but this currently doesn't work due to lack of JS.</p>
             <hr>
             <h1>BROWSER CONTROL</h1>
             <p><b>n / w:</b> New Tab / Close Tab.</p>
             <p><b>t:</b> Open highlighted address in new tab.</p>
+            <p><b>p:</b> Toggle I2P mode.</p>
+            <p><b>q:</b> Quit the browser.</p>
             <p><b>[ / ]:</b> Switch between tabs.</p>
             <p><b>Shift + V:</b> Toggle Page Source View.</p>
         "#;
