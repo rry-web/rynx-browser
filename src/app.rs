@@ -84,6 +84,7 @@ impl BrowserTab {
             <p><b>Up / Down Arrow:</b> Scroll page without moving cursor.</p>
             <p><b>Tab / Shift + Tab:</b> Cycle through links (Forward / Backward).</p>
             <p><b>Enter:</b> Open the currently selected link.</p>
+            <p><b>Backspace / Left Arrow:</b> Go back to previous page.</p>
             <p><b>d:</b> Download from the currently selected link.</p>
             <hr>
             <h1>CLIPBOARD & VISUAL MODES</h1>
@@ -98,6 +99,7 @@ impl BrowserTab {
             <hr>
             <h1>BROWSER CONTROL</h1>
             <p><b>n / w:</b> New Tab / Close Tab.</p>
+            <p><b>t:</b> Open highlighted address in new tab.</p>
             <p><b>[ / ]:</b> Switch between tabs.</p>
             <p><b>Shift + V:</b> Toggle Page Source View.</p>
         "#;

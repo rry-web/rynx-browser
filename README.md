@@ -15,10 +15,13 @@ cargo run
 ### Navigation (Normal Mode)
 | Key | Action |
 | :--- | :--- |
+
+| **`h` / `j` / `k` / `l`** | Move cursor (Vim-style). View scrolls to follow. (Few minor issues with horizontal navigation, in progress) |
 | **`Up` / `Down`** | Scroll the page up or down by 1 line. |
-| **`Tab`** | Cycle through links visible on the screen. |
+| **`Tab` / `Shift + Tab`** | Cycle through links visible on the screen. (Forward/Backward) |
 | **`Enter`** | Open the currently selected link. |
 | **`Backspace`** / **`Left`** | Go back to the previous page in history. |
+| **`d`** | Download the currently selected link. |
 
 ### Tab Management
 | Key | Action |
@@ -34,8 +37,14 @@ cargo run
 | :--- | :--- |
 | **`e`** | Enter **Edit Mode** to type a URL or search query. |
 | **`p`** | Toggle **I2P Mode** (Routes traffic via local proxy `127.0.0.1:4444`). |
-| **`v`** | Toggle Page Source View. |
+| **`Shift + v`** | Toggle Page Source View. |
 | **`q`** | Quit the browser. |
+
+### Visual Mode ###
+| Key | Action |
+| :--- | :--- |
+| **`v`** | Enter visual mode within the browser. |
+| **`y`** | Copy text to clipboard. |
 
 ### Edit Mode (URL Bar)
 _Active after pressing `e`_
@@ -44,6 +53,11 @@ _Active after pressing `e`_
 | **Typing** | Input URL or search terms. |
 | **`Enter`** | Submit request (Defaults to **Marginalia Search** if not a valid URL). |
 | **`Esc`** | Cancel editing and return to Normal Mode. |
+| **`Ctrl + u`** | Clear address bar. |
+| **`Ctrl + y`** | Copy address to clipboard. |
+| **`Ctrl + v`** | Paste from clipboard. |
+| **`Ctrl + v`** | Clear address and paste from clipboard. |
+
 
 ### Mouse Support
 | Action | Function |
