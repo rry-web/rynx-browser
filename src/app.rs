@@ -9,6 +9,9 @@ use tokio::sync::mpsc;
 use std::time::Duration;
 use reqwest::StatusCode;
 
+use tokio::io::AsyncWriteExt; // Required for streaming to file
+use futures_util::StreamExt;
+
 pub struct BrowserTab {
     pub id: usize,
     pub url_input: String,
@@ -25,6 +28,7 @@ pub struct BrowserTab {
     pub cursor_line: usize,
     pub cursor_char: usize,
     pub selection: Option<Selection>,
+    pub download_state: Option<crate::models::Download>,
 }
 
 impl BrowserTab {
@@ -59,8 +63,6 @@ impl BrowserTab {
                 let start = if i == s_line { s_char } else { 0 };
                 let end = if i == e_line { e_char } else { line_str.chars().count() };
 
-                //let start = start.min(line_str.len());
-                //let end = end.min(line_str.len());
                 // Map char index to byte index
                 let byte_start = line_str.char_indices().nth(start).map(|(idx, _)| idx).unwrap_or(0);
                 let byte_end = line_str.char_indices().nth(end).map(|(idx, _)| idx).unwrap_or(line_str.len());
@@ -82,6 +84,7 @@ impl BrowserTab {
             <p><b>Up / Down Arrow:</b> Scroll page without moving cursor.</p>
             <p><b>Tab / Shift + Tab:</b> Cycle through links (Forward / Backward).</p>
             <p><b>Enter:</b> Open the currently selected link.</p>
+            <p><b>d:</b> Download from the currently selected link.</p>
             <hr>
             <h1>CLIPBOARD & VISUAL MODES</h1>
             <p><b>v:</b> Enter <b>Visual Mode</b> (Character selection).</p>
@@ -118,6 +121,7 @@ impl BrowserTab {
             cursor_line: 0,
             cursor_char: 0,
             selection: None,
+            download_state: None,
         }
     }
 }
@@ -289,6 +293,54 @@ impl App {
                     let _ = tx_clone.send(NetworkResponse::Error(id, e.to_string())).await;
                 }
             }
+        });
+    }
+    pub fn trigger_download(&mut self, url: String) {
+        let tab_id = self.current_tab().id;
+        let tx = self.tx.clone();
+        let use_i2p = self.i2p_mode;
+
+        tokio::spawn(async move {
+            let mut builder = reqwest::Client::builder()
+                .user_agent("RynxBrowser/0.1.0")
+                .timeout(std::time::Duration::from_secs(300));
+
+            if use_i2p {
+                if let Ok(proxy) = reqwest::Proxy::http("http://127.0.0.1:4444") {
+                    builder = builder.proxy(proxy);
+                }
+            }
+            //let client = reqwest::Client::new();
+            let client = builder.build().unwrap_or_else(|_| reqwest::Client::new());
+
+            let res = match client.get(&url).send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx.send(NetworkResponse::Error(tab_id, format!("Download failed!: {}", e))).await;
+                    return;
+                }
+            };
+
+            let total_size = res.content_length();
+            let fname = url.split('/').last().unwrap_or("download.dat").to_string();
+            let mut file = match tokio::fs::File::create(&fname).await {
+                Ok(f) => f,
+                Err(e) => {
+                    let _ = tx.send(NetworkResponse::Error(tab_id, format!("I/O error: {}", e))).await;
+                    return;
+                }
+            };
+            let mut stream = res.bytes_stream();
+            let mut downloaded: u64 = 0;
+
+            while let Some(item) = stream.next().await {
+                if let Ok(chunk) = item {
+                    if file.write_all(&chunk).await.is_err() { break; }
+                    downloaded += chunk.len() as u64;
+                    let _ = tx.send(NetworkResponse::DownloadProgress(tab_id, downloaded, total_size)).await;
+                }
+            }
+            let _ = tx.send(NetworkResponse::DownloadFinished(tab_id, fname)).await;
         });
     }
 }

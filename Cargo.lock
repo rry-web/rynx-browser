@@ -1773,6 +1773,7 @@ dependencies = [
  "async-trait",
  "crossterm",
  "ego-tree",
+ "futures-util",
  "ratatui",
  "regex",
  "reqwest",

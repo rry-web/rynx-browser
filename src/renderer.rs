@@ -169,10 +169,6 @@ impl DomRenderer {
                 } else {
                     let content = text.text.split_whitespace().collect::<Vec<_>>().join(" ");
                     if !content.is_empty() {
-                        // Check if we need a leading space based on previous content
-                        // We add a space if the previous text didn't end with a newline/break 
-                        // and we aren't at the start of a line.
-                        // Simplified: Just add space if not start of line
                         if self.current_line_width > 0 && !self.current_line.is_empty() {
                              self.push_word(" ");
                         }

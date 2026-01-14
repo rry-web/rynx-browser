@@ -1,8 +1,8 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::Line,
-    widgets::{Block, Borders, Paragraph, Tabs, Clear},
+    widgets::{Gauge, Block, Borders, Paragraph, Tabs, Clear},
     Frame,
 };
 use crate::app::App;
@@ -151,4 +151,71 @@ pub fn ui(f: &mut Frame, app: &App) {
 
     f.render_widget(Clear, chunks[2]);
     f.render_widget(content, chunks[2]);
+    render_download_overlay(f, app, chunks[2])
+}
+
+fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
+    if let Some(state) = &app.tabs[app.active_tab_index].download_state {
+        let popup_area = Rect {
+            x: area.width / 4,
+            y: area.height / 2 - 2,
+            width: area.width / 2,
+            height: 5,
+        };
+
+        // Clear the background to prevent content bleed
+        f.render_widget(Clear, popup_area);
+
+        // Handle all three DownloadStatus variants
+        match &state.status {
+            // 1. ACTIVE STATE: Normal progress bar
+            crate::models::DownloadStatus::Active => {
+                match state.total_size {
+                    Some(total) => {
+                        let percentage = (state.bytes_downloaded as f64 / total as f64 * 100.0) as u16;
+                        let gauge = Gauge::default()
+                            .block(Block::default().borders(Borders::ALL).title(format!(" Downloading: {} ", state.filename)))
+                            .gauge_style(Style::default().fg(Color::Yellow))
+                            .percent(percentage)
+                            .label(format!("{:.1}%", percentage));
+                        f.render_widget(gauge, popup_area);
+                    }
+                    None => {
+                        let gauge = Gauge::default()
+                            .block(Block::default().borders(Borders::ALL).title(format!(" Downloading: {} ", state.filename)))
+                            .gauge_style(Style::default().fg(Color::Cyan))
+                            .percent(100)
+                            .label(format!("{} bytes downloaded", state.bytes_downloaded));
+                        f.render_widget(gauge, popup_area);
+                    }
+                }
+            },
+
+            // 2. FAILED STATE: Red bar with error message
+            crate::models::DownloadStatus::Failed(error_msg) => {
+                let gauge = Gauge::default()
+                    .block(Block::default()
+                        .borders(Borders::ALL)
+                        .title(" Download Failed ")
+                        .title_bottom(" Press ESC to clear ")) // Satisfies "unused" fields
+                    .gauge_style(Style::default().fg(Color::Red))
+                    .percent(0) // Show as empty/failed
+                    .label(format!("Error: {}", error_msg)); // Displays the error string
+                f.render_widget(gauge, popup_area);
+            },
+
+            // 3. COMPLETED STATE: Green success bar
+            crate::models::DownloadStatus::Completed => {
+                let gauge = Gauge::default()
+                    .block(Block::default()
+                        .borders(Borders::ALL)
+                        .title(" Download Finished ")
+                        .title_bottom(" Press ESC to clear "))
+                    .gauge_style(Style::default().fg(Color::Green))
+                    .percent(100)
+                    .label(format!("Saved: {}", state.filename));
+                f.render_widget(gauge, popup_area);
+            }
+        }
+    }
 }

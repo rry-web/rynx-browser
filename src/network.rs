@@ -9,6 +9,9 @@ pub enum NetworkResponse {
     Error(usize, String),
     Loading(usize),
     Info(usize, String),
+    // Variant for downloads
+    DownloadProgress(usize, u64, Option<u64>),
+    DownloadFinished(usize, String), // tab_id, filename
 }
 
 pub const JUMP_SERVICES: &[&str] = &[
@@ -62,3 +65,4 @@ pub async fn attempt_jump(
     }
     Err("All jump services failed.".into())
 }
+

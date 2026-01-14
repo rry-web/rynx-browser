@@ -23,3 +23,17 @@ pub struct Selection {
     pub end_line: usize,
     pub end_char: usize,
 }
+
+pub enum DownloadStatus {
+    Active,
+    Completed,
+    Failed(String),
+}
+
+pub struct Download {
+    pub _id: usize,
+    pub filename: String,
+    pub bytes_downloaded: u64,
+    pub total_size: Option<u64>,
+    pub status: DownloadStatus,
+}

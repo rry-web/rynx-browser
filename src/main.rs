@@ -105,9 +105,35 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                 NetworkResponse::Error(id, ..) => *id,
                 NetworkResponse::Loading(id) => *id,
                 NetworkResponse::Info(id, ..) => *id,
+                NetworkResponse::DownloadProgress(id, ..) => *id,
+                NetworkResponse::DownloadFinished(id, ..) => *id,
             };
             if let Some(index) = app.tabs.iter().position(|t| t.id == target_id) {
                 match response {
+                    NetworkResponse::DownloadProgress(_, downloaded, total) => {
+                        let tab = &mut app.tabs[index];
+                        tab.download_state = Some(crate::models::Download {
+                            _id: target_id,
+                            filename: String::from("Downloading..."),
+                            bytes_downloaded: downloaded,
+                            total_size: total,
+                            status: crate::models::DownloadStatus::Active,
+                        });
+                        // Update status message for footer
+                        tab.status_message = match total {
+                            Some(t) => format!("Downloading: {}%", (downloaded * 100) / t),
+                            None => format!("Downloading: {} bytes", downloaded),
+                        };
+                    },
+                    NetworkResponse::DownloadFinished(_, filename) => {
+                        let tab = &mut app.tabs[index];
+                        //tab.download_state = None; // Clear progress state
+                        if let Some(ref mut d) = tab.download_state {
+                            d.status = crate::models::DownloadStatus::Completed;
+                            d.filename = filename.clone();
+                        }
+                        tab.status_message = format!("Download complete: {}", filename);
+                    },
                     NetworkResponse::Success(_, title, html_source) => {
                         let tab = &mut app.tabs[index];
                         tab.page_title = title;
@@ -118,6 +144,9 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                     },
                     NetworkResponse::Error(_, msg) => {
                         let tab = &mut app.tabs[index];
+                        if let Some(ref mut d) = tab.download_state {
+                            d.status = crate::models::DownloadStatus::Failed(msg.clone());
+                        }
                         tab.page_title = String::from("Error");
                         tab.html_source = format!("<h1>Error</h1><hr><p style='color:red'>{}</p>", msg);
                         tab.scroll = 0;
@@ -151,6 +180,30 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                             // --- VISUAL MODE ---
                             KeyCode::Char('v') => app.current_tab().enter_visual_mode(),
 
+                            // --- DOWNLOAD ---
+                            KeyCode::Char('d') => {
+                                let tab = app.current_tab();
+                                if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
+                                    let download_url = resolve_url(&tab.url_input, &region.url);
+                                    tab.status_message = format!("Starting download: {}", download_url);
+                                    app.trigger_download(download_url);
+                                }
+                            }
+                            KeyCode::Esc => {
+                                let tab = app.current_tab();
+                                
+                                // Check if there is a download state to clear
+                                if let Some(state) = &tab.download_state {
+                                    match state.status {
+                                        // Only allow clearing if it's NOT actively downloading
+                                        crate::models::DownloadStatus::Completed | crate::models::DownloadStatus::Failed(_) => {
+                                            tab.download_state = None; // This removes the data, so ui.rs stops rendering it
+                                            tab.status_message = String::from("Ready");
+                                        }
+                                        _ => {} // Do nothing if the download is still Active
+                                    }
+                                }
+                            }
                             // --- TAB CONTROLS ---
                             KeyCode::Char('n') => app.add_tab(None),
                             KeyCode::Char('t') => {
@@ -463,7 +516,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                                 }
                             }
                         }
-                        // Optional: You can handle clicks here too!
+                        // Optional: can handle clicks here too!
                         _ => {}
                     }
                 }
