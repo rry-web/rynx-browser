@@ -92,71 +92,7 @@ impl DomRenderer {
             self.push_span_to_line(indent);
         }
     }
-    /*
-    fn push_word(&mut self, word: &str) {
-        let word_width = UnicodeWidthStr::width(word);
 
-        // Case 1: Word fits on the current line
-        if self.current_line_width + word_width <= self.max_width {
-            self.push_span_to_line(word.to_string());
-        } 
-        // Case 2: Word fits on a new line (Standard Wrap)
-        else if word_width <= self.max_width {
-            self.flush_line();
-            self.apply_indentation();
-            self.push_span_to_line(word.to_string());
-        } 
-        // Case 3: Word is huge (Hard Wrap)
-        else {
-            // If we are not at the start of a line, flush first to give the big word maximum space
-            if self.current_line_width > 0 {
-                self.flush_line();
-            }
-
-            let mut remaining = word;
-            while !remaining.is_empty() {
-                self.apply_indentation();
-                
-                // Calculate available width on the current line
-                let available_space = self.max_width.saturating_sub(self.current_line_width);
-                if available_space == 0 {
-                    self.flush_line();
-                    continue;
-                }
-
-                // Find where to split the string so it fits in `available_space`
-                let mut current_width = 0;
-                let mut split_idx = 0;
-
-                for (idx, ch) in remaining.char_indices() {
-                    let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
-                    if current_width + char_width > available_space {
-                        break;
-                    }
-                    current_width += char_width;
-                    split_idx = idx + ch.len_utf8();
-                }
-
-                // If even a single char doesn't fit (e.g., indentation took all space), force 1 char
-                if split_idx == 0 && !remaining.is_empty() {
-                     if let Some((idx, ch)) = remaining.char_indices().next() {
-                         split_idx = idx + ch.len_utf8();
-                     }
-                }
-
-                let (chunk, rest) = remaining.split_at(split_idx);
-                self.push_span_to_line(chunk.to_string());
-                
-                remaining = rest;
-                
-                // If there is still text remaining, we must flush to move to the next line
-                if !remaining.is_empty() {
-                    self.flush_line();
-                }
-            }
-        }
-    }
-    */
     fn push_word(&mut self, word: &str) {
         // Skip leading spaces on wrapped lines to keep the left margin clean
         if word == " " && self.current_line_width == 0 && !self.preserve_whitespace {
@@ -224,26 +160,6 @@ impl DomRenderer {
 
     fn walk(&mut self, node: ego_tree::NodeRef<scraper::node::Node>) {
         match node.value() {
-            /*
-            Node::Text(text) => {
-                if self.preserve_whitespace {
-                    // Split by actual newlines in code blocks
-                    for line in text.text.lines() {
-                        self.push_word(line);
-                        self.flush_line();
-                    }
-                } else {
-                    let content = text.text.split_whitespace().collect::<Vec<_>>().join(" ");
-                    if !content.is_empty() {
-                        if self.current_line_width > 0 && !self.current_line.is_empty() {
-                             self.push_word(" ");
-                        }
-                        
-                        self.push_word(&content);
-                    }
-                }
-            }
-            */
             Node::Text(text) => {
                 if self.preserve_whitespace {
                     for line in text.text.lines() {

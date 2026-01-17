@@ -311,7 +311,7 @@ impl App {
         tokio::spawn(async move {
             let mut builder = reqwest::Client::builder()
                 .user_agent("RynxBrowser/0.1.0")
-                .timeout(std::time::Duration::from_secs(300));
+                .timeout(std::time::Duration::from_secs(3000));
 
             if use_i2p {
                 if let Ok(proxy) = reqwest::Proxy::http("http://127.0.0.1:4444") {
