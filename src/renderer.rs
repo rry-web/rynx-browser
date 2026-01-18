@@ -6,7 +6,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 pub struct DomRenderer {
     pub lines: Vec<Line<'static>>,
     current_line: Vec<Span<'static>>,
-    current_style: Style,
+    style_stack: Vec<Style>,
     pub links: Vec<crate::LinkRegion>,
     max_width: usize,
     current_line_width: usize,
@@ -16,11 +16,28 @@ pub struct DomRenderer {
 }
 
 impl DomRenderer {
+    /// Get the current style from the top of the stack
+    fn current_style(&self) -> Style {
+        *self.style_stack.last().unwrap_or(&Style::default())
+    }
+
+    /// Push a new style onto the stack
+    fn push_style(&mut self, style: Style) {
+        self.style_stack.push(style);
+    }
+
+    /// Pop the current style from the stack
+    fn pop_style(&mut self) {
+        if self.style_stack.len() > 1 {
+            self.style_stack.pop();
+        }
+    }
+
     pub fn new(width: usize) -> Self {
         Self {
             lines: Vec::new(),
             current_line: Vec::new(),
-            current_style: Style::default(),
+            style_stack: vec![Style::default()],
             links: Vec::new(),
             max_width: width.saturating_sub(2),
             current_line_width: 0,
@@ -61,7 +78,7 @@ impl DomRenderer {
         let end_x = start_x + width;
 
         self.current_line
-            .push(Span::styled(content, self.current_style));
+            .push(Span::styled(content, self.current_style()));
         self.current_line_width += width;
 
         // Track link regions
@@ -193,37 +210,41 @@ impl DomRenderer {
                     return;
                 }
 
-                let old_style = self.current_style;
                 let old_link = self.active_link_url.clone();
                 let old_preserve = self.preserve_whitespace;
 
                 match tag {
                     "b" | "strong" => {
-                        self.current_style = self.current_style.add_modifier(Modifier::BOLD)
+                        let new_style = self.current_style().add_modifier(Modifier::BOLD);
+                        self.push_style(new_style);
                     }
                     "i" | "em" => {
-                        self.current_style = self.current_style.add_modifier(Modifier::ITALIC)
+                        let new_style = self.current_style().add_modifier(Modifier::ITALIC);
+                        self.push_style(new_style);
                     }
                     "a" => {
-                        self.current_style = self
-                            .current_style
+                        let new_style = self
+                            .current_style()
                             .fg(Color::Cyan)
                             .add_modifier(Modifier::UNDERLINED);
+                        self.push_style(new_style);
                         if let Some(href) = elem.attr("href") {
                             self.active_link_url = Some(href.to_string());
                         }
                     }
                     "h1" | "h2" | "h3" => {
                         self.add_vertical_space();
-                        self.current_style = self
-                            .current_style
+                        let new_style = self
+                            .current_style()
                             .fg(Color::White)
                             .add_modifier(Modifier::BOLD);
+                        self.push_style(new_style);
                     }
                     "pre" | "code" => {
                         self.flush_line();
                         self.preserve_whitespace = true;
-                        self.current_style = self.current_style.fg(Color::Magenta); // Distinct color for code
+                        let new_style = self.current_style().fg(Color::Magenta); // Distinct color for code
+                        self.push_style(new_style);
                     }
                     "ul" | "ol" => {
                         self.flush_line();
@@ -237,9 +258,10 @@ impl DomRenderer {
                     }
                     "img" => {
                         let alt = elem.attr("alt").unwrap_or("IMAGE");
-                        self.current_style = self.current_style.fg(Color::DarkGray);
+                        let new_style = self.current_style().fg(Color::DarkGray);
+                        self.push_style(new_style);
                         self.push_word(&format!("[{}] ", alt));
-                        self.current_style = old_style;
+                        self.pop_style();
                     }
                     "br" => self.flush_line(),
                     "p" | "main" | "article" | "section" | "table" | "aside" => {
@@ -259,8 +281,15 @@ impl DomRenderer {
                     self.walk(child);
                 }
 
-                // Restore state
-                self.current_style = old_style;
+                // Pop style from stack for tags that push styles
+                match tag {
+                    "b" | "strong" | "i" | "em" | "a" | "h1" | "h2" | "h3" | "pre" | "code" => {
+                        self.pop_style();
+                    }
+                    _ => {}
+                }
+
+                // Restore other state
                 self.active_link_url = old_link;
                 self.preserve_whitespace = old_preserve;
 
