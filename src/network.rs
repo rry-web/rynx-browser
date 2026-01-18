@@ -63,6 +63,13 @@ impl NetworkManager {
     ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
         let mut builder = Client::builder().user_agent(user_agent).timeout(timeout);
 
+        // Enforce TLS 1.2 as minimum for security (only for non-I2P clients)
+        if !use_proxy {
+            builder = builder
+                .use_rustls_tls()
+                .min_tls_version(reqwest::tls::Version::TLS_1_2);
+        }
+
         if include_headers {
             let mut headers = reqwest::header::HeaderMap::new();
             headers.insert("Referer", reqwest::header::HeaderValue::from_static(""));

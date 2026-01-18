@@ -244,6 +244,7 @@ impl App {
     }
 
     pub fn submit_request(&mut self) {
+        let use_i2p = self.i2p_mode;
         let tab = self.current_tab();
         let mut target_url = tab.url_input.clone();
 
@@ -261,6 +262,11 @@ impl App {
                     .finish();
                 target_url = format!("{}{}", MARGINALIA_SEARCH_URL, safe_query);
             }
+        }
+
+        // Enforce HTTPS for clearweb requests (security hardening)
+        if !use_i2p && target_url.starts_with("http://") && !target_url.contains(".i2p") {
+            target_url = target_url.replace("http://", "https://");
         }
 
         tab.url_input = target_url.clone();
