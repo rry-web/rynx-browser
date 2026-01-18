@@ -47,11 +47,18 @@ async fn test_full_request_to_render_flow() {
 
         // Use the actual terminal width constant or a test value
         let test_width = 80;
-        handle_network_event::<TestBackend>(&mut app, NetworkResponse::Success(id, title, body), test_width)
-            .unwrap();
+        handle_network_event::<TestBackend>(
+            &mut app,
+            NetworkResponse::Success(id, title, body),
+            test_width,
+        )
+        .unwrap();
 
         // Verify the content exists somewhere in the rendered lines
-        let found = app.current_tab().rendered_content.iter()
+        let found = app
+            .current_tab()
+            .rendered_content
+            .iter()
             .any(|line| line.to_string().contains("Hello World"));
 
         assert!(found, "Content 'Hello World' not found in rendered output");

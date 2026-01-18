@@ -78,34 +78,40 @@ impl DomRenderer {
     }
 
     /// Internal helper to push a span to the current line and track its link region
+    /// Now breaks content into individual characters for precise visual mode selection
     fn push_span_to_line(&mut self, content: String) {
-        let width = UnicodeWidthStr::width(content.as_str());
-        let start_x = self.current_line_width;
-        let end_x = start_x + width;
+        let chars: Vec<char> = content.chars().collect();
 
-        self.current_line
-            .push(Span::styled(content, self.current_style()));
-        self.current_line_width += width;
+        for ch in chars {
+            let char_str = ch.to_string();
+            let width = UnicodeWidthChar::width(ch).unwrap_or(0);
+            let start_x = self.current_line_width;
+            let end_x = start_x + width;
 
-        // Track link regions
-        if let Some(url) = &self.active_link_url {
-            let line_idx = self.lines.len();
+            self.current_line
+                .push(Span::styled(char_str, self.current_style()));
+            self.current_line_width += width;
 
-            // Try to merge with the previous link region if it's on the same line and contiguous
-            if let Some(last) = self.links.last_mut() {
-                if last.line_index == line_idx && last.url == *url && last.x_end == start_x {
-                    last.x_end = end_x;
-                    return;
+            // Track link regions - merge contiguous characters with same link
+            if let Some(url) = &self.active_link_url {
+                let line_idx = self.lines.len();
+
+                // Try to merge with the previous link region if it's on the same line and contiguous
+                if let Some(last) = self.links.last_mut() {
+                    if last.line_index == line_idx && last.url == *url && last.x_end == start_x {
+                        last.x_end = end_x;
+                        continue; // Continue to next character instead of creating new region
+                    }
                 }
-            }
 
-            // Otherwise, create a new link region
-            self.links.push(crate::models::LinkRegion {
-                url: url.clone(),
-                line_index: line_idx,
-                x_start: start_x,
-                x_end: end_x,
-            });
+                // Create a new link region for this character
+                self.links.push(crate::models::LinkRegion {
+                    url: url.clone(),
+                    line_index: line_idx,
+                    x_start: start_x,
+                    x_end: end_x,
+                });
+            }
         }
     }
 
