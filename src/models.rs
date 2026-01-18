@@ -1,3 +1,5 @@
+use ratatui::text::Line;
+
 #[derive(Clone)]
 pub struct LinkRegion {
     pub url: String,
@@ -22,6 +24,60 @@ pub struct Selection {
     pub start_char: usize,
     pub end_line: usize,
     pub end_char: usize,
+}
+
+impl Selection {
+    /// Extract the selected text from rendered content lines
+    pub fn extract_text(&self, rendered_content: &[Line]) -> String {
+        // Normalize selection (handle backwards selection)
+        let (s_line, s_char, e_line, e_char) =
+            if (self.start_line, self.start_char) <= (self.end_line, self.end_char) {
+                (
+                    self.start_line,
+                    self.start_char,
+                    self.end_line,
+                    self.end_char,
+                )
+            } else {
+                (
+                    self.end_line,
+                    self.end_char,
+                    self.start_line,
+                    self.start_char,
+                )
+            };
+
+        let mut result = String::new();
+        for i in s_line..=e_line {
+            if let Some(line) = rendered_content.get(i) {
+                let line_str = line.to_string();
+                let start = if i == s_line { s_char } else { 0 };
+                let end = if i == e_line {
+                    e_char
+                } else {
+                    line_str.chars().count()
+                };
+
+                // Map char index to byte index for proper UTF-8 handling
+                let byte_start = line_str
+                    .char_indices()
+                    .nth(start)
+                    .map(|(idx, _)| idx)
+                    .unwrap_or(0);
+                let byte_end = line_str
+                    .char_indices()
+                    .nth(end)
+                    .map(|(idx, _)| idx)
+                    .unwrap_or(line_str.len());
+
+                result.push_str(&line_str[byte_start..byte_end]);
+                if i < e_line {
+                    result.push('\n');
+                }
+            }
+        }
+        result
+    }
 }
 
 pub enum DownloadStatus {

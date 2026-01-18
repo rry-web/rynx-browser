@@ -47,50 +47,10 @@ impl BrowserTab {
         });
     }
     pub fn extract_text_from_selection(&self) -> String {
-        let sel = match &self.selection {
-            Some(s) => s,
-            None => return String::new(),
-        };
-
-        // Normalize selection (handle backwards selection)
-        let (s_line, s_char, e_line, e_char) =
-            if (sel.start_line, sel.start_char) <= (sel.end_line, sel.end_char) {
-                (sel.start_line, sel.start_char, sel.end_line, sel.end_char)
-            } else {
-                (sel.end_line, sel.end_char, sel.start_line, sel.start_char)
-            };
-
-        let mut result = String::new();
-        for i in s_line..=e_line {
-            if let Some(line) = self.rendered_content.get(i) {
-                let line_str = line.to_string();
-                let start = if i == s_line { s_char } else { 0 };
-                let end = if i == e_line {
-                    e_char
-                } else {
-                    line_str.chars().count()
-                };
-
-                // Map char index to byte index
-                let byte_start = line_str
-                    .char_indices()
-                    .nth(start)
-                    .map(|(idx, _)| idx)
-                    .unwrap_or(0);
-                let byte_end = line_str
-                    .char_indices()
-                    .nth(end)
-                    .map(|(idx, _)| idx)
-                    .unwrap_or(line_str.len());
-
-                //result.push_str(&line_str[start..end]);
-                result.push_str(&line_str[byte_start..byte_end]);
-                if i < e_line {
-                    result.push('\n');
-                }
-            }
+        match &self.selection {
+            Some(sel) => sel.extract_text(&self.rendered_content),
+            None => String::new(),
         }
-        result
     }
     pub fn new(id: usize, initial_url: String) -> Self {
         let help_html = include_str!("../assets/help.html");
