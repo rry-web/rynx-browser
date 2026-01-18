@@ -64,7 +64,12 @@ impl DomRenderer {
     }
 
     fn add_vertical_space(&mut self) {
-        self.flush_line();
+        // Only flush the current line if it has content
+        if !self.current_line.is_empty() {
+            self.flush_line();
+        }
+
+        // Add vertical space only if the last line has content
         if let Some(last) = self.lines.last() {
             if !last.spans.is_empty() {
                 self.lines.push(Line::from(""));
