@@ -8,7 +8,7 @@ pub struct DomRenderer {
     pub lines: Vec<Line<'static>>,
     current_line: Vec<Span<'static>>,
     style_stack: Vec<Style>,
-    pub links: Vec<crate::LinkRegion>,
+    pub links: Vec<crate::models::LinkRegion>,
     max_width: usize,
     current_line_width: usize,
     active_link_url: Option<String>,
@@ -100,7 +100,7 @@ impl DomRenderer {
             }
 
             // Otherwise, create a new link region
-            self.links.push(crate::LinkRegion {
+            self.links.push(crate::models::LinkRegion {
                 url: url.clone(),
                 line_index: line_idx,
                 x_start: start_x,

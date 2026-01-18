@@ -12,7 +12,7 @@ pub struct PageMetadata {
     pub title: String,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum InputMode {
     Normal,
     Editing,

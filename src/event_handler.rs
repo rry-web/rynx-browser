@@ -36,7 +36,7 @@ fn handle_normal_mode<B: Backend>(
         KeyCode::Char('d') => {
             let tab = app.current_tab();
             if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
-                let download_url = crate::resolve_url(&tab.url_input, &region.url);
+                let download_url = crate::network::resolve_url(&tab.url_input, &region.url);
                 tab.status_message = format!("Starting download: {}", download_url);
                 app.trigger_download(download_url);
             }
@@ -61,7 +61,7 @@ fn handle_normal_mode<B: Backend>(
         KeyCode::Char('t') => {
             let tab = app.current_tab();
             if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
-                let full_url = crate::resolve_url(&tab.url_input, &region.url);
+                let full_url = crate::network::resolve_url(&tab.url_input, &region.url);
                 app.open_link_in_new_tab(full_url);
             }
         }
@@ -186,7 +186,7 @@ fn handle_normal_mode<B: Backend>(
                 }
 
                 // 2. Resolve URL (Handle relative paths)
-                let new_url = crate::resolve_url(&tab.url_input, &region.url);
+                let new_url = crate::network::resolve_url(&tab.url_input, &region.url);
                 tab.url_input = new_url;
 
                 // 3. Submit
@@ -372,7 +372,7 @@ pub fn handle_mouse_event<B: Backend>(
 
                 if let Some(region) = found_link {
                     // 3. Navigate
-                    let full_url = crate::resolve_url(&tab.url_input, &region.url);
+                    let full_url = crate::network::resolve_url(&tab.url_input, &region.url);
 
                     if mouse.modifiers.contains(KeyModifiers::CONTROL) {
                         app.open_link_in_new_tab(full_url);

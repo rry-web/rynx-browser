@@ -1,16 +1,6 @@
-mod app;
-mod constants;
-mod event_handler;
-mod models;
-mod network;
-mod renderer;
-mod ui;
-
-use crate::app::App;
-use crate::event_handler::{handle_key_event, handle_mouse_event, handle_network_event};
-use crate::models::LinkRegion;
-use crate::network::resolve_url;
-use crate::ui::ui;
+use rynx_browser::app::App;
+use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, handle_network_event};
+use rynx_browser::ui::ui;
 
 use std::{error::Error, io, time::Duration};
 
@@ -43,7 +33,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut terminal = Terminal::new(backend)?;
 
     // Setup Channel
-    let (tx, rx) = tokio::sync::mpsc::channel(crate::constants::CHANNEL_CAPACITY);
+    let (tx, rx) = tokio::sync::mpsc::channel(rynx_browser::constants::CHANNEL_CAPACITY);
     let app = App::new(tx, rx)?;
 
     // Initialize MCP
@@ -81,7 +71,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
 
         // Handle input events
         if event::poll(Duration::from_millis(
-            crate::constants::EVENT_POLL_TIMEOUT_MS,
+            rynx_browser::constants::EVENT_POLL_TIMEOUT_MS,
         ))? {
             match event::read()? {
                 Event::Resize(width, _height) => {
