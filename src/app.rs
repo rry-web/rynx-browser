@@ -1,11 +1,14 @@
+use crate::constants::{
+    DEFAULT_TAB_INDEX, INITIAL_ID_COUNTER, INITIAL_TAB_ID, MAX_PAGE_SIZE_BYTES,
+};
 use crate::models::{InputMode, LinkRegion, Selection};
-use crate::network::{NetworkResponse, attempt_jump, parse_html_metadata, strict_redirect_policy};
+use crate::network::{NetworkManager, NetworkResponse, attempt_jump, parse_html_metadata};
 use crate::renderer::DomRenderer;
 
 use ratatui::text::Line;
 use reqwest::StatusCode;
 use scraper::Html;
-use std::time::Duration;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use url::Url;
 
@@ -155,20 +158,27 @@ pub struct App {
     pub rx: mpsc::Receiver<NetworkResponse>,
     pub i2p_mode: bool,
     pub clipboard: arboard::Clipboard,
+    pub network_manager: Arc<NetworkManager>,
 }
 
 impl App {
-    pub fn new(tx: mpsc::Sender<NetworkResponse>, rx: mpsc::Receiver<NetworkResponse>) -> Self {
-        let initial_tab = BrowserTab::new(0, String::from("https://www.rust-lang.org"));
-        Self {
+    pub fn new(
+        tx: mpsc::Sender<NetworkResponse>,
+        rx: mpsc::Receiver<NetworkResponse>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let initial_tab =
+            BrowserTab::new(INITIAL_TAB_ID, String::from("https://www.rust-lang.org"));
+        let network_manager = Arc::new(NetworkManager::new()?);
+        Ok(Self {
             tabs: vec![initial_tab],
-            active_tab_index: 0,
-            id_counter: 1,
+            active_tab_index: DEFAULT_TAB_INDEX,
+            id_counter: INITIAL_ID_COUNTER,
             tx,
             rx,
             i2p_mode: false,
             clipboard: arboard::Clipboard::new().expect("Failed to initialize clipboard"),
-        }
+            network_manager,
+        })
     }
 
     pub fn current_tab(&mut self) -> &mut BrowserTab {
@@ -250,6 +260,7 @@ impl App {
         let id = tab.id;
         let tx_clone = self.tx.clone();
         let use_i2p = self.i2p_mode;
+        let network_manager = Arc::clone(&self.network_manager);
 
         let domain_for_jump = Url::parse(&target_url)
             .ok()
@@ -259,68 +270,38 @@ impl App {
         tokio::spawn(async move {
             let _ = tx_clone.send(NetworkResponse::Loading(id)).await;
 
-            let mut headers = reqwest::header::HeaderMap::new();
-            headers.insert("Referer", reqwest::header::HeaderValue::from_static(""));
+            let client = network_manager.get_client(use_i2p);
+            let mut resp_result = client.get(&target_url).send().await;
 
-            let mut builder = reqwest::Client::builder()
-                .user_agent("RustBrowser/0.1.0 reqwest/0.12")
-                .timeout(Duration::from_secs(100))
-                .default_headers(headers)
-                .redirect(strict_redirect_policy());
-
-            if use_i2p {
-                if let Ok(proxy) = reqwest::Proxy::http("http://127.0.0.1:4444") {
-                    builder = builder.proxy(proxy);
+            if let Ok(ref resp) = resp_result {
+                if resp.status() == StatusCode::INTERNAL_SERVER_ERROR
+                    || resp.status() == StatusCode::SERVICE_UNAVAILABLE
+                {
+                    if let Ok(jump_resp) =
+                        attempt_jump(&client, &domain_for_jump, tx_clone.clone(), id).await
+                    {
+                        resp_result = Ok(jump_resp);
+                    }
                 }
             }
 
-            match builder.build() {
-                Ok(client) => {
-                    let mut resp_result = client.get(&target_url).send().await;
-
-                    if let Ok(ref resp) = resp_result {
-                        if resp.status() == StatusCode::INTERNAL_SERVER_ERROR
-                            || resp.status() == StatusCode::SERVICE_UNAVAILABLE
-                        {
-                            if let Ok(jump_resp) =
-                                attempt_jump(&client, &domain_for_jump, tx_clone.clone(), id).await
-                            {
-                                resp_result = Ok(jump_resp);
-                            }
+            match resp_result {
+                Ok(resp) => {
+                    if let Some(len) = resp.content_length() {
+                        if len > MAX_PAGE_SIZE_BYTES {
+                            let _ = tx_clone
+                                .send(NetworkResponse::Error(id, "Page too large".to_string()))
+                                .await;
+                            return;
                         }
                     }
 
-                    match resp_result {
-                        Ok(resp) => {
-                            if let Some(len) = resp.content_length() {
-                                if len > 10 * 1024 * 1024 {
-                                    let _ = tx_clone
-                                        .send(NetworkResponse::Error(
-                                            id,
-                                            "Page too large".to_string(),
-                                        ))
-                                        .await;
-                                    return;
-                                }
-                            }
-
-                            match resp.text().await {
-                                Ok(html_text) => {
-                                    let metadata = parse_html_metadata(&html_text);
-                                    let _ = tx_clone
-                                        .send(NetworkResponse::Success(
-                                            id,
-                                            metadata.title,
-                                            html_text,
-                                        ))
-                                        .await;
-                                }
-                                Err(e) => {
-                                    let _ = tx_clone
-                                        .send(NetworkResponse::Error(id, e.to_string()))
-                                        .await;
-                                }
-                            }
+                    match resp.text().await {
+                        Ok(html_text) => {
+                            let metadata = parse_html_metadata(&html_text);
+                            let _ = tx_clone
+                                .send(NetworkResponse::Success(id, metadata.title, html_text))
+                                .await;
                         }
                         Err(e) => {
                             let _ = tx_clone
@@ -337,23 +318,15 @@ impl App {
             }
         });
     }
+
     pub fn trigger_download(&mut self, url: String) {
         let tab_id = self.current_tab().id;
         let tx = self.tx.clone();
         let use_i2p = self.i2p_mode;
+        let network_manager = Arc::clone(&self.network_manager);
 
         tokio::spawn(async move {
-            let mut builder = reqwest::Client::builder()
-                .user_agent("RynxBrowser/0.1.0")
-                .timeout(std::time::Duration::from_secs(3000));
-
-            if use_i2p {
-                if let Ok(proxy) = reqwest::Proxy::http("http://127.0.0.1:4444") {
-                    builder = builder.proxy(proxy);
-                }
-            }
-            //let client = reqwest::Client::new();
-            let client = builder.build().unwrap_or_else(|_| reqwest::Client::new());
+            let client = network_manager.get_download_client(use_i2p);
 
             let res = match client.get(&url).send().await {
                 Ok(r) => r,

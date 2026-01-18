@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::constants::{MOUSE_SCROLL_LINES, UI_HEIGHT_OFFSET, UI_ROW_OFFSET};
 use crate::models::{DownloadStatus, InputMode};
 use crate::network::NetworkResponse;
 
@@ -125,7 +126,7 @@ fn handle_normal_mode<B: Backend>(
             tab.cursor_line = (tab.cursor_line + 1).min(max_lines);
 
             // Auto-scroll down if cursor goes off-screen
-            let viewport_height = terminal_width.saturating_sub(8) as usize;
+            let viewport_height = terminal_width.saturating_sub(UI_HEIGHT_OFFSET) as usize;
             if tab.cursor_line >= tab.scroll + viewport_height {
                 tab.scroll = tab.cursor_line - viewport_height + 1;
             }
@@ -160,7 +161,7 @@ fn handle_normal_mode<B: Backend>(
                 let selected = &tab.link_regions[tab.selected_link_index];
                 // We subtract 6 for the Tab bar (3) and URL bar (3),
                 // and another 2 for the borders of the Browser block.
-                let viewport_height = terminal_width.saturating_sub(8) as usize;
+                let viewport_height = terminal_width.saturating_sub(UI_HEIGHT_OFFSET) as usize;
 
                 if selected.line_index < tab.scroll {
                     // If link is above current view, jump to it
@@ -343,16 +344,16 @@ pub fn handle_mouse_event<B: Backend>(
     let tab = app.current_tab();
     match mouse.kind {
         MouseEventKind::ScrollDown => {
-            tab.scroll = tab.scroll.saturating_add(3); // Scroll down 3 lines
+            tab.scroll = tab.scroll.saturating_add(MOUSE_SCROLL_LINES); // Scroll down by configured amount
         }
         MouseEventKind::ScrollUp => {
-            tab.scroll = tab.scroll.saturating_sub(3); // Scroll up 3 lines
+            tab.scroll = tab.scroll.saturating_sub(MOUSE_SCROLL_LINES); // Scroll up by configured amount
         }
         MouseEventKind::Down(MouseButton::Left) => {
             // 1. Determine which line was clicked
-            if mouse.row >= 7 {
-                // 7 is the UI offset
-                let visual_line = (mouse.row - 7) as usize;
+            if mouse.row >= UI_ROW_OFFSET {
+                // UI_ROW_OFFSET is the UI offset
+                let visual_line = (mouse.row - UI_ROW_OFFSET) as usize;
                 let real_line_idx = visual_line + tab.scroll;
                 let click_x = (mouse.column as usize).saturating_sub(1);
 

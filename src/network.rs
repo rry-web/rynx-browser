@@ -1,7 +1,12 @@
+use crate::constants::{
+    BROWSING_TIMEOUT_SECS, DOWNLOAD_TIMEOUT_SECS, I2P_PROXY_URL, JUMP_SERVICES, MAX_REDIRECTS,
+    USER_AGENT_BROWSING, USER_AGENT_DOWNLOAD,
+};
 use crate::models::PageMetadata;
 use reqwest::{Client, StatusCode};
 use scraper::{Html, Selector};
 use std::sync::OnceLock;
+use std::time::Duration;
 use tokio::sync::mpsc;
 
 pub enum NetworkResponse {
@@ -14,11 +19,93 @@ pub enum NetworkResponse {
     DownloadFinished(usize, String), // tab_id, filename
 }
 
-pub const JUMP_SERVICES: &[&str] = &[
-    "http://i2p-projekt.i2p/jump/",
-    "http://stats.i2p/jump/",
-    "http://reg.i2p/jump/",
-];
+pub struct NetworkManager {
+    client: Client,
+    i2p_client: Client,
+    download_client: Client,
+    i2p_download_client: Client,
+}
+
+impl NetworkManager {
+    /// Private helper method to build a reqwest client with consistent configuration
+    fn build_client(
+        user_agent: &str,
+        timeout: Duration,
+        use_proxy: bool,
+        include_headers: bool,
+    ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
+        let mut builder = Client::builder().user_agent(user_agent).timeout(timeout);
+
+        if include_headers {
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert("Referer", reqwest::header::HeaderValue::from_static(""));
+            builder = builder.default_headers(headers);
+        }
+
+        if use_proxy {
+            let proxy = reqwest::Proxy::http(I2P_PROXY_URL)?;
+            builder = builder.proxy(proxy);
+        }
+
+        // Always apply redirect policy for browsing clients
+        if include_headers {
+            builder = builder.redirect(strict_redirect_policy());
+        }
+
+        Ok(builder.build()?)
+    }
+
+    pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        // Create all four clients using the build_client helper method
+        let client = Self::build_client(
+            USER_AGENT_BROWSING,
+            Duration::from_secs(BROWSING_TIMEOUT_SECS),
+            false,
+            true,
+        )?;
+        let i2p_client = Self::build_client(
+            USER_AGENT_BROWSING,
+            Duration::from_secs(BROWSING_TIMEOUT_SECS),
+            true,
+            true,
+        )?;
+        let download_client = Self::build_client(
+            USER_AGENT_DOWNLOAD,
+            Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
+            false,
+            false,
+        )?;
+        let i2p_download_client = Self::build_client(
+            USER_AGENT_DOWNLOAD,
+            Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
+            true,
+            false,
+        )?;
+
+        Ok(Self {
+            client,
+            i2p_client,
+            download_client,
+            i2p_download_client,
+        })
+    }
+
+    pub fn get_client(&self, i2p_mode: bool) -> &Client {
+        if i2p_mode {
+            &self.i2p_client
+        } else {
+            &self.client
+        }
+    }
+
+    pub fn get_download_client(&self, i2p_mode: bool) -> &Client {
+        if i2p_mode {
+            &self.i2p_download_client
+        } else {
+            &self.download_client
+        }
+    }
+}
 
 pub fn parse_html_metadata(html: &str) -> PageMetadata {
     let document = Html::parse_document(html);
@@ -43,7 +130,7 @@ pub fn parse_html_metadata(html: &str) -> PageMetadata {
 
 pub fn strict_redirect_policy() -> reqwest::redirect::Policy {
     reqwest::redirect::Policy::custom(|attempt| {
-        if attempt.previous().len() > 10 {
+        if attempt.previous().len() > MAX_REDIRECTS {
             return attempt.error("Too many redirects");
         }
         if let Some(host) = attempt.url().host_str() {

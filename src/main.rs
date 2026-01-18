@@ -1,4 +1,5 @@
 mod app;
+mod constants;
 mod event_handler;
 mod models;
 mod network;
@@ -51,7 +52,7 @@ pub fn resolve_url(base: &str, target: &str) -> String {
 
 // MAIN LOOP (ASYNC)
 #[tokio::main] // This macro turns main() into an async runtime
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // This hook catches panics and restores the terminal before printing the error
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
@@ -66,9 +67,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Setup Channel (Capacity of 10 messages)
-    let (tx, rx) = tokio::sync::mpsc::channel(10);
-    let app = App::new(tx, rx);
+    // Setup Channel
+    let (tx, rx) = tokio::sync::mpsc::channel(crate::constants::CHANNEL_CAPACITY);
+    let app = App::new(tx, rx)?;
 
     // Initialize MCP
     //app.init_mcp().await;
@@ -104,7 +105,9 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
         }
 
         // Handle input events
-        if event::poll(Duration::from_millis(10))? {
+        if event::poll(Duration::from_millis(
+            crate::constants::EVENT_POLL_TIMEOUT_MS,
+        ))? {
             match event::read()? {
                 Event::Resize(width, _height) => {
                     app.resize_all_tabs(width);
