@@ -1,6 +1,6 @@
 use crate::constants::{
     BROWSING_TIMEOUT_SECS, DOWNLOAD_TIMEOUT_SECS, I2P_PROXY_URL, JUMP_SERVICES, MAX_REDIRECTS,
-    USER_AGENT_BROWSING, USER_AGENT_DOWNLOAD,
+    USER_AGENT,
 };
 use crate::models::PageMetadata;
 use reqwest::{Client, StatusCode};
@@ -92,25 +92,25 @@ impl NetworkManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         // Create all four clients using the build_client helper method
         let client = Self::build_client(
-            USER_AGENT_BROWSING,
+            USER_AGENT,
             Duration::from_secs(BROWSING_TIMEOUT_SECS),
             false,
             true,
         )?;
         let i2p_client = Self::build_client(
-            USER_AGENT_BROWSING,
+            USER_AGENT,
             Duration::from_secs(BROWSING_TIMEOUT_SECS),
             true,
             true,
         )?;
         let download_client = Self::build_client(
-            USER_AGENT_DOWNLOAD,
+            USER_AGENT,
             Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
             false,
             false,
         )?;
         let i2p_download_client = Self::build_client(
-            USER_AGENT_DOWNLOAD,
+            USER_AGENT,
             Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
             true,
             false,

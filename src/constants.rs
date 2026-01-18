@@ -1,6 +1,5 @@
-// User Agent constants
-pub const USER_AGENT_BROWSING: &str = "RustBrowser/0.1.0 reqwest/0.12";
-pub const USER_AGENT_DOWNLOAD: &str = "RynxBrowser/0.1.0";
+// User Agent constant
+pub const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
 
 // Network configuration
 pub const I2P_PROXY_URL: &str = "http://127.0.0.1:4444";
