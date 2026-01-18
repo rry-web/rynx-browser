@@ -19,6 +19,7 @@ pub fn handle_key_event<B: Backend>(
         InputMode::Normal => handle_normal_mode::<B>(app, key, terminal_width, terminal_height),
         InputMode::Editing => handle_editing_mode(app, key),
         InputMode::Visual => handle_visual_mode(app, key),
+        InputMode::Search => handle_search_mode(app, key),
     }
 }
 
@@ -82,6 +83,56 @@ fn handle_normal_mode<B: Backend>(
         KeyCode::Char('e') => {
             app.current_tab().input_mode = InputMode::Editing;
             app.current_tab().status_message = String::from("EDIT MODE - Type URL and press Enter");
+        }
+        KeyCode::Char('/') => {
+            app.current_tab().input_mode = InputMode::Search;
+            app.current_tab().search_state = Some(crate::models::SearchState {
+                query: String::new(),
+                matches: Vec::new(),
+                current_match_index: 0,
+            });
+            app.current_tab().status_message =
+                String::from("SEARCH MODE - Type query and press Enter");
+        }
+        KeyCode::Char('>') => {
+            let tab = app.current_tab();
+            tab.next_search_match();
+            // Auto-scroll to the current search match
+            if let Some(search_state) = &tab.search_state {
+                if let Some(current_match) =
+                    search_state.matches.get(search_state.current_match_index)
+                {
+                    let viewport_height = terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize;
+
+                    if current_match.line_index < tab.scroll {
+                        // If match is above current view, jump to it
+                        tab.scroll = current_match.line_index;
+                    } else if current_match.line_index >= tab.scroll + viewport_height {
+                        // If match is below, scroll just enough to make it visible at the bottom
+                        tab.scroll = current_match.line_index - viewport_height + 1;
+                    }
+                }
+            }
+        }
+        KeyCode::Char('<') => {
+            let tab = app.current_tab();
+            tab.previous_search_match();
+            // Auto-scroll to the current search match
+            if let Some(search_state) = &tab.search_state {
+                if let Some(current_match) =
+                    search_state.matches.get(search_state.current_match_index)
+                {
+                    let viewport_height = terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize;
+
+                    if current_match.line_index < tab.scroll {
+                        // If match is above current view, jump to it
+                        tab.scroll = current_match.line_index;
+                    } else if current_match.line_index >= tab.scroll + viewport_height {
+                        // If match is below, scroll just enough to make it visible at the bottom
+                        tab.scroll = current_match.line_index - viewport_height + 1;
+                    }
+                }
+            }
         }
         KeyCode::Down => app.current_tab().scroll = app.current_tab().scroll.saturating_add(1),
         KeyCode::Up => app.current_tab().scroll = app.current_tab().scroll.saturating_sub(1),
@@ -463,4 +514,43 @@ pub fn handle_network_event<B: Backend>(
         }
     }
     Ok(())
+}
+
+fn handle_search_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
+    let tab = app.current_tab();
+    match key.code {
+        KeyCode::Esc => {
+            tab.clear_search();
+        }
+        KeyCode::Enter => {
+            // Search is already performed during typing, just exit search mode
+            tab.input_mode = InputMode::Normal;
+        }
+        KeyCode::Char(c) => {
+            if let Some(search_state) = &mut tab.search_state {
+                search_state.query.push(c);
+                // Clone the query to avoid borrowing issues
+                let query = search_state.query.clone();
+                let _ = search_state; // Release the borrow
+                tab.perform_search(&query);
+            }
+        }
+        KeyCode::Backspace => {
+            if let Some(search_state) = &mut tab.search_state {
+                search_state.query.pop();
+                if search_state.query.is_empty() {
+                    tab.search_state = None;
+                    tab.input_mode = InputMode::Normal;
+                    tab.status_message = String::from("Ready");
+                } else {
+                    // Clone the query to avoid borrowing issues
+                    let query = search_state.query.clone();
+                    let _ = search_state; // Release the borrow
+                    tab.perform_search(&query);
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(false)
 }

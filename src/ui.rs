@@ -36,6 +36,7 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
         InputMode::Normal => Style::default(),
         InputMode::Editing => Style::default().fg(Color::Yellow),
         InputMode::Visual => Style::default().fg(Color::Blue),
+        InputMode::Search => Style::default().fg(Color::Magenta),
     };
 
     let mode_text = if app.i2p_mode {
@@ -106,6 +107,61 @@ fn apply_visual_highlights(
                 span.style = span.style.bg(Color::Blue).fg(Color::White);
             }
             current_x = span_end;
+        }
+    }
+}
+
+/// Apply highlighting to search results
+fn apply_search_highlights(
+    lines: &mut [Line],
+    search_state: Option<&crate::models::SearchState>,
+    start_index: usize,
+    end_index: usize,
+) {
+    if let Some(search_state) = search_state {
+        for search_match in &search_state.matches {
+            // Check if the search match is within the lines we are currently displaying
+            if search_match.line_index >= start_index && search_match.line_index < end_index {
+                let relative_line_idx = search_match.line_index - start_index;
+
+                // Boundary check to prevent panic
+                if let Some(line) = lines.get_mut(relative_line_idx) {
+                    let mut current_x = 0;
+                    for span in line.spans.iter_mut() {
+                        let span_width = span.width();
+                        let span_end = current_x + span_width;
+
+                        // Check if this span overlaps with the search match
+                        if current_x < search_match.end_char && span_end > search_match.start_char {
+                            // Apply search highlighting (yellow background, black text)
+                            span.style = span.style.bg(Color::Yellow).fg(Color::Black);
+                        }
+                        current_x = span_end;
+                    }
+                }
+            }
+        }
+
+        // Highlight current search match with different color (green background)
+        if let Some(current_match) = search_state.matches.get(search_state.current_match_index) {
+            if current_match.line_index >= start_index && current_match.line_index < end_index {
+                let relative_line_idx = current_match.line_index - start_index;
+
+                if let Some(line) = lines.get_mut(relative_line_idx) {
+                    let mut current_x = 0;
+                    for span in line.spans.iter_mut() {
+                        let span_width = span.width();
+                        let span_end = current_x + span_width;
+
+                        if current_x < current_match.end_char && span_end > current_match.start_char
+                        {
+                            // Current match gets green background
+                            span.style = span.style.bg(Color::Green).fg(Color::Black);
+                        }
+                        current_x = span_end;
+                    }
+                }
+            }
         }
     }
 }
@@ -196,6 +252,14 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
         &mut viewport_content,
         &active_tab.link_regions,
         active_tab.selected_link_index,
+        start_index,
+        end_index,
+    );
+
+    // Apply search result highlighting
+    apply_search_highlights(
+        &mut viewport_content,
+        active_tab.search_state.as_ref(),
         start_index,
         end_index,
     );

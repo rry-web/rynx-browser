@@ -36,6 +36,7 @@ cargo run
 | Key | Action |
 | :--- | :--- |
 | **`e`** | Enter **Edit Mode** to type a URL or search query. |
+| **`/`** | Enter **Search Mode** to search within the current page. |
 | **`p`** | Toggle **I2P Mode** (Routes traffic via local proxy `127.0.0.1:4444`). |
 | **`Shift + v`** | Toggle Page Source View. |
 | **`q`** | Quit the browser. |
@@ -45,6 +46,16 @@ cargo run
 | :--- | :--- |
 | **`v`** | Enter visual mode within the browser. |
 | **`y`** | Copy text to clipboard. |
+
+### Search Mode (Press '/')
+| Key | Action |
+| :--- | :--- |
+| **Typing** | Input search query with live results. |
+| **`>`** | Jump to next search match. |
+| **`<`** | Jump to previous search match. |
+| **`Enter`** | Finish search and return to Normal Mode. |
+| **`Esc`** | Cancel search and return to Normal Mode. |
+| **`Backspace`** | Remove characters from search query. |
 
 ### Edit Mode (URL Bar)
 _Active after pressing `e`_
@@ -70,6 +81,7 @@ _Active after pressing `e`_
 - [x] **I2P Integration**: Routes via local proxy `127.0.0.1:4444`.
 - [x] **Download Manager**: Memory-efficient streaming with progress tracking.
 - [x] **Clipboard Support**: Full copy/paste support for URL bar and content.
+- [x] **Search Functionality**: Character-level search with highlighting and navigation.
 - [ ] **MCP Support**: Integration for Model Context Protocol as a JS alternative.
 - [ ] **High-Fidelity Images**: Implementing `ratatui-image` for Sixel/Kitty support.
 - [ ] **Text Input**: For entering usernames, passwords, or messages into text boxes.

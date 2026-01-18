@@ -17,6 +17,7 @@ pub enum InputMode {
     Normal,
     Editing,
     Visual,
+    Search,
 }
 
 pub struct Selection {
@@ -24,6 +25,18 @@ pub struct Selection {
     pub start_char: usize,
     pub end_line: usize,
     pub end_char: usize,
+}
+
+pub struct SearchMatch {
+    pub line_index: usize,
+    pub start_char: usize,
+    pub end_char: usize,
+}
+
+pub struct SearchState {
+    pub query: String,
+    pub matches: Vec<SearchMatch>,
+    pub current_match_index: usize,
 }
 
 impl Selection {

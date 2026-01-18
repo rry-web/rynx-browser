@@ -2,7 +2,7 @@ use crate::constants::{
     DEFAULT_TAB_INDEX, INITIAL_ID_COUNTER, INITIAL_TAB_ID, MARGINALIA_SEARCH_URL,
     MAX_PAGE_SIZE_BYTES,
 };
-use crate::models::{InputMode, LinkRegion, Selection};
+use crate::models::{InputMode, LinkRegion, SearchState, Selection};
 use crate::network::{NetworkManager, NetworkResponse, attempt_jump, parse_html_metadata};
 use crate::renderer::DomRenderer;
 
@@ -33,6 +33,7 @@ pub struct BrowserTab {
     pub cursor_char: usize,
     pub selection: Option<Selection>,
     pub download_state: Option<crate::models::Download>,
+    pub search_state: Option<SearchState>,
 }
 
 impl BrowserTab {
@@ -76,7 +77,83 @@ impl BrowserTab {
             cursor_char: 0,
             selection: None,
             download_state: None,
+            search_state: None,
         }
+    }
+
+    pub fn perform_search(&mut self, query: &str) {
+        if query.is_empty() {
+            self.search_state = None;
+            return;
+        }
+
+        let mut matches = Vec::new();
+        let query_chars: Vec<char> = query.chars().collect();
+
+        for (line_idx, line) in self.rendered_content.iter().enumerate() {
+            let line_str = line.to_string();
+            let line_chars: Vec<char> = line_str.chars().collect();
+
+            let mut char_idx = 0;
+            while char_idx <= line_chars.len().saturating_sub(query_chars.len()) {
+                let mut found = true;
+                for (i, &query_char) in query_chars.iter().enumerate() {
+                    if char_idx + i >= line_chars.len() || line_chars[char_idx + i] != query_char {
+                        found = false;
+                        break;
+                    }
+                }
+
+                if found {
+                    matches.push(crate::models::SearchMatch {
+                        line_index: line_idx,
+                        start_char: char_idx,
+                        end_char: char_idx + query_chars.len(),
+                    });
+                    // Move past this match to avoid overlapping matches
+                    char_idx += query_chars.len();
+                } else {
+                    char_idx += 1;
+                }
+            }
+        }
+
+        self.search_state = if matches.is_empty() {
+            None
+        } else {
+            Some(SearchState {
+                query: query.to_string(),
+                matches,
+                current_match_index: 0,
+            })
+        };
+    }
+
+    pub fn next_search_match(&mut self) {
+        if let Some(search_state) = &mut self.search_state {
+            if !search_state.matches.is_empty() {
+                search_state.current_match_index =
+                    (search_state.current_match_index + 1) % search_state.matches.len();
+            }
+        }
+    }
+
+    pub fn previous_search_match(&mut self) {
+        if let Some(search_state) = &mut self.search_state {
+            if !search_state.matches.is_empty() {
+                search_state.current_match_index = if search_state.current_match_index == 0 {
+                    search_state.matches.len() - 1
+                } else {
+                    search_state.current_match_index - 1
+                };
+            }
+        }
+    }
+
+    pub fn clear_search(&mut self) {
+        self.search_state = None;
+        self.input_mode = InputMode::Normal;
+        self.status_message = String::from("Ready");
     }
 }
 
