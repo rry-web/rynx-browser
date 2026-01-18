@@ -9,6 +9,7 @@ use crate::renderer::DomRenderer;
 use ratatui::text::Line;
 use reqwest::StatusCode;
 use scraper::Html;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use url::Url;
@@ -332,6 +333,29 @@ impl App {
         });
     }
 
+    /// Sanitize filename to prevent path traversal attacks
+    fn sanitize_filename(filename: &str) -> String {
+        // Get just the filename part, stripping any path components
+        let path = Path::new(filename);
+        let filename_only = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("download.dat");
+
+        // Remove any dangerous characters and ensure it's safe
+        let safe_name = filename_only
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '-' || *c == '_')
+            .collect::<String>();
+
+        // Ensure we have a valid filename
+        if safe_name.is_empty() || safe_name == "." || safe_name == ".." {
+            "download.dat".to_string()
+        } else {
+            safe_name
+        }
+    }
+
     pub fn trigger_download(&mut self, url: String) {
         let tab_id = self.current_tab().id;
         let tx = self.tx.clone();
@@ -355,7 +379,10 @@ impl App {
             };
 
             let total_size = res.content_length();
-            let fname = url.split('/').last().unwrap_or("download.dat").to_string();
+
+            // Extract and sanitize filename to prevent path traversal attacks
+            let raw_filename = url.split('/').last().unwrap_or("download.dat");
+            let fname = Self::sanitize_filename(raw_filename);
             let mut file = match tokio::fs::File::create(&fname).await {
                 Ok(f) => f,
                 Err(e) => {
