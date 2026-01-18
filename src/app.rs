@@ -14,6 +14,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use url::Url;
 
+use directories::UserDirs;
 use futures_util::StreamExt;
 use tokio::io::AsyncWriteExt; // Required for streaming to file
 
@@ -266,8 +267,26 @@ impl App {
         }
 
         // Enforce HTTPS for clearweb requests (security hardening)
+        // Allow HTTP for local addresses (localhost, 127.0.0.1, etc.)
         if !use_i2p && target_url.starts_with("http://") && !target_url.contains(".i2p") {
-            target_url = target_url.replace("http://", "https://");
+            if let Ok(url) = Url::parse(&target_url) {
+                if let Some(host) = url.host_str() {
+                    let is_local = match host {
+                        "localhost" => true,
+                        "127.0.0.1" => true,
+                        "::1" => true,
+                        host if host.starts_with("127.") => true, // 127.x.x.x range
+                        _ => false,
+                    };
+
+                    if !is_local {
+                        target_url = target_url.replace("http://", "https://");
+                    }
+                } else {
+                    // If we can't parse the host, enforce HTTPS for security
+                    target_url = target_url.replace("http://", "https://");
+                }
+            }
         }
 
         tab.url_input = target_url.clone();
@@ -380,10 +399,49 @@ impl App {
 
             let total_size = res.content_length();
 
+            // Get the system Downloads directory
+            let downloads_dir = match UserDirs::new() {
+                Some(user_dirs) => {
+                    if let Some(downloads) = user_dirs.download_dir() {
+                        downloads.to_path_buf()
+                    } else {
+                        let _ = tx
+                            .send(NetworkResponse::Error(
+                                tab_id,
+                                "Could not determine Downloads directory".to_string(),
+                            ))
+                            .await;
+                        return;
+                    }
+                }
+                None => {
+                    let _ = tx
+                        .send(NetworkResponse::Error(
+                            tab_id,
+                            "Could not access user directories".to_string(),
+                        ))
+                        .await;
+                    return;
+                }
+            };
+
+            // Create Downloads directory if it doesn't exist
+            if let Err(e) = tokio::fs::create_dir_all(&downloads_dir).await {
+                let _ = tx
+                    .send(NetworkResponse::Error(
+                        tab_id,
+                        format!("Failed to create Downloads directory: {}", e),
+                    ))
+                    .await;
+                return;
+            }
+
             // Extract and sanitize filename to prevent path traversal attacks
             let raw_filename = url.split('/').last().unwrap_or("download.dat");
             let fname = Self::sanitize_filename(raw_filename);
-            let mut file = match tokio::fs::File::create(&fname).await {
+            let file_path = downloads_dir.join(&fname);
+
+            let mut file = match tokio::fs::File::create(&file_path).await {
                 Ok(f) => f,
                 Err(e) => {
                     let _ = tx
@@ -409,7 +467,10 @@ impl App {
                 }
             }
             let _ = tx
-                .send(NetworkResponse::DownloadFinished(tab_id, fname))
+                .send(NetworkResponse::DownloadFinished(
+                    tab_id,
+                    file_path.display().to_string(),
+                ))
                 .await;
         });
     }
