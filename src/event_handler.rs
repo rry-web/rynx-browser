@@ -11,11 +11,12 @@ pub fn handle_key_event<B: Backend>(
     app: &mut App,
     key: KeyEvent,
     terminal_width: u16,
+    terminal_height: u16,
 ) -> Result<bool> {
     let active_mode = app.current_tab().input_mode;
 
     match active_mode {
-        InputMode::Normal => handle_normal_mode::<B>(app, key, terminal_width),
+        InputMode::Normal => handle_normal_mode::<B>(app, key, terminal_width, terminal_height),
         InputMode::Editing => handle_editing_mode(app, key),
         InputMode::Visual => handle_visual_mode(app, key),
     }
@@ -25,6 +26,7 @@ fn handle_normal_mode<B: Backend>(
     app: &mut App,
     key: KeyEvent,
     terminal_width: u16,
+    terminal_height: u16,
 ) -> Result<bool> {
     match key.code {
         // --- VISUAL MODE ---
@@ -126,7 +128,7 @@ fn handle_normal_mode<B: Backend>(
             tab.cursor_line = (tab.cursor_line + 1).min(max_lines);
 
             // Auto-scroll down if cursor goes off-screen
-            let viewport_height = terminal_width.saturating_sub(UI_HEIGHT_OFFSET) as usize;
+            let viewport_height = terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize;
             if tab.cursor_line >= tab.scroll + viewport_height {
                 tab.scroll = tab.cursor_line - viewport_height + 1;
             }
@@ -161,7 +163,7 @@ fn handle_normal_mode<B: Backend>(
                 let selected = &tab.link_regions[tab.selected_link_index];
                 // We subtract 6 for the Tab bar (3) and URL bar (3),
                 // and another 2 for the borders of the Browser block.
-                let viewport_height = terminal_width.saturating_sub(UI_HEIGHT_OFFSET) as usize;
+                let viewport_height = terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize;
 
                 if selected.line_index < tab.scroll {
                     // If link is above current view, jump to it

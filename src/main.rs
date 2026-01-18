@@ -88,7 +88,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                     app.resize_all_tabs(width);
                 }
                 Event::Key(key) => {
-                    if handle_key_event::<B>(&mut app, key, size.width)? {
+                    if handle_key_event::<B>(&mut app, key, size.width, size.height)? {
                         return Ok(()); // Quit signal received
                     }
                 }
