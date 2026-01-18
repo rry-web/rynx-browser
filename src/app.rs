@@ -1,5 +1,6 @@
 use crate::constants::{
-    DEFAULT_TAB_INDEX, INITIAL_ID_COUNTER, INITIAL_TAB_ID, MAX_PAGE_SIZE_BYTES,
+    DEFAULT_TAB_INDEX, INITIAL_ID_COUNTER, INITIAL_TAB_ID, MARGINALIA_SEARCH_URL,
+    MAX_PAGE_SIZE_BYTES,
 };
 use crate::models::{InputMode, LinkRegion, Selection};
 use crate::network::{NetworkManager, NetworkResponse, attempt_jump, parse_html_metadata};
@@ -181,7 +182,7 @@ impl App {
                 let safe_query = url::form_urlencoded::Serializer::new(String::new())
                     .append_pair("query", &target_url)
                     .finish();
-                target_url = format!("https://search.marginalia.nu/search?{}", safe_query);
+                target_url = format!("{}{}", MARGINALIA_SEARCH_URL, safe_query);
             }
         }
 

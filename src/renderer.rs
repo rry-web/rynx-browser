@@ -1,3 +1,4 @@
+use crate::constants::UI_BORDER_WIDTH;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use scraper::{Html, Node};
@@ -39,7 +40,7 @@ impl DomRenderer {
             current_line: Vec::new(),
             style_stack: vec![Style::default()],
             links: Vec::new(),
-            max_width: width.saturating_sub(2),
+            max_width: width.saturating_sub(UI_BORDER_WIDTH),
             current_line_width: 0,
             active_link_url: None,
             preserve_whitespace: false,

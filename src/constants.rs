@@ -11,8 +11,11 @@ pub const DOWNLOAD_TIMEOUT_SECS: u64 = 3000;
 pub const CHANNEL_CAPACITY: usize = 10;
 
 // UI layout constants
+pub const TAB_BAR_HEIGHT: u16 = 3;
+pub const URL_BAR_HEIGHT: u16 = 3;
 pub const UI_ROW_OFFSET: u16 = 7;
 pub const UI_HEIGHT_OFFSET: u16 = 8;
+pub const UI_BORDER_WIDTH: usize = 2;
 pub const MOUSE_SCROLL_LINES: usize = 3;
 
 // File size limits
@@ -35,3 +38,6 @@ pub const EVENT_POLL_TIMEOUT_MS: u64 = 10;
 
 // Redirect policy
 pub const MAX_REDIRECTS: usize = 10;
+
+// Search URLs
+pub const MARGINALIA_SEARCH_URL: &str = "https://search.marginalia.nu/search?";

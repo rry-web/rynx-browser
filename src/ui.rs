@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::constants::{TAB_BAR_HEIGHT, URL_BAR_HEIGHT};
 use crate::models::{InputMode, LinkRegion};
 use ratatui::{
     Frame,
@@ -227,9 +228,9 @@ pub fn ui(f: &mut Frame, app: &App) {
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Length(3), // Tab Bar
-                Constraint::Length(3), // URL Input
-                Constraint::Min(0),    // Content area
+                Constraint::Length(TAB_BAR_HEIGHT), // Tab Bar
+                Constraint::Length(URL_BAR_HEIGHT), // URL Input
+                Constraint::Min(0),                 // Content area
             ]
             .as_ref(),
         )
