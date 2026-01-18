@@ -44,13 +44,46 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
     } else {
         " [Clearweb] "
     };
-    let input = Paragraph::new(active_tab.url_input.as_str())
+
+    // In Search mode, show the search query instead of the URL
+    let (display_text, title) = match active_tab.input_mode {
+        InputMode::Search => {
+            let query = active_tab
+                .search_state
+                .as_ref()
+                .map(|s| s.query.as_str())
+                .unwrap_or("");
+            let match_count = active_tab
+                .search_state
+                .as_ref()
+                .map(|s| s.matches.len())
+                .unwrap_or(0);
+            let current_index = active_tab
+                .search_state
+                .as_ref()
+                .map(|s| s.current_match_index + 1)
+                .unwrap_or(0);
+
+            (
+                query,
+                format!(
+                    "SEARCH - {} [{}/{}] {}",
+                    mode_text.trim(),
+                    current_index,
+                    match_count,
+                    mode_text
+                ),
+            )
+        }
+        _ => (
+            active_tab.url_input.as_str(),
+            format!("URL - {}", mode_text),
+        ),
+    };
+
+    let input = Paragraph::new(display_text)
         .style(input_style)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(format!("URL - {}", mode_text)),
-        );
+        .block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(input, area);
 }
 
