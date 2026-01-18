@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::models::InputMode;
+use crate::models::{InputMode, LinkRegion};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -8,20 +8,8 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Gauge, Paragraph, Tabs},
 };
 
-pub fn ui(f: &mut Frame, app: &App) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Length(3), // Tab Bar
-                Constraint::Length(3), // URL Input
-                Constraint::Min(0),    // Content area
-            ]
-            .as_ref(),
-        )
-        .split(f.area());
-
-    // 1. RENDER TABS
+/// Render the tab bar showing all open tabs
+fn render_tabs(f: &mut Frame, app: &App, area: Rect) {
     let titles: Vec<Line> = app
         .tabs
         .iter()
@@ -37,9 +25,11 @@ pub fn ui(f: &mut Frame, app: &App) {
                 .add_modifier(Modifier::BOLD),
         );
 
-    f.render_widget(tabs, chunks[0]);
+    f.render_widget(tabs, area);
+}
 
-    // 2. RENDER URL BAR
+/// Render the URL input bar with mode styling
+fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
     let active_tab = &app.tabs[app.active_tab_index];
     let input_style = match active_tab.input_mode {
         InputMode::Normal => Style::default(),
@@ -59,10 +49,132 @@ pub fn ui(f: &mut Frame, app: &App) {
                 .borders(Borders::ALL)
                 .title(format!("URL - {}", mode_text)),
         );
-    f.render_widget(input, chunks[1]);
+    f.render_widget(input, area);
+}
 
-    // 3. RENDER CONTENT
-    let content_area_height = chunks[2].height as usize;
+/// Apply visual mode selection highlighting to content lines
+fn apply_visual_highlights(
+    lines: &mut [Line],
+    selection: &crate::models::Selection,
+    start_index: usize,
+) {
+    // Normalize bounds for rendering
+    let (s_line, s_char, e_line, e_char) = if (selection.start_line, selection.start_char)
+        <= (selection.end_line, selection.end_char)
+    {
+        (
+            selection.start_line,
+            selection.start_char,
+            selection.end_line,
+            selection.end_char,
+        )
+    } else {
+        (
+            selection.end_line,
+            selection.end_char,
+            selection.start_line,
+            selection.start_char,
+        )
+    };
+
+    for (i, line) in lines.iter_mut().enumerate() {
+        let current_line_idx = start_index + i;
+
+        // Skip lines outside the selection range
+        if current_line_idx < s_line || current_line_idx > e_line {
+            continue;
+        }
+
+        let mut current_x = 0;
+        for span in line.spans.iter_mut() {
+            let span_width = span.width();
+            let span_end = current_x + span_width;
+
+            // Determine if this specific span falls within the selection boundaries
+            let is_selected = if current_line_idx == s_line && current_line_idx == e_line {
+                current_x < e_char && span_end > s_char
+            } else if current_line_idx == s_line {
+                span_end > s_char
+            } else if current_line_idx == e_line {
+                current_x < e_char
+            } else {
+                true
+            };
+
+            if is_selected {
+                span.style = span.style.bg(Color::Blue).fg(Color::White);
+            }
+            current_x = span_end;
+        }
+    }
+}
+
+/// Apply highlighting to the currently selected link
+fn apply_link_highlights(
+    lines: &mut [Line],
+    link_regions: &[LinkRegion],
+    selected_link_index: usize,
+    start_index: usize,
+    end_index: usize,
+) {
+    if link_regions.is_empty() {
+        return;
+    }
+
+    let selected_link = &link_regions[selected_link_index];
+
+    // Check if the link is within the lines we are currently displaying
+    if selected_link.line_index >= start_index && selected_link.line_index < end_index {
+        let relative_line_idx = selected_link.line_index - start_index;
+
+        // Boundary check to prevent panic if viewport_content is smaller than expected
+        if let Some(line) = lines.get_mut(relative_line_idx) {
+            let mut current_x = 0;
+            for span in line.spans.iter_mut() {
+                let span_width = span.width();
+                let span_end = current_x + span_width;
+
+                if current_x < selected_link.x_end && span_end > selected_link.x_start {
+                    span.style = span.style.bg(Color::Yellow).fg(Color::Black);
+                }
+                current_x = span_end;
+            }
+        }
+    }
+}
+
+/// Apply cursor highlighting for Normal and Visual modes
+fn apply_cursor_highlight(
+    lines: &mut [Line],
+    cursor_line: usize,
+    cursor_char: usize,
+    start_index: usize,
+    end_index: usize,
+) {
+    if cursor_line >= start_index && cursor_line < end_index {
+        let relative_line_idx = cursor_line - start_index;
+        if let Some(line) = lines.get_mut(relative_line_idx) {
+            let mut current_x = 0;
+            for span in line.spans.iter_mut() {
+                let span_width = span.width();
+                let span_end = current_x + span_width;
+
+                // Check if the cursor_char falls within this span
+                if cursor_char >= current_x && cursor_char < span_end {
+                    // Apply REVERSED style to the span containing the cursor
+                    span.style = span.style.add_modifier(Modifier::REVERSED);
+                    break; // Stop looking once the cursor position is styled
+                }
+                current_x = span_end;
+            }
+        }
+    }
+}
+
+/// Render the main browser content area with all highlighting applied
+fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
+    let active_tab = &app.tabs[app.active_tab_index];
+    let content_area_height = area.height as usize;
     let start_index = active_tab.scroll;
     let total_lines = active_tab.rendered_content.len();
     let end_index = (start_index + content_area_height).min(total_lines);
@@ -73,92 +185,31 @@ pub fn ui(f: &mut Frame, app: &App) {
         Vec::new()
     };
 
-    // --- VISUAL MODE HIGHLIGHTING ---
+    // Apply visual mode highlighting
     if let (InputMode::Visual, Some(sel)) = (active_tab.input_mode, &active_tab.selection) {
-        // Normalize bounds for rendering
-        let (s_line, s_char, e_line, e_char) =
-            if (sel.start_line, sel.start_char) <= (sel.end_line, sel.end_char) {
-                (sel.start_line, sel.start_char, sel.end_line, sel.end_char)
-            } else {
-                (sel.end_line, sel.end_char, sel.start_line, sel.start_char)
-            };
-
-        for (i, line) in viewport_content.iter_mut().enumerate() {
-            let current_line_idx = start_index + i;
-
-            // Skip lines outside the selection range
-            if current_line_idx < s_line || current_line_idx > e_line {
-                continue;
-            }
-
-            let mut current_x = 0;
-            for span in line.spans.iter_mut() {
-                let span_width = span.width();
-                let span_end = current_x + span_width;
-
-                // Determine if this specific span falls within the selection boundaries
-                let is_selected = if current_line_idx == s_line && current_line_idx == e_line {
-                    current_x < e_char && span_end > s_char
-                } else if current_line_idx == s_line {
-                    span_end > s_char
-                } else if current_line_idx == e_line {
-                    current_x < e_char
-                } else {
-                    true
-                };
-
-                if is_selected {
-                    span.style = span.style.bg(Color::Blue).fg(Color::White);
-                }
-                current_x = span_end;
-            }
-        }
+        apply_visual_highlights(&mut viewport_content, sel, start_index);
     }
 
-    if !active_tab.link_regions.is_empty() {
-        let selected_link = &active_tab.link_regions[active_tab.selected_link_index];
+    // Apply link highlighting
+    apply_link_highlights(
+        &mut viewport_content,
+        &active_tab.link_regions,
+        active_tab.selected_link_index,
+        start_index,
+        end_index,
+    );
 
-        // Check if the link is within the lines we are currently displaying
-        if selected_link.line_index >= start_index && selected_link.line_index < end_index {
-            let relative_line_idx = selected_link.line_index - start_index;
-
-            // Boundary check to prevent panic if viewport_content is smaller than expected
-            if let Some(line) = viewport_content.get_mut(relative_line_idx) {
-                let mut current_x = 0;
-                for span in line.spans.iter_mut() {
-                    let span_width = span.width();
-                    let span_end = current_x + span_width;
-
-                    if current_x < selected_link.x_end && span_end > selected_link.x_start {
-                        span.style = span.style.bg(Color::Yellow).fg(Color::Black);
-                    }
-                    current_x = span_end;
-                }
-            }
-        }
-    }
-
-    // This allows the user to see their starting point before/during selection
+    // Apply cursor highlighting for Normal and Visual modes
     if active_tab.input_mode == InputMode::Normal || active_tab.input_mode == InputMode::Visual {
-        if active_tab.cursor_line >= start_index && active_tab.cursor_line < end_index {
-            let relative_line_idx = active_tab.cursor_line - start_index;
-            if let Some(line) = viewport_content.get_mut(relative_line_idx) {
-                let mut current_x = 0;
-                for span in line.spans.iter_mut() {
-                    let span_width = span.width();
-                    let span_end = current_x + span_width;
-
-                    // Check if the cursor_char falls within this span
-                    if active_tab.cursor_char >= current_x && active_tab.cursor_char < span_end {
-                        // Apply REVERSED style to the span containing the cursor
-                        span.style = span.style.add_modifier(Modifier::REVERSED);
-                        break; // Stop looking once the cursor position is styled
-                    }
-                    current_x = span_end;
-                }
-            }
-        }
+        apply_cursor_highlight(
+            &mut viewport_content,
+            active_tab.cursor_line,
+            active_tab.cursor_char,
+            start_index,
+            end_index,
+        );
     }
+
     let status_text = format!("Status: {}", active_tab.status_message);
     let content = Paragraph::new(viewport_content).scroll((0, 0)).block(
         Block::default()
@@ -166,9 +217,28 @@ pub fn ui(f: &mut Frame, app: &App) {
             .title(format!("Browser - [{}]", status_text)),
     );
 
-    f.render_widget(Clear, chunks[2]);
-    f.render_widget(content, chunks[2]);
-    render_download_overlay(f, app, chunks[2])
+    f.render_widget(Clear, area);
+    f.render_widget(content, area);
+    render_download_overlay(f, app, area)
+}
+
+pub fn ui(f: &mut Frame, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Length(3), // Tab Bar
+                Constraint::Length(3), // URL Input
+                Constraint::Min(0),    // Content area
+            ]
+            .as_ref(),
+        )
+        .split(f.area());
+
+    // Render each UI component
+    render_tabs(f, app, chunks[0]);
+    render_url_bar(f, app, chunks[1]);
+    render_browser_content(f, app, chunks[2]);
 }
 
 fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
