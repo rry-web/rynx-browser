@@ -8,6 +8,7 @@ use scraper::{Html, Selector};
 use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::sync::mpsc;
+use url::Url;
 
 pub enum NetworkResponse {
     Success(usize, String, String),
@@ -17,6 +18,32 @@ pub enum NetworkResponse {
     // Variant for downloads
     DownloadProgress(usize, u64, Option<u64>),
     DownloadFinished(usize, String), // tab_id, filename
+}
+
+/// Resolve relative URLs against a base URL
+pub fn resolve_url(base: &str, target: &str) -> String {
+    // If target is already a full URL (e.g. https://google.com), return it immediately
+    if let Ok(url) = Url::parse(target) {
+        return url.to_string();
+    }
+
+    // Handle internal pages or empty bases
+    if base.is_empty() || base.starts_with("about:") || base == "New Tab" {
+        // If we are on a help page, relative links can't be resolved,
+        // so we treat the target as a potential new absolute URL or search query.
+        return target.to_string();
+    }
+
+    // Try standard joining
+    match Url::parse(base) {
+        Ok(base_url) => {
+            match base_url.join(target) {
+                Ok(joined) => joined.to_string(),
+                Err(_) => target.to_string(), // Fallback to target string if join fails
+            }
+        }
+        Err(_) => target.to_string(), // Fallback if base is unparseable
+    }
 }
 
 pub struct NetworkManager {
