@@ -60,13 +60,14 @@ impl DomRenderer {
         let start_x = self.current_line_width;
         let end_x = start_x + width;
 
-        self.current_line.push(Span::styled(content, self.current_style));
+        self.current_line
+            .push(Span::styled(content, self.current_style));
         self.current_line_width += width;
 
         // Track link regions
         if let Some(url) = &self.active_link_url {
             let line_idx = self.lines.len();
-            
+
             // Try to merge with the previous link region if it's on the same line and contiguous
             if let Some(last) = self.links.last_mut() {
                 if last.line_index == line_idx && last.url == *url && last.x_end == start_x {
@@ -74,7 +75,7 @@ impl DomRenderer {
                     return;
                 }
             }
-            
+
             // Otherwise, create a new link region
             self.links.push(crate::LinkRegion {
                 url: url.clone(),
@@ -142,9 +143,9 @@ impl DomRenderer {
                 }
 
                 if split_idx == 0 && !remaining.is_empty() {
-                     if let Some((idx, ch)) = remaining.char_indices().next() {
-                         split_idx = idx + ch.len_utf8();
-                     }
+                    if let Some((idx, ch)) = remaining.char_indices().next() {
+                        split_idx = idx + ch.len_utf8();
+                    }
                 }
 
                 let (chunk, rest) = remaining.split_at(split_idx);
@@ -178,9 +179,14 @@ impl DomRenderer {
             }
             Node::Element(elem) => {
                 let tag = elem.name();
-                
+
                 // 1. Skip Data and Hidden Tags
-                if tag == "script" || tag == "style" || tag == "head" || tag == "meta" || tag == "link" {
+                if tag == "script"
+                    || tag == "style"
+                    || tag == "head"
+                    || tag == "meta"
+                    || tag == "link"
+                {
                     return;
                 }
                 if elem.attr("hidden").is_some() || elem.attr("aria-hidden") == Some("true") {
@@ -192,17 +198,27 @@ impl DomRenderer {
                 let old_preserve = self.preserve_whitespace;
 
                 match tag {
-                    "b" | "strong" => self.current_style = self.current_style.add_modifier(Modifier::BOLD),
-                    "i" | "em" => self.current_style = self.current_style.add_modifier(Modifier::ITALIC),
+                    "b" | "strong" => {
+                        self.current_style = self.current_style.add_modifier(Modifier::BOLD)
+                    }
+                    "i" | "em" => {
+                        self.current_style = self.current_style.add_modifier(Modifier::ITALIC)
+                    }
                     "a" => {
-                        self.current_style = self.current_style.fg(Color::Cyan).add_modifier(Modifier::UNDERLINED);
+                        self.current_style = self
+                            .current_style
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::UNDERLINED);
                         if let Some(href) = elem.attr("href") {
                             self.active_link_url = Some(href.to_string());
                         }
-                    },
+                    }
                     "h1" | "h2" | "h3" => {
                         self.add_vertical_space();
-                        self.current_style = self.current_style.fg(Color::White).add_modifier(Modifier::BOLD);
+                        self.current_style = self
+                            .current_style
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD);
                     }
                     "pre" | "code" => {
                         self.flush_line();
@@ -215,7 +231,8 @@ impl DomRenderer {
                     }
                     "li" => {
                         self.flush_line();
-                        let bullet = format!("{}• ", "  ".repeat(self.list_depth.saturating_sub(1)));
+                        let bullet =
+                            format!("{}• ", "  ".repeat(self.list_depth.saturating_sub(1)));
                         self.push_word(&bullet);
                     }
                     "img" => {
@@ -225,7 +242,9 @@ impl DomRenderer {
                         self.current_style = old_style;
                     }
                     "br" => self.flush_line(),
-                    "p" | "main" | "article" | "section" | "table" | "aside" => self.add_vertical_space(),
+                    "p" | "main" | "article" | "section" | "table" | "aside" => {
+                        self.add_vertical_space()
+                    }
                     "div" | "header" | "footer" | "nav" | "tr" => self.flush_line(),
                     "td" | "th" => self.push_word("  "),
                     "hr" => {
@@ -250,7 +269,8 @@ impl DomRenderer {
                         self.list_depth = self.list_depth.saturating_sub(1);
                         self.flush_line();
                     }
-                    "h1" | "h2" | "h3" | "p" | "main" | "article" | "section" | "table" | "aside" | "pre" => self.add_vertical_space(),
+                    "h1" | "h2" | "h3" | "p" | "main" | "article" | "section" | "table"
+                    | "aside" | "pre" => self.add_vertical_space(),
                     "div" | "li" | "header" | "footer" | "nav" | "tr" => self.flush_line(),
                     _ => {}
                 }

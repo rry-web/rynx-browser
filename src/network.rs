@@ -28,7 +28,14 @@ pub fn parse_html_metadata(html: &str) -> PageMetadata {
     let title = document
         .select(title_selector)
         .next()
-        .map(|element| element.text().collect::<Vec<_>>().join(" ").trim().to_string())
+        .map(|element| {
+            element
+                .text()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .trim()
+                .to_string()
+        })
         .unwrap_or_else(|| "No Title".to_string());
 
     PageMetadata { title }
@@ -52,12 +59,22 @@ pub async fn attempt_jump(
     client: &Client,
     target_domain: &str,
     tx: mpsc::Sender<NetworkResponse>,
-    id: usize
+    id: usize,
 ) -> Result<reqwest::Response, Box<dyn std::error::Error + Send + Sync>> {
-    let _ = tx.send(NetworkResponse::Info(id, "Address not found. Requesting Jump Helper...".to_string())).await;
+    let _ = tx
+        .send(NetworkResponse::Info(
+            id,
+            "Address not found. Requesting Jump Helper...".to_string(),
+        ))
+        .await;
     for service_base in JUMP_SERVICES {
         let jump_url = format!("{}{}", service_base, target_domain);
-        let _ = tx.send(NetworkResponse::Info(id, format!("Contacting jump service: {}", service_base))).await;
+        let _ = tx
+            .send(NetworkResponse::Info(
+                id,
+                format!("Contacting jump service: {}", service_base),
+            ))
+            .await;
         let response = client.get(&jump_url).send().await?;
         if response.status() == StatusCode::OK {
             return Ok(response);
@@ -65,4 +82,3 @@ pub async fn attempt_jump(
     }
     Err("All jump services failed.".into())
 }
-

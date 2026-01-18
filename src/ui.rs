@@ -1,25 +1,29 @@
+use crate::app::App;
+use crate::models::InputMode;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::Line,
-    widgets::{Gauge, Block, Borders, Paragraph, Tabs, Clear},
-    Frame,
+    widgets::{Block, Borders, Clear, Gauge, Paragraph, Tabs},
 };
-use crate::app::App;
-use crate::models::InputMode;
 
 pub fn ui(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // Tab Bar
-            Constraint::Length(3), // URL Input
-            Constraint::Min(0),    // Content area
-        ].as_ref())
+        .constraints(
+            [
+                Constraint::Length(3), // Tab Bar
+                Constraint::Length(3), // URL Input
+                Constraint::Min(0),    // Content area
+            ]
+            .as_ref(),
+        )
         .split(f.area());
 
     // 1. RENDER TABS
-    let titles: Vec<Line> = app.tabs
+    let titles: Vec<Line> = app
+        .tabs
         .iter()
         .map(|t| Line::from(format!(" {} ", t.page_title)))
         .collect();
@@ -27,7 +31,11 @@ pub fn ui(f: &mut Frame, app: &App) {
     let tabs = Tabs::new(titles)
         .select(app.active_tab_index)
         .block(Block::default().borders(Borders::ALL).title("Tabs"))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
 
     f.render_widget(tabs, chunks[0]);
 
@@ -39,10 +47,18 @@ pub fn ui(f: &mut Frame, app: &App) {
         InputMode::Visual => Style::default().fg(Color::Blue),
     };
 
-    let mode_text = if app.i2p_mode { " [I2P MODE ON] " } else { " [Clearweb] " };
+    let mode_text = if app.i2p_mode {
+        " [I2P MODE ON] "
+    } else {
+        " [Clearweb] "
+    };
     let input = Paragraph::new(active_tab.url_input.as_str())
         .style(input_style)
-        .block(Block::default().borders(Borders::ALL).title(format!("URL - {}", mode_text)));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!("URL - {}", mode_text)),
+        );
     f.render_widget(input, chunks[1]);
 
     // 3. RENDER CONTENT
@@ -60,11 +76,12 @@ pub fn ui(f: &mut Frame, app: &App) {
     // --- VISUAL MODE HIGHLIGHTING ---
     if let (InputMode::Visual, Some(sel)) = (active_tab.input_mode, &active_tab.selection) {
         // Normalize bounds for rendering
-        let (s_line, s_char, e_line, e_char) = if (sel.start_line, sel.start_char) <= (sel.end_line, sel.end_char) {
-            (sel.start_line, sel.start_char, sel.end_line, sel.end_char)
-        } else {
-            (sel.end_line, sel.end_char, sel.start_line, sel.start_char)
-        };
+        let (s_line, s_char, e_line, e_char) =
+            if (sel.start_line, sel.start_char) <= (sel.end_line, sel.end_char) {
+                (sel.start_line, sel.start_char, sel.end_line, sel.end_char)
+            } else {
+                (sel.end_line, sel.end_char, sel.start_line, sel.start_char)
+            };
 
         for (i, line) in viewport_content.iter_mut().enumerate() {
             let current_line_idx = start_index + i;
@@ -143,11 +160,11 @@ pub fn ui(f: &mut Frame, app: &App) {
         }
     }
     let status_text = format!("Status: {}", active_tab.status_message);
-    let content = Paragraph::new(viewport_content)
-        .scroll((0, 0))
-        .block(Block::default()
+    let content = Paragraph::new(viewport_content).scroll((0, 0)).block(
+        Block::default()
             .borders(Borders::ALL)
-            .title(format!("Browser - [{}]", status_text)));
+            .title(format!("Browser - [{}]", status_text)),
+    );
 
     f.render_widget(Clear, chunks[2]);
     f.render_widget(content, chunks[2]);
@@ -169,48 +186,58 @@ fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
         // Handle all three DownloadStatus variants
         match &state.status {
             // 1. ACTIVE STATE: Normal progress bar
-            crate::models::DownloadStatus::Active => {
-                match state.total_size {
-                    Some(total) => {
-                        let percentage = (state.bytes_downloaded as f64 / total as f64 * 100.0) as u16;
-                        let gauge = Gauge::default()
-                            .block(Block::default().borders(Borders::ALL).title(format!(" Downloading: {} ", state.filename)))
-                            .gauge_style(Style::default().fg(Color::Yellow))
-                            .percent(percentage)
-                            .label(format!("{:.1}%", percentage));
-                        f.render_widget(gauge, popup_area);
-                    }
-                    None => {
-                        let gauge = Gauge::default()
-                            .block(Block::default().borders(Borders::ALL).title(format!(" Downloading: {} ", state.filename)))
-                            .gauge_style(Style::default().fg(Color::Cyan))
-                            .percent(100)
-                            .label(format!("{} bytes downloaded", state.bytes_downloaded));
-                        f.render_widget(gauge, popup_area);
-                    }
+            crate::models::DownloadStatus::Active => match state.total_size {
+                Some(total) => {
+                    let percentage = (state.bytes_downloaded as f64 / total as f64 * 100.0) as u16;
+                    let gauge = Gauge::default()
+                        .block(
+                            Block::default()
+                                .borders(Borders::ALL)
+                                .title(format!(" Downloading: {} ", state.filename)),
+                        )
+                        .gauge_style(Style::default().fg(Color::Yellow))
+                        .percent(percentage)
+                        .label(format!("{:.1}%", percentage));
+                    f.render_widget(gauge, popup_area);
+                }
+                None => {
+                    let gauge = Gauge::default()
+                        .block(
+                            Block::default()
+                                .borders(Borders::ALL)
+                                .title(format!(" Downloading: {} ", state.filename)),
+                        )
+                        .gauge_style(Style::default().fg(Color::Cyan))
+                        .percent(100)
+                        .label(format!("{} bytes downloaded", state.bytes_downloaded));
+                    f.render_widget(gauge, popup_area);
                 }
             },
 
             // 2. FAILED STATE: Red bar with error message
             crate::models::DownloadStatus::Failed(error_msg) => {
                 let gauge = Gauge::default()
-                    .block(Block::default()
-                        .borders(Borders::ALL)
-                        .title(" Download Failed ")
-                        .title_bottom(" Press ESC to clear ")) // Satisfies "unused" fields
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title(" Download Failed ")
+                            .title_bottom(" Press ESC to clear "),
+                    ) // Satisfies "unused" fields
                     .gauge_style(Style::default().fg(Color::Red))
                     .percent(0) // Show as empty/failed
                     .label(format!("Error: {}", error_msg)); // Displays the error string
                 f.render_widget(gauge, popup_area);
-            },
+            }
 
             // 3. COMPLETED STATE: Green success bar
             crate::models::DownloadStatus::Completed => {
                 let gauge = Gauge::default()
-                    .block(Block::default()
-                        .borders(Borders::ALL)
-                        .title(" Download Finished ")
-                        .title_bottom(" Press ESC to clear "))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title(" Download Finished ")
+                            .title_bottom(" Press ESC to clear "),
+                    )
                     .gauge_style(Style::default().fg(Color::Green))
                     .percent(100)
                     .label(format!("Saved: {}", state.filename));

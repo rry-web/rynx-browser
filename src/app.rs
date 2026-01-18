@@ -1,16 +1,16 @@
-use crate::models::{LinkRegion, InputMode, Selection};
-use crate::network::{NetworkResponse, parse_html_metadata, strict_redirect_policy, attempt_jump};
+use crate::models::{InputMode, LinkRegion, Selection};
+use crate::network::{NetworkResponse, attempt_jump, parse_html_metadata, strict_redirect_policy};
 use crate::renderer::DomRenderer;
 
 use ratatui::text::Line;
-use scraper::Html;
-use url::Url;
-use tokio::sync::mpsc;
-use std::time::Duration;
 use reqwest::StatusCode;
+use scraper::Html;
+use std::time::Duration;
+use tokio::sync::mpsc;
+use url::Url;
 
-use tokio::io::AsyncWriteExt; // Required for streaming to file
 use futures_util::StreamExt;
+use tokio::io::AsyncWriteExt; // Required for streaming to file
 
 pub struct BrowserTab {
     pub id: usize,
@@ -50,22 +50,35 @@ impl BrowserTab {
         };
 
         // Normalize selection (handle backwards selection)
-        let (s_line, s_char, e_line, e_char) = if (sel.start_line, sel.start_char) <= (sel.end_line, sel.end_char) {
-            (sel.start_line, sel.start_char, sel.end_line, sel.end_char)
-        } else {
-            (sel.end_line, sel.end_char, sel.start_line, sel.start_char)
-        };
+        let (s_line, s_char, e_line, e_char) =
+            if (sel.start_line, sel.start_char) <= (sel.end_line, sel.end_char) {
+                (sel.start_line, sel.start_char, sel.end_line, sel.end_char)
+            } else {
+                (sel.end_line, sel.end_char, sel.start_line, sel.start_char)
+            };
 
         let mut result = String::new();
         for i in s_line..=e_line {
             if let Some(line) = self.rendered_content.get(i) {
                 let line_str = line.to_string();
                 let start = if i == s_line { s_char } else { 0 };
-                let end = if i == e_line { e_char } else { line_str.chars().count() };
+                let end = if i == e_line {
+                    e_char
+                } else {
+                    line_str.chars().count()
+                };
 
                 // Map char index to byte index
-                let byte_start = line_str.char_indices().nth(start).map(|(idx, _)| idx).unwrap_or(0);
-                let byte_end = line_str.char_indices().nth(end).map(|(idx, _)| idx).unwrap_or(line_str.len());
+                let byte_start = line_str
+                    .char_indices()
+                    .nth(start)
+                    .map(|(idx, _)| idx)
+                    .unwrap_or(0);
+                let byte_end = line_str
+                    .char_indices()
+                    .nth(end)
+                    .map(|(idx, _)| idx)
+                    .unwrap_or(line_str.len());
 
                 //result.push_str(&line_str[start..end]);
                 result.push_str(&line_str[byte_start..byte_end]);
@@ -166,13 +179,13 @@ impl App {
         if let Some(tab) = self.tabs.get_mut(tab_index) {
             let content_width = (width as usize).saturating_sub(2);
             if tab.is_source_view {
-                tab.rendered_content = tab.html_source
+                tab.rendered_content = tab
+                    .html_source
                     .lines()
                     .map(|l| Line::from(l.to_string()))
                     .collect();
                 tab.link_regions.clear();
-            }
-            else {
+            } else {
                 let document = Html::parse_document(&tab.html_source);
                 let mut renderer = DomRenderer::new(content_width);
                 renderer.render(&document);
@@ -266,10 +279,14 @@ impl App {
                     let mut resp_result = client.get(&target_url).send().await;
 
                     if let Ok(ref resp) = resp_result {
-                        if resp.status() == StatusCode::INTERNAL_SERVER_ERROR || resp.status() == StatusCode::SERVICE_UNAVAILABLE {
-                             if let Ok(jump_resp) = attempt_jump(&client, &domain_for_jump, tx_clone.clone(), id).await {
-                                 resp_result = Ok(jump_resp);
-                             }
+                        if resp.status() == StatusCode::INTERNAL_SERVER_ERROR
+                            || resp.status() == StatusCode::SERVICE_UNAVAILABLE
+                        {
+                            if let Ok(jump_resp) =
+                                attempt_jump(&client, &domain_for_jump, tx_clone.clone(), id).await
+                            {
+                                resp_result = Ok(jump_resp);
+                            }
                         }
                     }
 
@@ -277,7 +294,12 @@ impl App {
                         Ok(resp) => {
                             if let Some(len) = resp.content_length() {
                                 if len > 10 * 1024 * 1024 {
-                                    let _ = tx_clone.send(NetworkResponse::Error(id, "Page too large".to_string())).await;
+                                    let _ = tx_clone
+                                        .send(NetworkResponse::Error(
+                                            id,
+                                            "Page too large".to_string(),
+                                        ))
+                                        .await;
                                     return;
                                 }
                             }
@@ -285,20 +307,32 @@ impl App {
                             match resp.text().await {
                                 Ok(html_text) => {
                                     let metadata = parse_html_metadata(&html_text);
-                                    let _ = tx_clone.send(NetworkResponse::Success(id, metadata.title, html_text)).await;
+                                    let _ = tx_clone
+                                        .send(NetworkResponse::Success(
+                                            id,
+                                            metadata.title,
+                                            html_text,
+                                        ))
+                                        .await;
                                 }
                                 Err(e) => {
-                                    let _ = tx_clone.send(NetworkResponse::Error(id, e.to_string())).await;
+                                    let _ = tx_clone
+                                        .send(NetworkResponse::Error(id, e.to_string()))
+                                        .await;
                                 }
                             }
                         }
                         Err(e) => {
-                            let _ = tx_clone.send(NetworkResponse::Error(id, e.to_string())).await;
+                            let _ = tx_clone
+                                .send(NetworkResponse::Error(id, e.to_string()))
+                                .await;
                         }
                     }
                 }
                 Err(e) => {
-                    let _ = tx_clone.send(NetworkResponse::Error(id, e.to_string())).await;
+                    let _ = tx_clone
+                        .send(NetworkResponse::Error(id, e.to_string()))
+                        .await;
                 }
             }
         });
@@ -324,7 +358,12 @@ impl App {
             let res = match client.get(&url).send().await {
                 Ok(r) => r,
                 Err(e) => {
-                    let _ = tx.send(NetworkResponse::Error(tab_id, format!("Download failed!: {}", e))).await;
+                    let _ = tx
+                        .send(NetworkResponse::Error(
+                            tab_id,
+                            format!("Download failed!: {}", e),
+                        ))
+                        .await;
                     return;
                 }
             };
@@ -334,7 +373,9 @@ impl App {
             let mut file = match tokio::fs::File::create(&fname).await {
                 Ok(f) => f,
                 Err(e) => {
-                    let _ = tx.send(NetworkResponse::Error(tab_id, format!("I/O error: {}", e))).await;
+                    let _ = tx
+                        .send(NetworkResponse::Error(tab_id, format!("I/O error: {}", e)))
+                        .await;
                     return;
                 }
             };
@@ -343,12 +384,20 @@ impl App {
 
             while let Some(item) = stream.next().await {
                 if let Ok(chunk) = item {
-                    if file.write_all(&chunk).await.is_err() { break; }
+                    if file.write_all(&chunk).await.is_err() {
+                        break;
+                    }
                     downloaded += chunk.len() as u64;
-                    let _ = tx.send(NetworkResponse::DownloadProgress(tab_id, downloaded, total_size)).await;
+                    let _ = tx
+                        .send(NetworkResponse::DownloadProgress(
+                            tab_id, downloaded, total_size,
+                        ))
+                        .await;
                 }
             }
-            let _ = tx.send(NetworkResponse::DownloadFinished(tab_id, fname)).await;
+            let _ = tx
+                .send(NetworkResponse::DownloadFinished(tab_id, fname))
+                .await;
         });
     }
 }
