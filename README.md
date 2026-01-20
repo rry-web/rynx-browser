@@ -15,7 +15,7 @@ cargo run
 ### Navigation (Normal Mode)
 | Key | Action |
 | :--- | :--- |
-| **`h / j / k / l`** | Move cursor (Vim-style). View scrolls to follow. (Few minor issues with horizontal navigation, in progress) |
+| **`h / j / k / l`** | Move cursor (Vim-style). View scrolls to follow. |
 | **`Up / Down`** | Scroll the page up or down by 1 line. |
 | **`Tab / Shift + Tab`** | Cycle through links visible on the screen. (Forward/Backward) |
 | **`Enter`** | Open the currently selected link. |
