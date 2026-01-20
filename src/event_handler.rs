@@ -7,6 +7,24 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::backend::Backend;
 use std::io::Result;
 
+/// Determines if a URL likely points to a downloadable file based on extension or patterns
+fn is_downloadable_file(url: &str) -> bool {
+    let u = url.to_lowercase();
+    // Restored common types that users expect to download via click
+    let binary_exts = [
+        "zip", "pdf", "exe", "dmg", "pkg", "deb", "iso", "mp4", "mp3",
+        "png", "jpg", "jpeg", "gif", "docx", "xlsx", "tar", "gz"
+    ];
+
+    if let Some(dot) = u.rfind('.') {
+        let ext = u[dot + 1..].split('?').next().unwrap_or("");
+        if binary_exts.contains(&ext) { return true; }
+    }
+
+    // Catch common dynamic download paths
+    ["/download/", "/files/", "/assets/", "/attachments/"].iter().any(|p| u.contains(p))
+}
+
 pub fn handle_key_event<B: Backend>(
     app: &mut App,
     key: KeyEvent,
@@ -422,12 +440,17 @@ pub fn handle_mouse_event<B: Backend>(
                 });
 
                 if let Some(region) = found_link {
-                    // 3. Navigate
+                    // 3. Determine if this should be a download or navigation
                     let full_url = crate::network::resolve_url(&tab.url_input, &region.url);
 
                     if mouse.modifiers.contains(KeyModifiers::CONTROL) {
                         app.open_link_in_new_tab(full_url);
+                    } else if is_downloadable_file(&full_url) {
+                        // Auto-download for file types
+                        tab.status_message = format!("Starting download: {}", full_url);
+                        app.trigger_download(full_url);
                     } else {
+                        // Normal navigation for HTML pages
                         if !tab.url_input.is_empty() {
                             tab.history.push(tab.url_input.clone());
                         }

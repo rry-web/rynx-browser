@@ -203,3 +203,14 @@ pub async fn attempt_jump(
     }
     Err("All jump services failed.".into())
 }
+
+/// Detects file extensions based on magic bytes (file signatures)
+pub fn sniff_extension(h: &[u8]) -> Option<&'static str> {
+    if h.starts_with(&[0x89, 0x50, 0x4E, 0x47]) { Some("png") }
+    else if h.starts_with(&[0xFF, 0xD8, 0xFF]) { Some("jpg") }
+    else if h.starts_with(&[0x25, 0x50, 0x44, 0x46]) { Some("pdf") }
+    else if h.starts_with(&[0x50, 0x4B, 0x03, 0x04]) { Some("zip") }
+    else if h.starts_with(&[0x4D, 0x5A]) { Some("exe") }
+    else if h.starts_with(b"GIF8") { Some("gif") }
+    else { None }
+}

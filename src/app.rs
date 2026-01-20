@@ -374,104 +374,78 @@ impl App {
             safe_name
         }
     }
-
     pub fn trigger_download(&mut self, url: String) {
         let tab_id = self.current_tab().id;
         let tx = self.tx.clone();
         let use_i2p = self.i2p_mode;
-        let network_manager = Arc::clone(&self.network_manager);
+        let nm = Arc::clone(&self.network_manager);
 
         tokio::spawn(async move {
-            let client = network_manager.get_download_client(use_i2p);
+            let client = nm.get_download_client(use_i2p);
 
+            // 1. Send request
             let res = match client.get(&url).send().await {
                 Ok(r) => r,
                 Err(e) => {
-                    let _ = tx
-                        .send(NetworkResponse::Error(
-                            tab_id,
-                            format!("Download failed!: {}", e),
-                        ))
-                        .await;
+                    let _ = tx.send(NetworkResponse::Error(tab_id, format!("Connection failed: {}", e))).await;
                     return;
                 }
             };
 
-            let total_size = res.content_length();
-
-            // Get the system Downloads directory
-            let downloads_dir = match UserDirs::new() {
-                Some(user_dirs) => {
-                    if let Some(downloads) = user_dirs.download_dir() {
-                        downloads.to_path_buf()
-                    } else {
-                        let _ = tx
-                            .send(NetworkResponse::Error(
-                                tab_id,
-                                "Could not determine Downloads directory".to_string(),
-                            ))
-                            .await;
-                        return;
-                    }
-                }
-                None => {
-                    let _ = tx
-                        .send(NetworkResponse::Error(
-                            tab_id,
-                            "Could not access user directories".to_string(),
-                        ))
-                        .await;
-                    return;
-                }
-            };
-
-            // Create Downloads directory if it doesn't exist
-            if let Err(e) = tokio::fs::create_dir_all(&downloads_dir).await {
-                let _ = tx
-                    .send(NetworkResponse::Error(
-                        tab_id,
-                        format!("Failed to create Downloads directory: {}", e),
-                    ))
-                    .await;
-                return;
-            }
-
-            // Extract and sanitize filename to prevent path traversal attacks
-            let raw_filename = url.split('/').last().unwrap_or("download.dat");
-            let fname = Self::sanitize_filename(raw_filename);
-            let file_path = downloads_dir.join(&fname);
-
-            let mut file = match tokio::fs::File::create(&file_path).await {
-                Ok(f) => f,
-                Err(e) => {
-                    let _ = tx
-                        .send(NetworkResponse::Error(tab_id, format!("I/O error: {}", e)))
-                        .await;
-                    return;
-                }
-            };
+            let total = res.content_length();
             let mut stream = res.bytes_stream();
             let mut downloaded: u64 = 0;
+            let mut file_handle: Option<(tokio::fs::File, String)> = None;
 
             while let Some(item) = stream.next().await {
                 if let Ok(chunk) = item {
-                    if file.write_all(&chunk).await.is_err() {
-                        break;
+                    if file_handle.is_none() {
+                        // 2. Resolve and Create Downloads Directory
+                        let download_dir = UserDirs::new()
+                            .and_then(|d| d.download_dir().map(|p| p.to_path_buf()))
+                            .unwrap_or_default();
+
+                        if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
+                            let _ = tx.send(NetworkResponse::Error(tab_id, format!("Folder error: {}", e))).await;
+                            return;
+                        }
+
+                        // 3. Sanitize and Sniff Extension
+                        let raw_name = url.split('/').last().unwrap_or("download.dat");
+                        let mut sanitized = Self::sanitize_filename(raw_name);
+
+                        if !sanitized.contains('.') {
+                            if let Some(ext) = crate::network::sniff_extension(&chunk) {
+                                sanitized.push_str(&format!(".{}", ext));
+                            }
+                        }
+
+                        let file_path = download_dir.join(&sanitized);
+
+                        // 4. Safe File Creation (No unwraps)
+                        let file = match tokio::fs::File::create(&file_path).await {
+                            Ok(f) => f,
+                            Err(e) => {
+                                let _ = tx.send(NetworkResponse::Error(tab_id, format!("File error: {}", e))).await;
+                                return;
+                            }
+                        };
+                        file_handle = Some((file, file_path.display().to_string()));
                     }
-                    downloaded += chunk.len() as u64;
-                    let _ = tx
-                        .send(NetworkResponse::DownloadProgress(
-                            tab_id, downloaded, total_size,
-                        ))
-                        .await;
+
+                    if let Some((ref mut file, _)) = file_handle {
+                        if file.write_all(&chunk).await.is_err() { break; }
+                        downloaded += chunk.len() as u64;
+                        let _ = tx.send(NetworkResponse::DownloadProgress(tab_id, downloaded, total)).await;
+                    }
                 }
             }
-            let _ = tx
-                .send(NetworkResponse::DownloadFinished(
-                    tab_id,
-                    file_path.display().to_string(),
-                ))
-                .await;
+
+            if let Some((_, path)) = file_handle {
+                let _ = tx.send(NetworkResponse::DownloadFinished(tab_id, path)).await;
+            } else {
+                let _ = tx.send(NetworkResponse::Error(tab_id, "Download stream was empty".to_string())).await;
+            }
         });
     }
 }
