@@ -8,6 +8,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Gauge, Paragraph, Tabs},
 };
+use crate::constants::*;
 
 /// Render the tab bar showing all open tabs
 fn render_tabs(f: &mut Frame, app: &App, area: Rect) {
@@ -318,7 +319,7 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(Clear, area);
     f.render_widget(content, area);
     render_download_overlay(f, app, area);
-    render_download_prompt(f, app, area);
+    render_download_prompt(f, app);
 }
 
 pub fn ui(f: &mut Frame, app: &App) {
@@ -416,8 +417,10 @@ fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-fn render_download_prompt(f: &mut Frame, app: &App, area: Rect) {
+fn render_download_prompt(f: &mut Frame, app: &App) {
     if let Some(prompt) = &app.tabs[app.active_tab_index].download_prompt {
+        let area = f.area();
+
         let block = Block::default()
             .title(" Confirm Download ")
             .borders(Borders::ALL)
@@ -425,10 +428,10 @@ fn render_download_prompt(f: &mut Frame, app: &App, area: Rect) {
 
         // Center the pop-up (50% width, fixed height)
         let popup_area = Rect {
-            x: area.width / 4,
-            y: (area.height / 2).saturating_sub(4),
-            width: area.width / 2,
-            height: 9,
+            x: area.width / DOWNLOAD_PROMPT_X_DIVISOR,
+            y: (area.height / DOWNLOAD_PROMPT_Y_DIVISOR).saturating_sub(DOWNLOAD_PROMPT_Y_OFFSET),
+            width: area.width / DOWNLOAD_PROMPT_WIDTH_DIVISOR,
+            height: DOWNLOAD_PROMPT_HEIGHT,
         };
 
         f.render_widget(Clear, popup_area);
@@ -447,7 +450,10 @@ fn render_download_prompt(f: &mut Frame, app: &App, area: Rect) {
             text.push(Line::from("Save to Downloads folder?"));
         }
 
-        text.push(Line::from(""));
+        // DYNAMIC SPACING: Fill lines until we reach the button row
+        while (text.len() as u16) < DOWNLOAD_PROMPT_BUTTON_ROW_OFFSET - 1 {
+            text.push(Line::from(""));
+        }
         text.push(Line::from(" [Y] Yes   /   [N] No "));
 
         let paragraph = Paragraph::new(text)

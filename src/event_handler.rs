@@ -2,6 +2,7 @@ use crate::app::App;
 use crate::constants::{MOUSE_SCROLL_LINES, UI_HEIGHT_OFFSET, UI_ROW_OFFSET};
 use crate::models::{DownloadStatus, InputMode};
 use crate::network::NetworkResponse;
+use crate::constants::*;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::backend::Backend;
@@ -13,7 +14,7 @@ fn is_downloadable_file(url: &str) -> bool {
     // Restored common types that users expect to download via click
     let binary_exts = [
         "zip", "pdf", "exe", "dmg", "pkg", "deb", "iso", "mp4", "mp3",
-        "png", "jpg", "jpeg", "gif", "docx", "xlsx", "tar", "gz"
+        "png", "jpg", "jpeg", "gif", "docx", "xlsx", "tar", "gz", "ogg", "txt"
     ];
 
     if let Some(dot) = u.rfind('.') {
@@ -424,29 +425,6 @@ pub fn handle_mouse_event<B: Backend>(
     terminal_height: u16,
 ) -> Result<()> {
     let tab = app.current_tab();
-    if let Some(prompt) = tab.download_prompt.take() {
-        let popup_x = terminal_width / 4;
-        let popup_y = (terminal_height / 2).saturating_sub(4);
-        let popup_w = terminal_width / 2;
-        let popup_h = 9;
-
-        if mouse.column >= popup_x && mouse.column < (popup_x + popup_w) &&
-           mouse.row >= popup_y && mouse.row < popup_y + popup_h
-        {
-            // Detect clicks on the button line (popup_y + 6)
-            if mouse.row == popup_y + 6 {
-                if mouse.column < popup_x + (popup_w / 2) {
-                    app.trigger_download(prompt.url);
-                } else {
-                    tab.download_prompt = None;
-                }
-            } else {
-                tab.download_prompt = Some(prompt);
-            }
-            return Ok(());
-        }
-        tab.download_prompt = Some(prompt);
-    }
     match mouse.kind {
         MouseEventKind::ScrollDown => {
             tab.scroll = tab.scroll.saturating_add(MOUSE_SCROLL_LINES); // Scroll down by configured amount
@@ -455,6 +433,29 @@ pub fn handle_mouse_event<B: Backend>(
             tab.scroll = tab.scroll.saturating_sub(MOUSE_SCROLL_LINES); // Scroll up by configured amount
         }
         MouseEventKind::Down(MouseButton::Left) => {
+            if let Some(prompt) = tab.download_prompt.take() {
+                let popup_x = terminal_width / DOWNLOAD_PROMPT_X_DIVISOR;
+                let popup_y = (terminal_height / DOWNLOAD_PROMPT_Y_DIVISOR).saturating_sub(DOWNLOAD_PROMPT_Y_OFFSET);
+                let popup_w = terminal_width / DOWNLOAD_PROMPT_WIDTH_DIVISOR;
+                let popup_h = DOWNLOAD_PROMPT_HEIGHT;
+
+                if mouse.column >= popup_x && mouse.column < (popup_x + popup_w) &&
+                   mouse.row >= popup_y && mouse.row < popup_y + popup_h
+                {
+                    // Detect clicks on the button line (popup_y + offset)
+                    if mouse.row == popup_y + DOWNLOAD_PROMPT_BUTTON_ROW_OFFSET {
+                        if mouse.column < popup_x + (popup_w / 2) {
+                            app.trigger_download(prompt.url);
+                        } else {
+                            tab.download_prompt = None;
+                        }
+                    } else {
+                        tab.download_prompt = Some(prompt);
+                    }
+                    return Ok(());
+                }
+                tab.download_prompt = Some(prompt);
+            }
             // 1. Determine which line was clicked
             if mouse.row >= UI_ROW_OFFSET {
                 // UI_ROW_OFFSET is the UI offset
