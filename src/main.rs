@@ -83,7 +83,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                     }
                 }
                 Event::Mouse(mouse) => {
-                    handle_mouse_event::<B>(&mut app, mouse, size.height)?;
+                    handle_mouse_event::<B>(&mut app, mouse, size.width, size.height)?;
                 }
                 _ => {}
             }

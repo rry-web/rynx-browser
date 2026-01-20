@@ -36,6 +36,7 @@ pub struct BrowserTab {
     pub selection: Option<Selection>,
     pub download_state: Option<crate::models::Download>,
     pub search_state: Option<SearchState>,
+    pub download_prompt: Option<crate::models::DownloadPrompt>,
 }
 
 impl BrowserTab {
@@ -80,6 +81,7 @@ impl BrowserTab {
             selection: None,
             download_state: None,
             search_state: None,
+            download_prompt: None,
         }
     }
 
@@ -156,6 +158,26 @@ impl BrowserTab {
         self.search_state = None;
         self.input_mode = InputMode::Normal;
         self.status_message = String::from("Ready");
+    }
+
+    pub fn initiate_download_request(&mut self, url: String) {
+        let raw_filename = url.split('/').last().unwrap_or("download.dat");
+        let sanitized_name = crate::app::App::sanitize_filename(raw_filename);
+
+        // Resolve target directory using the directories crate
+        let download_dir = UserDirs::new()
+            .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
+            .unwrap_or_default();
+
+        let target_path = download_dir.join(&sanitized_name);
+        let file_exists = target_path.exists();
+
+        self.download_prompt = Some(crate::models::DownloadPrompt {
+            url,
+            filename: sanitized_name,
+            target_path,
+            file_exists,
+        });
     }
 }
 

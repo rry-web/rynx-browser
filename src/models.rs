@@ -106,3 +106,10 @@ pub struct Download {
     pub total_size: Option<u64>,
     pub status: DownloadStatus,
 }
+
+pub struct DownloadPrompt {
+    pub url: String,
+    pub filename: String,
+    pub target_path: std::path::PathBuf,
+    pub file_exists: bool,
+}

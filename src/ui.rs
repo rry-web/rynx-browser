@@ -5,7 +5,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::Line,
+    text::{Line, Span},
     widgets::{Block, Borders, Clear, Gauge, Paragraph, Tabs},
 };
 
@@ -317,7 +317,8 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
 
     f.render_widget(Clear, area);
     f.render_widget(content, area);
-    render_download_overlay(f, app, area)
+    render_download_overlay(f, app, area);
+    render_download_prompt(f, app, area);
 }
 
 pub fn ui(f: &mut Frame, app: &App) {
@@ -412,5 +413,47 @@ fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
                 f.render_widget(gauge, popup_area);
             }
         }
+    }
+}
+
+fn render_download_prompt(f: &mut Frame, app: &App, area: Rect) {
+    if let Some(prompt) = &app.tabs[app.active_tab_index].download_prompt {
+        let block = Block::default()
+            .title(" Confirm Download ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow));
+
+        // Center the pop-up (50% width, fixed height)
+        let popup_area = Rect {
+            x: area.width / 4,
+            y: (area.height / 2).saturating_sub(4),
+            width: area.width / 2,
+            height: 9,
+        };
+
+        f.render_widget(Clear, popup_area);
+
+        let mut text = vec![
+            Line::from(format!("File: {}", prompt.filename)),
+            Line::from(""),
+        ];
+
+        if prompt.file_exists {
+            text.push(Line::from(vec![
+                Span::styled("WARNING: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::from("File exists and will be overwritten!"),
+            ]));
+        } else {
+            text.push(Line::from("Save to Downloads folder?"));
+        }
+
+        text.push(Line::from(""));
+        text.push(Line::from(" [Y] Yes   /   [N] No "));
+
+        let paragraph = Paragraph::new(text)
+            .block(block)
+            .alignment(ratatui::layout::Alignment::Center);
+
+        f.render_widget(paragraph, popup_area);
     }
 }

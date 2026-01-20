@@ -55,11 +55,21 @@ fn handle_normal_mode<B: Backend>(
         KeyCode::Char('d') => {
             let tab = app.current_tab();
             if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
-                let download_url = crate::network::resolve_url(&tab.url_input, &region.url);
-                tab.status_message = format!("Starting download: {}", download_url);
-                app.trigger_download(download_url);
+                let url = crate::network::resolve_url(&tab.url_input, &region.url);
+                tab.initiate_download_request(url);
             }
         }
+
+        KeyCode::Char('y') | KeyCode::Char('Y') if app.current_tab().download_prompt.is_some() => {
+            if let Some(prompt) = app.current_tab().download_prompt.take() {
+                app.trigger_download(prompt.url);
+            }
+        }
+
+        KeyCode::Char('n') | KeyCode::Char('N') if app.current_tab().download_prompt.is_some() => {
+            app.current_tab().download_prompt = None;
+        }
+
         KeyCode::Esc => {
             let tab = app.current_tab();
 
@@ -410,9 +420,33 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
 pub fn handle_mouse_event<B: Backend>(
     app: &mut App,
     mouse: MouseEvent,
-    _terminal_height: u16,
+    terminal_width: u16,
+    terminal_height: u16,
 ) -> Result<()> {
     let tab = app.current_tab();
+    if let Some(prompt) = tab.download_prompt.take() {
+        let popup_x = terminal_width / 4;
+        let popup_y = (terminal_height / 2).saturating_sub(4);
+        let popup_w = terminal_width / 2;
+        let popup_h = 9;
+
+        if mouse.column >= popup_x && mouse.column < (popup_x + popup_w) &&
+           mouse.row >= popup_y && mouse.row < popup_y + popup_h
+        {
+            // Detect clicks on the button line (popup_y + 6)
+            if mouse.row == popup_y + 6 {
+                if mouse.column < popup_x + (popup_w / 2) {
+                    app.trigger_download(prompt.url);
+                } else {
+                    tab.download_prompt = None;
+                }
+            } else {
+                tab.download_prompt = Some(prompt);
+            }
+            return Ok(());
+        }
+        tab.download_prompt = Some(prompt);
+    }
     match mouse.kind {
         MouseEventKind::ScrollDown => {
             tab.scroll = tab.scroll.saturating_add(MOUSE_SCROLL_LINES); // Scroll down by configured amount
@@ -446,9 +480,8 @@ pub fn handle_mouse_event<B: Backend>(
                     if mouse.modifiers.contains(KeyModifiers::CONTROL) {
                         app.open_link_in_new_tab(full_url);
                     } else if is_downloadable_file(&full_url) {
-                        // Auto-download for file types
-                        tab.status_message = format!("Starting download: {}", full_url);
-                        app.trigger_download(full_url);
+                        // download for file types
+                        tab.initiate_download_request(full_url);
                     } else {
                         // Normal navigation for HTML pages
                         if !tab.url_input.is_empty() {
