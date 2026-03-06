@@ -1,8 +1,8 @@
 use crate::app::App;
+use crate::constants::*;
 use crate::constants::{MOUSE_SCROLL_LINES, UI_HEIGHT_OFFSET, UI_ROW_OFFSET};
 use crate::models::{DownloadStatus, InputMode};
 use crate::network::NetworkResponse;
-use crate::constants::*;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::backend::Backend;
@@ -13,17 +13,21 @@ fn is_downloadable_file(url: &str) -> bool {
     let u = url.to_lowercase();
     // Restored common types that users expect to download via click
     let binary_exts = [
-        "zip", "pdf", "exe", "dmg", "pkg", "deb", "iso", "mp4", "mp3",
-        "png", "jpg", "jpeg", "gif", "docx", "xlsx", "tar", "gz", "ogg", "txt"
+        "zip", "pdf", "exe", "dmg", "pkg", "deb", "iso", "mp4", "mp3", "png", "jpg", "jpeg", "gif",
+        "docx", "xlsx", "tar", "gz", "ogg", "txt",
     ];
 
     if let Some(dot) = u.rfind('.') {
         let ext = u[dot + 1..].split('?').next().unwrap_or("");
-        if binary_exts.contains(&ext) { return true; }
+        if binary_exts.contains(&ext) {
+            return true;
+        }
     }
 
     // Catch common dynamic download paths
-    ["/download/", "/files/", "/assets/", "/attachments/"].iter().any(|p| u.contains(p))
+    ["/download/", "/files/", "/assets/", "/attachments/"]
+        .iter()
+        .any(|p| u.contains(p))
 }
 
 pub fn handle_key_event<B: Backend>(
@@ -435,12 +439,15 @@ pub fn handle_mouse_event<B: Backend>(
         MouseEventKind::Down(MouseButton::Left) => {
             if let Some(prompt) = tab.download_prompt.take() {
                 let popup_x = terminal_width / DOWNLOAD_PROMPT_X_DIVISOR;
-                let popup_y = (terminal_height / DOWNLOAD_PROMPT_Y_DIVISOR).saturating_sub(DOWNLOAD_PROMPT_Y_OFFSET);
+                let popup_y = (terminal_height / DOWNLOAD_PROMPT_Y_DIVISOR)
+                    .saturating_sub(DOWNLOAD_PROMPT_Y_OFFSET);
                 let popup_w = terminal_width / DOWNLOAD_PROMPT_WIDTH_DIVISOR;
                 let popup_h = DOWNLOAD_PROMPT_HEIGHT;
 
-                if mouse.column >= popup_x && mouse.column < (popup_x + popup_w) &&
-                   mouse.row >= popup_y && mouse.row < popup_y + popup_h
+                if mouse.column >= popup_x
+                    && mouse.column < (popup_x + popup_w)
+                    && mouse.row >= popup_y
+                    && mouse.row < popup_y + popup_h
                 {
                     // Detect clicks on the button line (popup_y + offset)
                     if mouse.row == popup_y + DOWNLOAD_PROMPT_BUTTON_ROW_OFFSET {

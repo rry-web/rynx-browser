@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::constants::*;
 use crate::constants::{TAB_BAR_HEIGHT, URL_BAR_HEIGHT};
 use crate::models::{InputMode, LinkRegion};
 use ratatui::{
@@ -8,7 +9,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Gauge, Paragraph, Tabs},
 };
-use crate::constants::*;
 
 /// Render the tab bar showing all open tabs
 fn render_tabs(f: &mut Frame, app: &App, area: Rect) {
@@ -443,7 +443,10 @@ fn render_download_prompt(f: &mut Frame, app: &App) {
 
         if prompt.file_exists {
             text.push(Line::from(vec![
-                Span::styled("WARNING: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "WARNING: ",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::from("File exists and will be overwritten!"),
             ]));
         } else {

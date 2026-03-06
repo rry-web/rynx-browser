@@ -409,7 +409,12 @@ impl App {
             let res = match client.get(&url).send().await {
                 Ok(r) => r,
                 Err(e) => {
-                    let _ = tx.send(NetworkResponse::Error(tab_id, format!("Connection failed: {}", e))).await;
+                    let _ = tx
+                        .send(NetworkResponse::Error(
+                            tab_id,
+                            format!("Connection failed: {}", e),
+                        ))
+                        .await;
                     return;
                 }
             };
@@ -428,7 +433,12 @@ impl App {
                             .unwrap_or_default();
 
                         if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
-                            let _ = tx.send(NetworkResponse::Error(tab_id, format!("Folder error: {}", e))).await;
+                            let _ = tx
+                                .send(NetworkResponse::Error(
+                                    tab_id,
+                                    format!("Folder error: {}", e),
+                                ))
+                                .await;
                             return;
                         }
 
@@ -448,7 +458,12 @@ impl App {
                         let file = match tokio::fs::File::create(&file_path).await {
                             Ok(f) => f,
                             Err(e) => {
-                                let _ = tx.send(NetworkResponse::Error(tab_id, format!("File error: {}", e))).await;
+                                let _ = tx
+                                    .send(NetworkResponse::Error(
+                                        tab_id,
+                                        format!("File error: {}", e),
+                                    ))
+                                    .await;
                                 return;
                             }
                         };
@@ -456,17 +471,28 @@ impl App {
                     }
 
                     if let Some((ref mut file, _)) = file_handle {
-                        if file.write_all(&chunk).await.is_err() { break; }
+                        if file.write_all(&chunk).await.is_err() {
+                            break;
+                        }
                         downloaded += chunk.len() as u64;
-                        let _ = tx.send(NetworkResponse::DownloadProgress(tab_id, downloaded, total)).await;
+                        let _ = tx
+                            .send(NetworkResponse::DownloadProgress(tab_id, downloaded, total))
+                            .await;
                     }
                 }
             }
 
             if let Some((_, path)) = file_handle {
-                let _ = tx.send(NetworkResponse::DownloadFinished(tab_id, path)).await;
+                let _ = tx
+                    .send(NetworkResponse::DownloadFinished(tab_id, path))
+                    .await;
             } else {
-                let _ = tx.send(NetworkResponse::Error(tab_id, "Download stream was empty".to_string())).await;
+                let _ = tx
+                    .send(NetworkResponse::Error(
+                        tab_id,
+                        "Download stream was empty".to_string(),
+                    ))
+                    .await;
             }
         });
     }
