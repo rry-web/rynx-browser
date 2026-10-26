@@ -2,9 +2,9 @@ use crate::constants::UI_BORDER_WIDTH;
 use crate::forms::{ControlKind, Form, FormControl, FormMethod, SelectOption};
 use crate::models::LinkRegion;
 use crate::network::PageKind;
+use ego_tree::iter::Edge;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ego_tree::iter::Edge;
 use scraper::{ElementRef, Html, Node, Selector};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -33,11 +33,7 @@ pub fn sanitize_for_terminal(text: &str) -> Cow<'_, str> {
 /// Line::width(), which measures whole strings (an emoji joined with ZWJ is width 2 as a string
 /// but is drawn, and laid out by the renderer, character by character).
 pub fn display_width(line: &Line) -> usize {
-    line.spans
-        .iter()
-        .flat_map(|span| span.content.chars())
-        .map(char_width)
-        .sum()
+    line.spans.iter().flat_map(|span| span.content.chars()).map(char_width).sum()
 }
 
 fn char_width(ch: char) -> usize {
@@ -72,11 +68,7 @@ pub struct RenderedPage {
 /// page that is slow to parse never freezes input or drawing.
 pub fn render_page(job: &RenderJob) -> RenderedPage {
     if job.source_view {
-        let lines = job
-            .source
-            .lines()
-            .map(|l| Line::from(sanitize_for_terminal(l).into_owned()))
-            .collect();
+        let lines = job.source.lines().map(|l| Line::from(sanitize_for_terminal(l).into_owned())).collect();
         return RenderedPage {
             lines,
             links: Vec::new(),
@@ -121,11 +113,7 @@ fn document_title(document: &Html) -> Option<String> {
 fn find_urls(line: &str) -> Vec<(usize, usize)> {
     let mut urls = Vec::new();
     let mut from = 0;
-    while let Some(found) = ["https://", "http://"]
-        .iter()
-        .filter_map(|scheme| line[from..].find(scheme))
-        .min()
-    {
+    while let Some(found) = ["https://", "http://"].iter().filter_map(|scheme| line[from..].find(scheme)).min() {
         let start = from + found;
         let mut end = line[start..]
             .find(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | '"'))
@@ -155,8 +143,8 @@ fn find_urls(line: &str) -> Vec<(usize, usize)> {
 
 /// Elements whose content is never shown
 const SKIPPED_TAGS: &[&str] = &[
-    "script", "style", "head", "meta", "link", "title", "template", "svg", "object", "embed",
-    "param", "source", "track",
+    "script", "style", "head", "meta", "link", "title", "template", "svg", "object", "embed", "param", "source",
+    "track",
 ];
 
 const BULLETS: &[&str] = &["•", "◦", "▪"];
@@ -219,9 +207,9 @@ fn cell_words(cell: ElementRef) -> Vec<(String, usize)> {
                     }
                     // The cell itself isn't a separator, only cells of tables nested inside it
                     let follows_cell = node.id() != cell.id()
-                        && node.prev_siblings().any(|s| {
-                            s.value().as_element().is_some_and(|e| matches!(e.name(), "td" | "th"))
-                        });
+                        && node
+                            .prev_siblings()
+                            .any(|s| s.value().as_element().is_some_and(|e| matches!(e.name(), "td" | "th")));
                     if matches!(elem.name(), "td" | "th") && follows_cell {
                         // A nested table's column separator
                         words.push(("│".to_string(), indent));
@@ -287,11 +275,7 @@ fn measure_cell(cell: ElementRef) -> (usize, usize) {
     let natural = words.iter().map(|(w, _)| text_width(w)).sum::<usize>()
         + words.len().saturating_sub(1)
         + words.iter().map(|(_, indent)| *indent).max().unwrap_or(0);
-    let minimum = words
-        .iter()
-        .map(|(w, indent)| text_width(w).min(MAX_MIN_COLUMN_WIDTH) + indent)
-        .max()
-        .unwrap_or(0);
+    let minimum = words.iter().map(|(w, indent)| text_width(w).min(MAX_MIN_COLUMN_WIDTH) + indent).max().unwrap_or(0);
     (natural, minimum)
 }
 
@@ -369,10 +353,8 @@ fn column_widths(natural: &[usize], minimum: &[usize], available: usize) -> Opti
 
 /// Words in class names that mark a list as a menu or a horizontal list (e.g. "nav-links",
 /// "vector-menu-content-list", MediaWiki's "hlist")
-const MENU_CLASS_WORDS: &[&str] = &[
-    "nav", "navbar", "navigation", "menu", "menubar", "hlist", "breadcrumb", "breadcrumbs",
-    "pagination", "toolbar",
-];
+const MENU_CLASS_WORDS: &[&str] =
+    &["nav", "navbar", "navigation", "menu", "menubar", "hlist", "breadcrumb", "breadcrumbs", "pagination", "toolbar"];
 
 /// Menu items longer than this are content, not navigation
 const MAX_MENU_ITEM_CHARS: usize = 60;
@@ -407,8 +389,7 @@ fn has_menu_class(elem: &scraper::node::Element) -> bool {
 }
 
 fn is_navigation_region(elem: &scraper::node::Element) -> bool {
-    matches!(elem.name(), "nav" | "footer")
-        || matches!(elem.attr("role"), Some("navigation" | "menubar" | "menu"))
+    matches!(elem.name(), "nav" | "footer") || matches!(elem.attr("role"), Some("navigation" | "menubar" | "menu"))
 }
 
 /// A list is shown as a menu if it's in a navigation region (<nav>, <footer>, role=navigation)
@@ -416,11 +397,7 @@ fn is_navigation_region(elem: &scraper::node::Element) -> bool {
 fn looks_like_menu(list: ElementRef) -> bool {
     // Bounded, so pathologically deep nesting can't make this quadratic
     let in_navigation = is_navigation_region(list.value())
-        || list
-            .ancestors()
-            .filter_map(ElementRef::wrap)
-            .take(50)
-            .any(|a| is_navigation_region(a.value()));
+        || list.ancestors().filter_map(ElementRef::wrap).take(50).any(|a| is_navigation_region(a.value()));
     if list.value().name() == "ol" {
         return in_navigation;
     }
@@ -529,11 +506,7 @@ fn link_label(link: ElementRef) -> String {
     let text = text.trim_matches(char::is_whitespace).to_string();
     if text.is_empty() {
         // An icon link: use its accessible name
-        link.value()
-            .attr("aria-label")
-            .or_else(|| link.value().attr("title"))
-            .unwrap_or("")
-            .to_string()
+        link.value().attr("aria-label").or_else(|| link.value().attr("title")).unwrap_or("").to_string()
     } else {
         text
     }
@@ -614,8 +587,19 @@ fn format_number(n: i64, numbering: Numbering) -> String {
     }
     fn roman(mut n: i64) -> String {
         const NUMERALS: &[(i64, &str)] = &[
-            (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
-            (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
+            (1000, "m"),
+            (900, "cm"),
+            (500, "d"),
+            (400, "cd"),
+            (100, "c"),
+            (90, "xc"),
+            (50, "l"),
+            (40, "xl"),
+            (10, "x"),
+            (9, "ix"),
+            (5, "v"),
+            (4, "iv"),
+            (1, "i"),
         ];
         let mut out = String::new();
         for &(value, numeral) in NUMERALS {
@@ -1025,13 +1009,13 @@ impl DomRenderer {
                 // Merge with the previous region if it's the same link and contiguous
                 if let Some(last) = self.links.last_mut()
                     && last.line_index == line_index
-                        && last.url == url
-                        && last.control == control
-                        && last.x_end == start_x
-                    {
-                        last.x_end = end_x;
-                        continue;
-                    }
+                    && last.url == url
+                    && last.control == control
+                    && last.x_end == start_x
+                {
+                    last.x_end = end_x;
+                    continue;
+                }
                 // A zero-width character (combining mark, zero-width space) can't start a
                 // clickable region on its own
                 if width == 0 {
@@ -1290,9 +1274,7 @@ impl DomRenderer {
         self.open_element(element);
 
         // Record link targets after any block spacing, so jumps land on the content
-        let anchor = elem
-            .attr("id")
-            .or_else(|| if tag == "a" { elem.attr("name") } else { None });
+        let anchor = elem.attr("id").or_else(|| if tag == "a" { elem.attr("name") } else { None });
         if let Some(name) = anchor {
             // First occurrence wins, as in browsers
             self.anchors.entry(name.to_string()).or_insert(self.lines.len());
@@ -1380,7 +1362,8 @@ impl DomRenderer {
                 // Only submit buttons do anything without JavaScript
                 let kind = elem.attr("type").unwrap_or("submit").trim().to_ascii_lowercase();
                 if kind == "submit" {
-                    let label: String = element.text().collect::<String>().split_ascii_whitespace().collect::<Vec<_>>().join(" ");
+                    let label: String =
+                        element.text().collect::<String>().split_ascii_whitespace().collect::<Vec<_>>().join(" ");
                     let control = self.add_control(
                         elem,
                         FormControl {
@@ -1406,8 +1389,8 @@ impl DomRenderer {
                     self.add_style(|s| s.add_modifier(Modifier::DIM));
                 }
             }
-            "p" | "main" | "article" | "section" | "aside" | "figure" | "fieldset" | "details"
-            | "center" | "hgroup" | "dl" => self.add_vertical_space(),
+            "p" | "main" | "article" | "section" | "aside" | "figure" | "fieldset" | "details" | "center"
+            | "hgroup" | "dl" => self.add_vertical_space(),
             "address" => {
                 self.add_vertical_space();
                 self.add_style(|s| s.add_modifier(Modifier::ITALIC));
@@ -1438,11 +1421,7 @@ impl DomRenderer {
                 } else {
                     self.flush_line();
                 }
-                let kind = if elem.name() == "ol" {
-                    Self::ordered_list(element)
-                } else {
-                    ListKind::Unordered
-                };
+                let kind = if elem.name() == "ol" { Self::ordered_list(element) } else { ListKind::Unordered };
                 self.list_stack.push(kind);
                 self.prefix_stack.push(LinePrefix::Indent(2));
             }
@@ -1472,35 +1451,31 @@ impl DomRenderer {
                 AfterElement::Nothing
             }
             "form" => AfterElement::BlockSpace,
-            "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p" | "main" | "article" | "section"
-            | "aside" | "figure" | "fieldset" | "details" | "center" | "hgroup"
-            | "address" | "pre" | "blockquote" | "dl" => AfterElement::BlockSpace,
+            "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p" | "main" | "article" | "section" | "aside" | "figure"
+            | "fieldset" | "details" | "center" | "hgroup" | "address" | "pre" | "blockquote" | "dl" => {
+                AfterElement::BlockSpace
+            }
             // Only the outermost list is separated from the text around it
             "ul" | "ol" | "menu" if self.list_stack.len() <= 1 => AfterElement::BlockSpace,
             "li" => {
                 self.marker_pending = false;
                 AfterElement::EndLine
             }
-            "ul" | "ol" | "menu" | "div" | "header" | "footer" | "nav" | "legend" | "search"
-            | "figcaption" | "summary" | "dt" | "dd" | "tr" => AfterElement::EndLine,
+            "ul" | "ol" | "menu" | "div" | "header" | "footer" | "nav" | "legend" | "search" | "figcaption"
+            | "summary" | "dt" | "dd" | "tr" => AfterElement::EndLine,
             _ => AfterElement::Nothing,
         }
     }
 
     fn ordered_list(element: ElementRef) -> ListKind {
         let elem = element.value();
-        let items: Vec<ElementRef> = element
-            .children()
-            .filter_map(ElementRef::wrap)
-            .filter(|child| child.value().name() == "li")
-            .collect();
+        let items: Vec<ElementRef> =
+            element.children().filter_map(ElementRef::wrap).filter(|child| child.value().name() == "li").collect();
         let count = items.len().max(1) as i64;
         let reversed = elem.attr("reversed").is_some();
         let step: i64 = if reversed { -1 } else { 1 };
-        let start = elem
-            .attr("start")
-            .and_then(|s| s.trim().parse::<i64>().ok())
-            .unwrap_or(if reversed { count } else { 1 });
+        let start =
+            elem.attr("start").and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(if reversed { count } else { 1 });
         let numbering = match elem.attr("type") {
             Some("a") => Numbering::LowerAlpha,
             Some("A") => Numbering::UpperAlpha,
@@ -1524,11 +1499,7 @@ impl DomRenderer {
     fn start_list_item(&mut self, elem: &scraper::node::Element) {
         self.marker_pending = false;
         self.flush_line();
-        let unordered_depth = self
-            .list_stack
-            .iter()
-            .filter(|kind| matches!(kind, ListKind::Unordered))
-            .count();
+        let unordered_depth = self.list_stack.iter().filter(|kind| matches!(kind, ListKind::Unordered)).count();
         let marker = match self.list_stack.last_mut() {
             Some(ListKind::Ordered { next, step, numbering, marker_width }) => {
                 if let Some(value) = elem.attr("value").and_then(|v| v.trim().parse::<i64>().ok()) {
@@ -1604,9 +1575,7 @@ impl DomRenderer {
                 continue;
             };
             match menu_items(submenu, 1) {
-                Some(subitems) if depth < MAX_MENU_DEPTH => {
-                    self.render_menu(&subitems, Some(&item.label), depth + 1)
-                }
+                Some(subitems) if depth < MAX_MENU_DEPTH => self.render_menu(&subitems, Some(&item.label), depth + 1),
                 // Not a plain menu (or nested too deeply): draw it as usual, unless it's empty
                 _ if submenu.text().any(|t| !t.trim().is_empty()) => self.walk(*submenu),
                 _ => {}
@@ -1636,11 +1605,8 @@ impl DomRenderer {
     fn push_control_box(&mut self, control: Option<usize>, text: &str) {
         let saved = self.active_control;
         self.active_control = control;
-        let style = if control.is_some() {
-            |s: Style| s.fg(Color::Yellow)
-        } else {
-            |s: Style| s.add_modifier(Modifier::DIM)
-        };
+        let style =
+            if control.is_some() { |s: Style| s.fg(Color::Yellow) } else { |s: Style| s.add_modifier(Modifier::DIM) };
         self.add_style(style);
         self.push_word(text);
         self.style_stack.pop();
@@ -1731,7 +1697,8 @@ impl DomRenderer {
             if option.value().name() != "option" || option.value().attr("disabled").is_some() {
                 continue;
             }
-            let label: String = option.text().collect::<String>().split_ascii_whitespace().collect::<Vec<_>>().join(" ");
+            let label: String =
+                option.text().collect::<String>().split_ascii_whitespace().collect::<Vec<_>>().join(" ");
             let value = option.value().attr("value").map(str::to_string).unwrap_or_else(|| label.clone());
             if option.value().attr("selected").is_some() {
                 selected = options.len();
@@ -1778,11 +1745,8 @@ impl DomRenderer {
             self.flush_line();
         }
 
-        let columns = rows
-            .iter()
-            .map(|row| row.cells.iter().map(|cell| cell.colspan).sum::<usize>())
-            .max()
-            .unwrap_or(1);
+        let columns =
+            rows.iter().map(|row| row.cells.iter().map(|cell| cell.colspan).sum::<usize>()).max().unwrap_or(1);
         let prefix_width: usize = self.prefix_spans().iter().map(|s| text_width(&s.content)).sum();
         let separators = COLUMN_SEPARATOR_WIDTH * (columns - 1);
         let available = self.max_width.saturating_sub(prefix_width);
@@ -1802,10 +1766,7 @@ impl DomRenderer {
             }
         }
 
-        match available
-            .checked_sub(separators)
-            .and_then(|space| column_widths(&natural, &minimum, space))
-        {
+        match available.checked_sub(separators).and_then(|space| column_widths(&natural, &minimum, space)) {
             Some(widths) => self.render_table_grid(&rows, &widths),
             None => self.render_table_stacked(&rows),
         }
@@ -1813,9 +1774,8 @@ impl DomRenderer {
     }
 
     fn render_table_grid(&mut self, rows: &[TableRow], widths: &[usize]) {
-        let column_x = |column: usize| -> usize {
-            widths[..column].iter().sum::<usize>() + COLUMN_SEPARATOR_WIDTH * column
-        };
+        let column_x =
+            |column: usize| -> usize { widths[..column].iter().sum::<usize>() + COLUMN_SEPARATOR_WIDTH * column };
         let separator_style = Style::default().fg(Color::DarkGray);
         let mut header_rule_drawn = false;
 
@@ -1827,8 +1787,7 @@ impl DomRenderer {
                     break;
                 }
                 let span = cell.colspan.min(widths.len() - column);
-                let width = widths[column..column + span].iter().sum::<usize>()
-                    + COLUMN_SEPARATOR_WIDTH * (span - 1);
+                let width = widths[column..column + span].iter().sum::<usize>() + COLUMN_SEPARATOR_WIDTH * (span - 1);
                 cells.push(self.render_cell(cell, column, width));
                 column += span;
             }

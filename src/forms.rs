@@ -28,11 +28,15 @@ pub struct SelectOption {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ControlKind {
     /// A single-line field (text, search, email, number...), masked if it's a password
-    Text { password: bool },
+    Text {
+        password: bool,
+    },
     TextArea,
     Checkbox,
     Radio,
-    Select { options: Vec<SelectOption> },
+    Select {
+        options: Vec<SelectOption>,
+    },
     /// Submits its form: submit and image inputs, and <button>
     Submit,
     /// Sent with the form but never shown
@@ -107,11 +111,8 @@ impl FormControl {
                     // Empty and not being edited: show the placeholder, if any
                     return fit_start(&self.label, self.width, '_');
                 }
-                let shown = if self.is_password() {
-                    "•".repeat(text.chars().count())
-                } else {
-                    text.replace('\n', "⏎")
-                };
+                let shown =
+                    if self.is_password() { "•".repeat(text.chars().count()) } else { text.replace('\n', "⏎") };
                 if editing {
                     fit_end(&format!("{}▏", shown), self.width, '_')
                 } else {
@@ -121,9 +122,7 @@ impl FormControl {
             (ControlKind::Checkbox, ControlValue::Checked(on)) => {
                 fit_start(if *on { "x" } else { " " }, self.width, ' ')
             }
-            (ControlKind::Radio, ControlValue::Checked(on)) => {
-                fit_start(if *on { "•" } else { " " }, self.width, ' ')
-            }
+            (ControlKind::Radio, ControlValue::Checked(on)) => fit_start(if *on { "•" } else { " " }, self.width, ' '),
             (ControlKind::Select { options }, ControlValue::Selected(i)) => {
                 let label = options.get(*i).map(|o| o.label.as_str()).unwrap_or("");
                 let inner = self.width.saturating_sub(2);
@@ -307,7 +306,5 @@ pub fn build_submission(
 /// The button pressed when a form is submitted by pressing Enter in a text field: its first
 /// submit button, as in other browsers
 pub fn default_submitter(controls: &[FormControl], form: usize) -> Option<usize> {
-    controls
-        .iter()
-        .position(|c| c.form == Some(form) && c.kind == ControlKind::Submit)
+    controls.iter().position(|c| c.form == Some(form) && c.kind == ControlKind::Submit)
 }

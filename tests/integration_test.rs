@@ -48,12 +48,7 @@ async fn test_full_request_to_render_flow() {
 
         // Use the actual terminal width constant or a test value
         let test_width = 80;
-        handle_network_event(
-            &mut app,
-            NetworkResponse::Success(id, title, body, final_url, kind),
-            test_width,
-        )
-        .unwrap();
+        handle_network_event(&mut app, NetworkResponse::Success(id, title, body, final_url, kind), test_width).unwrap();
         // Pages are laid out on a background thread; wait for the result
         while app.is_rendering(app.active_tab_index) {
             let resp = app.rx.recv().await.unwrap();
@@ -62,11 +57,7 @@ async fn test_full_request_to_render_flow() {
         assert_eq!(app.current_tab().page_title, "Test Page");
 
         // Verify the content exists somewhere in the rendered lines
-        let found = app
-            .current_tab()
-            .rendered_content
-            .iter()
-            .any(|line| line.to_string().contains("Hello World"));
+        let found = app.current_tab().rendered_content.iter().any(|line| line.to_string().contains("Hello World"));
 
         assert!(found, "Content 'Hello World' not found in rendered output");
     } else {
@@ -86,16 +77,8 @@ async fn test_search_url_normalization() {
     app.submit_request();
 
     // Verify it was transformed into a Marginalia search URL
-    assert!(
-        app.current_tab()
-            .url_input
-            .starts_with(rynx_browser::constants::MARGINALIA_SEARCH_URL)
-    );
-    assert!(
-        app.current_tab()
-            .url_input
-            .contains("query=rust+programming")
-    );
+    assert!(app.current_tab().url_input.starts_with(rynx_browser::constants::MARGINALIA_SEARCH_URL));
+    assert!(app.current_tab().url_input.contains("query=rust+programming"));
 }
 
 #[test]
@@ -178,10 +161,7 @@ async fn test_input_handling_switch_to_edit_mode() {
     assert!(result.is_ok());
 
     // Verify app state changed to Editing
-    assert_eq!(
-        app.current_tab().input_mode,
-        rynx_browser::models::InputMode::Editing
-    );
+    assert_eq!(app.current_tab().input_mode, rynx_browser::models::InputMode::Editing);
 }
 
 // --- Regression test helpers ---
@@ -201,11 +181,7 @@ fn test_app() -> App {
 fn unique_temp_dir() -> std::path::PathBuf {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
-    std::env::temp_dir().join(format!(
-        "rynx-test-{}-{}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ))
+    std::env::temp_dir().join(format!("rynx-test-{}-{}", std::process::id(), COUNTER.fetch_add(1, Ordering::Relaxed)))
 }
 
 /// Go through the same prompt-then-confirm flow as the 'd' key and 'y' answer
@@ -221,12 +197,7 @@ fn history_urls(tab: &rynx_browser::app::BrowserTab) -> Vec<&str> {
 }
 
 fn key(code: KeyCode) -> KeyEvent {
-    KeyEvent {
-        code,
-        modifiers: KeyModifiers::empty(),
-        kind: KeyEventKind::Press,
-        state: KeyEventState::empty(),
-    }
+    KeyEvent { code, modifiers: KeyModifiers::empty(), kind: KeyEventKind::Press, state: KeyEventState::empty() }
 }
 
 /// Deliver a page to the active tab as if it had just finished loading
@@ -241,9 +212,7 @@ fn load_page(app: &mut App, html: &str) {
 }
 
 fn links_page(count: usize) -> String {
-    (0..count)
-        .map(|i| format!("<p><a href='/l{i}'>link {i}</a></p>"))
-        .collect()
+    (0..count).map(|i| format!("<p><a href='/l{i}'>link {i}</a></p>")).collect()
 }
 
 #[tokio::test]
@@ -412,10 +381,7 @@ async fn test_failed_download_keeps_current_page() {
     let tab = app.current_tab();
     assert_eq!(tab.html_source, source_before, "page was replaced by download error");
     assert_eq!(tab.page_title, "Page");
-    assert!(matches!(
-        tab.download_state.as_ref().map(|d| &d.status),
-        Some(DownloadStatus::Failed(_))
-    ));
+    assert!(matches!(tab.download_state.as_ref().map(|d| &d.status), Some(DownloadStatus::Failed(_))));
 }
 
 #[tokio::test]
@@ -430,13 +396,9 @@ async fn test_page_error_does_not_fail_active_download() {
         status: DownloadStatus::Active,
     });
     let id = app.current_tab().id;
-    handle_network_event(&mut app, NetworkResponse::Error(id, "boom".into()), 80)
-        .unwrap();
+    handle_network_event(&mut app, NetworkResponse::Error(id, "boom".into()), 80).unwrap();
 
-    assert!(matches!(
-        app.current_tab().download_state.as_ref().map(|d| &d.status),
-        Some(DownloadStatus::Active)
-    ));
+    assert!(matches!(app.current_tab().download_state.as_ref().map(|d| &d.status), Some(DownloadStatus::Active)));
 }
 
 #[tokio::test]
@@ -484,10 +446,7 @@ async fn test_download_progress_is_throttled() {
     assert_eq!(saved_len, body.len() as u64);
     // Unthrottled, this was one message per network chunk (hundreds for 4MB)
     assert!(progress_messages <= 5, "got {progress_messages} progress messages");
-    assert!(matches!(
-        app.current_tab().download_state.as_ref().map(|d| &d.status),
-        Some(DownloadStatus::Completed)
-    ));
+    assert!(matches!(app.current_tab().download_state.as_ref().map(|d| &d.status), Some(DownloadStatus::Completed)));
 }
 
 #[test]
@@ -532,10 +491,7 @@ async fn test_download_ignores_query_string_and_saves_to_prompted_path() {
     let NetworkResponse::DownloadFinished(_, saved) = &resp else { panic!("download failed") };
     assert_eq!(std::path::PathBuf::from(saved), expected_path);
     handle_network_event(&mut app, resp, 80).unwrap();
-    assert!(matches!(
-        app.current_tab().download_state.as_ref().map(|d| &d.status),
-        Some(DownloadStatus::Completed)
-    ));
+    assert!(matches!(app.current_tab().download_state.as_ref().map(|d| &d.status), Some(DownloadStatus::Completed)));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -614,10 +570,7 @@ async fn test_jump_tries_next_service_after_failure() {
     use rynx_browser::network::attempt_jump_with;
 
     let no_entry = MockServer::start().await;
-    Mock::given(method("GET"))
-        .respond_with(ResponseTemplate::new(404))
-        .mount(&no_entry)
-        .await;
+    Mock::given(method("GET")).respond_with(ResponseTemplate::new(404)).mount(&no_entry).await;
     let working = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/jump/example.i2p"))
@@ -792,7 +745,10 @@ async fn test_fragment_link_jumps_within_page_without_reloading() {
     let mut app = test_app();
     load_page(&mut app, &book_page());
     let anchor_line = app.current_tab().anchors["ch2"];
-    assert!(line_text(&mut app, anchor_line + 1).contains("Chapter Two") || line_text(&mut app, anchor_line).contains("Chapter Two"));
+    assert!(
+        line_text(&mut app, anchor_line + 1).contains("Chapter Two")
+            || line_text(&mut app, anchor_line).contains("Chapter Two")
+    );
 
     // First link is selected by default
     handle_key_event(&mut app, key(KeyCode::Enter), 80, 24).unwrap();
@@ -974,9 +930,7 @@ async fn test_redirect_to_http_is_upgraded_to_https() {
     let mock_server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/out"))
-        .respond_with(
-            ResponseTemplate::new(302).insert_header("Location", "http://example.invalid/book.html"),
-        )
+        .respond_with(ResponseTemplate::new(302).insert_header("Location", "http://example.invalid/book.html"))
         .mount(&mock_server)
         .await;
 
@@ -1036,9 +990,7 @@ async fn test_control_characters_never_reach_the_terminal() {
     // OSC 0 sets the window title, OSC 52 writes the clipboard, CSI 2J clears the screen,
     // and U+009B is the single-byte C1 form of CSI
     let evil = "\x1b]52;c;ZWNobyBoaQ==\x07\x1b[2J\u{9b}31m";
-    let html = format!(
-        "<p>safe {evil}text</p><img alt='pic{evil}'><pre>col1\tcol2{evil}</pre>"
-    );
+    let html = format!("<p>safe {evil}text</p><img alt='pic{evil}'><pre>col1\tcol2{evil}</pre>");
     let mut app = test_app();
     let id = app.current_tab().id;
     handle_network_event(
@@ -1060,10 +1012,7 @@ async fn test_control_characters_never_reach_the_terminal() {
         app.current_tab().is_source_view = source_view;
         app.render_tab(0, 100);
         terminal.draw(|f| ui(f, &app)).unwrap();
-        let bad: Vec<_> = screen_cells(&terminal)
-            .into_iter()
-            .filter(|s| s.contains(char::is_control))
-            .collect();
+        let bad: Vec<_> = screen_cells(&terminal).into_iter().filter(|s| s.contains(char::is_control)).collect();
         assert!(bad.is_empty(), "control characters on screen (source_view={source_view}): {bad:?}");
     }
 
@@ -1093,9 +1042,7 @@ async fn test_compressed_page_cannot_exceed_size_limit() {
     Mock::given(method("GET"))
         .and(path("/bomb"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("Content-Encoding", "gzip")
-                .set_body_raw(compressed, "text/html"),
+            ResponseTemplate::new(200).insert_header("Content-Encoding", "gzip").set_body_raw(compressed, "text/html"),
         )
         .mount(&mock_server)
         .await;
@@ -1134,8 +1081,7 @@ async fn test_page_charset_is_honoured() {
         .and(path("/latin1"))
         .respond_with(
             // "café" in windows-1252, where é is the single byte 0xE9
-            ResponseTemplate::new(200)
-                .set_body_raw(b"<p>caf\xe9</p>".to_vec(), "text/html; charset=windows-1252"),
+            ResponseTemplate::new(200).set_body_raw(b"<p>caf\xe9</p>".to_vec(), "text/html; charset=windows-1252"),
         )
         .mount(&mock_server)
         .await;
@@ -1241,10 +1187,8 @@ async fn test_downloads_are_quarantined_for_gatekeeper() {
     let (resp, _) = finish_download(&mut app).await;
     let NetworkResponse::DownloadFinished(_, saved) = resp else { panic!("download failed") };
 
-    let output = std::process::Command::new("/usr/bin/xattr")
-        .args(["-p", "com.apple.quarantine", &saved])
-        .output()
-        .unwrap();
+    let output =
+        std::process::Command::new("/usr/bin/xattr").args(["-p", "com.apple.quarantine", &saved]).output().unwrap();
     let value = String::from_utf8_lossy(&output.stdout);
     let _ = std::fs::remove_dir_all(&dir);
     assert!(output.status.success(), "no quarantine attribute on {saved}");
@@ -1368,12 +1312,8 @@ async fn test_requests_send_no_referer_header() {
     let resp = load_url(&mut app, &format!("{}/page", mock_server.uri())).await;
     assert!(matches!(resp, NetworkResponse::Success(..)));
     let requests = mock_server.received_requests().await.unwrap();
-    assert!(
-        requests.iter().all(|r| !r.headers.contains_key("referer")),
-        "a Referer header was sent"
-    );
+    assert!(requests.iter().all(|r| !r.headers.contains_key("referer")), "a Referer header was sent");
 }
-
 
 #[test]
 fn test_content_types_are_classified() {
@@ -1383,8 +1323,14 @@ fn test_content_types_are_classified() {
         assert_eq!(classify_content_type(html), ContentClass::Html, "{html:?}");
     }
     for text in [
-        "text/plain", "text/markdown", "text/css; charset=utf-8", "application/json",
-        "application/ld+json", "application/rss+xml", "application/javascript", "TEXT/PLAIN",
+        "text/plain",
+        "text/markdown",
+        "text/css; charset=utf-8",
+        "application/json",
+        "application/ld+json",
+        "application/rss+xml",
+        "application/javascript",
+        "TEXT/PLAIN",
     ] {
         assert_eq!(classify_content_type(Some(text)), ContentClass::Text, "{text}");
     }
@@ -1456,12 +1402,8 @@ async fn test_pages_use_the_full_content_width() {
     // An 80-column terminal leaves 78 columns inside the page's border
     let mut app = test_app();
     load_page(&mut app, &format!("<p>{}</p><hr>", "word ".repeat(200)));
-    let widths: Vec<usize> = app
-        .current_tab()
-        .rendered_content
-        .iter()
-        .map(rynx_browser::renderer::display_width)
-        .collect();
+    let widths: Vec<usize> =
+        app.current_tab().rendered_content.iter().map(rynx_browser::renderer::display_width).collect();
     assert_eq!(widths.iter().max(), Some(&78), "{widths:?}");
 
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
@@ -1574,16 +1516,11 @@ async fn test_downloads_record_their_origin() {
     assert_eq!(String::from_utf8(recorded).unwrap(), origin);
 }
 
-
 /// Load a page at a URL the way a finished network request would
 fn arrive(app: &mut App, url: &str, html: &str) {
     let id = app.current_tab().id;
-    handle_network_event(
-        app,
-        NetworkResponse::Success(id, "Page".into(), html.into(), url.into(), PageKind::Html),
-        80,
-    )
-    .unwrap();
+    handle_network_event(app, NetworkResponse::Success(id, "Page".into(), html.into(), url.into(), PageKind::Html), 80)
+        .unwrap();
 }
 
 fn long_page(label: &str) -> String {
@@ -1656,7 +1593,12 @@ async fn test_paging_keys() {
     let mut app = test_app();
     arrive(&mut app, TEST_PAGE_URL, &long_page("page"));
     let total = app.current_tab().rendered_content.len();
-    let ctrl = |c| KeyEvent { code: KeyCode::Char(c), modifiers: KeyModifiers::CONTROL, kind: KeyEventKind::Press, state: KeyEventState::empty() };
+    let ctrl = |c| KeyEvent {
+        code: KeyCode::Char(c),
+        modifiers: KeyModifiers::CONTROL,
+        kind: KeyEventKind::Press,
+        state: KeyEventState::empty(),
+    };
     // 24 rows leaves 16 visible
     handle_key_event(&mut app, key(KeyCode::PageDown), 80, 24).unwrap();
     assert_eq!(app.current_tab().scroll, 16);
@@ -1677,13 +1619,18 @@ async fn test_only_binary_file_links_skip_straight_to_downloading() {
     use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
     use rynx_browser::event_handler::handle_mouse_event;
 
-    let click = |row| MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: 2, row, modifiers: KeyModifiers::empty() };
+    let click = |row| MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: 2,
+        row,
+        modifiers: KeyModifiers::empty(),
+    };
     for (href, prompts) in [
         ("/files/report.zip", true),
         ("/files/index.html", false), // /files/ is an ordinary page path on many sites
         ("/download/", false),
-        ("/notes.txt", false),         // shown as text now
-        ("/page?file=a.zip", false),   // the query doesn't make it a download
+        ("/notes.txt", false),       // shown as text now
+        ("/page?file=a.zip", false), // the query doesn't make it a download
     ] {
         let mut app = test_app();
         arrive(&mut app, TEST_PAGE_URL, &format!("<a href='{href}'>link</a>"));

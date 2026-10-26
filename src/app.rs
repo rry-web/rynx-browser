@@ -1,18 +1,17 @@
+use crate::bookmarks::{BOOKMARKS_PAGE, Bookmarks};
 use crate::constants::{
-    DEFAULT_TAB_INDEX, INITIAL_ID_COUNTER, INITIAL_TAB_ID,
-    DOWNLOAD_PROGRESS_INTERVAL_MS, MAX_PAGE_SIZE_BYTES,
+    DEFAULT_TAB_INDEX, DOWNLOAD_PROGRESS_INTERVAL_MS, INITIAL_ID_COUNTER, INITIAL_TAB_ID, MAX_PAGE_SIZE_BYTES,
 };
+use crate::forms::{ControlKind, ControlValue, Form, FormControl, FormMethod};
+use crate::history::{HISTORY_PAGE, History};
 use crate::models::{HistoryEntry, InputMode, LinkRegion, SearchState, Selection};
 use crate::network::{
-    ContentClass, NetworkManager, NetworkResponse, PageKind, attempt_jump, classify_content_type,
-    fragment_of, should_attempt_jump,
+    ContentClass, NetworkManager, NetworkResponse, PageKind, attempt_jump, classify_content_type, fragment_of,
+    should_attempt_jump,
 };
-use crate::bookmarks::{BOOKMARKS_PAGE, Bookmarks};
-use crate::history::{HISTORY_PAGE, History};
-use crate::forms::{ControlKind, ControlValue, Form, FormControl, FormMethod};
-use crate::settings::Settings;
-use crate::renderer::{RenderJob, RenderedPage, render_page};
 use crate::renderer::DomRenderer;
+use crate::renderer::{RenderJob, RenderedPage, render_page};
+use crate::settings::Settings;
 
 use ratatui::text::Line;
 use scraper::Html;
@@ -301,9 +300,7 @@ impl BrowserTab {
         if self.selected_link_index >= self.link_regions.len() {
             self.selected_link_index = 0;
         }
-        self.cursor_line = self
-            .cursor_line
-            .min(self.rendered_content.len().saturating_sub(1));
+        self.cursor_line = self.cursor_line.min(self.rendered_content.len().saturating_sub(1));
     }
 
     pub fn extract_text_from_selection(&self) -> String {
@@ -386,10 +383,7 @@ impl BrowserTab {
 
             let mut char_idx = 0;
             while char_idx + query_chars.len() <= line_chars.len() {
-                let found = query_chars
-                    .iter()
-                    .enumerate()
-                    .all(|(i, q)| fold(line_chars[char_idx + i]) == *q);
+                let found = query_chars.iter().enumerate().all(|(i, q)| fold(line_chars[char_idx + i]) == *q);
                 if found {
                     matches.push(crate::models::SearchMatch {
                         line_index: line_idx,
@@ -405,30 +399,27 @@ impl BrowserTab {
         }
 
         // Keep the state even with no matches so the query survives and can be edited
-        self.search_state = Some(SearchState {
-            query: query.to_string(),
-            matches,
-            current_match_index: 0,
-        });
+        self.search_state = Some(SearchState { query: query.to_string(), matches, current_match_index: 0 });
     }
 
     pub fn next_search_match(&mut self) {
         if let Some(search_state) = &mut self.search_state
-            && !search_state.matches.is_empty() {
-                search_state.current_match_index =
-                    (search_state.current_match_index + 1) % search_state.matches.len();
-            }
+            && !search_state.matches.is_empty()
+        {
+            search_state.current_match_index = (search_state.current_match_index + 1) % search_state.matches.len();
+        }
     }
 
     pub fn previous_search_match(&mut self) {
         if let Some(search_state) = &mut self.search_state
-            && !search_state.matches.is_empty() {
-                search_state.current_match_index = if search_state.current_match_index == 0 {
-                    search_state.matches.len() - 1
-                } else {
-                    search_state.current_match_index - 1
-                };
-            }
+            && !search_state.matches.is_empty()
+        {
+            search_state.current_match_index = if search_state.current_match_index == 0 {
+                search_state.matches.len() - 1
+            } else {
+                search_state.current_match_index - 1
+            };
+        }
     }
 
     pub fn clear_search(&mut self) {
@@ -439,8 +430,7 @@ impl BrowserTab {
 
     pub fn initiate_download_request(&mut self, url: String, download_dir: &Path) {
         // Each tab tracks one download; a second would fight over the same overlay
-        if let Some(crate::models::Download { status: crate::models::DownloadStatus::Active, .. }) =
-            self.download_state
+        if let Some(crate::models::Download { status: crate::models::DownloadStatus::Active, .. }) = self.download_state
         {
             self.status_message = String::from("A download is already in progress in this tab");
             return;
@@ -458,12 +448,8 @@ impl BrowserTab {
         let target_path = download_dir.join(&sanitized_name);
         let file_exists = App::path_taken(&target_path);
 
-        self.download_prompt = Some(crate::models::DownloadPrompt {
-            url,
-            filename: sanitized_name,
-            target_path,
-            file_exists,
-        });
+        self.download_prompt =
+            Some(crate::models::DownloadPrompt { url, filename: sanitized_name, target_path, file_exists });
     }
 }
 
@@ -515,8 +501,7 @@ impl App {
         rx: mpsc::Receiver<NetworkResponse>,
         settings: Settings,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let initial_tab =
-            BrowserTab::new(INITIAL_TAB_ID, String::from("https://www.rust-lang.org"));
+        let initial_tab = BrowserTab::new(INITIAL_TAB_ID, String::from("https://www.rust-lang.org"));
         let network_manager = Arc::new(NetworkManager::with_settings(&settings.i2p_proxy, &settings.user_agent)?);
         let download_dir = settings.download_dir.clone().unwrap_or_else(Self::default_download_dir);
         Ok(Self {
@@ -560,7 +545,8 @@ impl App {
         if let Some(id) = address.strip_prefix(crate::mcp::RESULT_PAGE) {
             let result = self.tool_results.iter().find(|(n, ..)| n.to_string() == id).cloned();
             let (title, html) = result.map(|(_, title, html)| (title, html)).unwrap_or_else(|| {
-                let html = "<title>Result gone</title><h1>Result gone</h1><p>Only the last few tool results are kept.</p>";
+                let html =
+                    "<title>Result gone</title><h1>Result gone</h1><p>Only the last few tool results are kept.</p>";
                 (String::from("Result gone"), html.to_string())
             });
             self.show_generated_page(self.active_tab_index, address, &title, html);
@@ -631,7 +617,13 @@ impl App {
     }
 
     /// Show the tools a server listed, if the tab is still waiting for them
-    pub fn finish_listing_tools(&mut self, index: usize, address: String, server: String, result: Result<Vec<crate::mcp::Tool>, String>) {
+    pub fn finish_listing_tools(
+        &mut self,
+        index: usize,
+        address: String,
+        server: String,
+        result: Result<Vec<crate::mcp::Tool>, String>,
+    ) {
         if self.tabs[index].url_input != address {
             return;
         }
@@ -643,7 +635,12 @@ impl App {
                 self.show_generated_page(index, &address, &format!("Tools from {}", host), html);
             }
             Err(e) => {
-                self.show_generated_page(index, &address, "Tools unavailable", crate::mcp::error_page_html(&server, &e));
+                self.show_generated_page(
+                    index,
+                    &address,
+                    "Tools unavailable",
+                    crate::mcp::error_page_html(&server, &e),
+                );
                 self.tabs[index].status_message = e;
             }
         }
@@ -655,7 +652,9 @@ impl App {
         let Some(server) = crate::mcp::server_of(&tab.url_input) else {
             return;
         };
-        let Some(tool) = self.mcp_tools.get(&server).and_then(|tools| tools.iter().find(|t| t.name == tool_name)).cloned() else {
+        let Some(tool) =
+            self.mcp_tools.get(&server).and_then(|tools| tools.iter().find(|t| t.name == tool_name)).cloned()
+        else {
             self.current_tab().status_message = String::from("That tool is no longer listed; reload the page");
             return;
         };
@@ -708,7 +707,13 @@ impl App {
     }
 
     /// Keep a tool's result, and show it if the tab is still on that server's tools page
-    pub fn finish_tool(&mut self, index: usize, server: String, title: String, result: Result<serde_json::Value, String>) {
+    pub fn finish_tool(
+        &mut self,
+        index: usize,
+        server: String,
+        title: String,
+        result: Result<serde_json::Value, String>,
+    ) {
         self.next_result_id += 1;
         let id = self.next_result_id;
         let html = crate::mcp::result_page_html(&server, &title, &result);
@@ -919,10 +924,8 @@ impl App {
         }
         // https://paypal.com@evil.example/ goes to evil.example: a classic phishing disguise
         if let Some(host) = crate::network::hidden_destination(url) {
-            self.current_tab().status_message = format!(
-                "Blocked: this link hides where it really goes ({}). Type the address if you trust it.",
-                host
-            );
+            self.current_tab().status_message =
+                format!("Blocked: this link hides where it really goes ({}). Type the address if you trust it.", host);
             return true;
         }
         // A Gopher or Gemini link sends its address to the server as a raw line of text, which a
@@ -951,7 +954,8 @@ impl App {
         } else {
             url
         };
-        let internal = url == BOOKMARKS_PAGE || url == HISTORY_PAGE || url == HELP_PAGE || url.starts_with(crate::mcp::TOOLS_PAGE);
+        let internal =
+            url == BOOKMARKS_PAGE || url == HISTORY_PAGE || url == HELP_PAGE || url.starts_with(crate::mcp::TOOLS_PAGE);
         if !internal && self.reject_unsupported_link(&url) {
             return;
         }
@@ -1047,20 +1051,18 @@ impl App {
         let base = tab.link_base().to_string();
         // Forms on the browser's tools page run tools; a web page's forms can never reach them
         if tab.page_url.is_none() && tab.url_input.starts_with(crate::mcp::TOOLS_PAGE) {
-            let tool = tab.forms.get(form).map(|f| crate::forms::form_target(f, &base)).and_then(|t| crate::mcp::tool_of_action(&t));
+            let tool = tab
+                .forms
+                .get(form)
+                .map(|f| crate::forms::form_target(f, &base))
+                .and_then(|t| crate::mcp::tool_of_action(&t));
             if let Some(tool) = tool {
                 self.prepare_tool_call(form, &tool);
             }
             return;
         }
-        let submission = crate::forms::build_submission(
-            &tab.forms,
-            &tab.controls,
-            &tab.control_values,
-            form,
-            submitter,
-            &base,
-        );
+        let submission =
+            crate::forms::build_submission(&tab.forms, &tab.controls, &tab.control_values, form, submitter, &base);
         match submission {
             Err(message) => tab.status_message = message,
             Ok(submission) if submission.method == FormMethod::Get => self.follow_link(submission.url),
@@ -1152,10 +1154,8 @@ impl App {
         let solve_anubis = self.settings.solve_anubis;
         let network_manager = Arc::clone(&self.network_manager);
 
-        let domain_for_jump = Url::parse(&target_url)
-            .ok()
-            .and_then(|u| u.domain().map(|s| s.to_string()))
-            .unwrap_or_default();
+        let domain_for_jump =
+            Url::parse(&target_url).ok().and_then(|u| u.domain().map(|s| s.to_string())).unwrap_or_default();
 
         if crate::network::is_small_web(&target_url) {
             let gemini_hosts = Arc::clone(&self.gemini_hosts);
@@ -1187,11 +1187,10 @@ impl App {
 
             if let Ok(ref resp) = resp_result
                 && should_attempt_jump(use_i2p, &domain_for_jump, resp.status())
-                    && let Ok(jump_resp) =
-                        attempt_jump(client, &domain_for_jump, tx_clone.clone(), id).await
-                    {
-                        resp_result = Ok(jump_resp);
-                    }
+                && let Ok(jump_resp) = attempt_jump(client, &domain_for_jump, tx_clone.clone(), id).await
+            {
+                resp_result = Ok(jump_resp);
+            }
 
             // An Anubis bot check is passed at most once per page, so a site that keeps asking
             // can't make rynx work forever
@@ -1222,12 +1221,11 @@ impl App {
                         // Fast rejection when the server declares the size; read_text_limited
                         // enforces the limit when it doesn't
                         if let Some(len) = resp.content_length()
-                            && len > MAX_PAGE_SIZE_BYTES {
-                                let _ = tx_clone
-                                    .send(NetworkResponse::Error(id, "Page too large".to_string()))
-                                    .await;
-                                return;
-                            }
+                            && len > MAX_PAGE_SIZE_BYTES
+                        {
+                            let _ = tx_clone.send(NetworkResponse::Error(id, "Page too large".to_string())).await;
+                            return;
+                        }
 
                         let body = match crate::network::read_text_limited(resp, MAX_PAGE_SIZE_BYTES).await {
                             Ok(body) => body,
@@ -1243,27 +1241,35 @@ impl App {
                         if anubis_tried && (status.is_client_error() || status.is_server_error()) {
                             anubis_problem = Some(String::from("the site didn't accept rynx's answer"));
                         }
-                        if class == ContentClass::Html && anubis_problem.is_none()
-                            && let Some(challenge) = crate::anubis::detect(&body) {
-                                if anubis_tried {
-                                    anubis_problem = Some(String::from("the site didn't accept rynx's answer"));
-                                } else if !solve_anubis {
-                                    anubis_problem = Some(String::from("passing them is turned off in settings.conf"));
-                                } else {
-                                    anubis_tried = true;
-                                    let host = Url::parse(&final_url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
-                                    let _ = tx_clone
-                                        .send(NetworkResponse::Info(id, format!("Passing {}'s bot check (Anubis), without JavaScript...", host)))
-                                        .await;
-                                    match crate::anubis::pass(client, &final_url, challenge, use_i2p).await {
-                                        Ok(next) => {
-                                            resp_result = Ok(next);
-                                            continue;
-                                        }
-                                        Err(e) => anubis_problem = Some(e),
+                        if class == ContentClass::Html
+                            && anubis_problem.is_none()
+                            && let Some(challenge) = crate::anubis::detect(&body)
+                        {
+                            if anubis_tried {
+                                anubis_problem = Some(String::from("the site didn't accept rynx's answer"));
+                            } else if !solve_anubis {
+                                anubis_problem = Some(String::from("passing them is turned off in settings.conf"));
+                            } else {
+                                anubis_tried = true;
+                                let host = Url::parse(&final_url)
+                                    .ok()
+                                    .and_then(|u| u.host_str().map(str::to_string))
+                                    .unwrap_or_default();
+                                let _ = tx_clone
+                                    .send(NetworkResponse::Info(
+                                        id,
+                                        format!("Passing {}'s bot check (Anubis), without JavaScript...", host),
+                                    ))
+                                    .await;
+                                match crate::anubis::pass(client, &final_url, challenge, use_i2p).await {
+                                    Ok(next) => {
+                                        resp_result = Ok(next);
+                                        continue;
                                     }
+                                    Err(e) => anubis_problem = Some(e),
                                 }
                             }
+                        }
 
                         if crate::mcp::is_endpoint_answer(content_type.as_deref(), &body) {
                             let html = crate::mcp::endpoint_page_html(&final_url);
@@ -1284,13 +1290,14 @@ impl App {
                                 ContentClass::Html => PageKind::Html,
                                 _ => PageKind::PlainText,
                             };
-                            let _ = tx_clone
-                                .send(NetworkResponse::Success(id, title, body, final_url, kind))
-                                .await;
+                            let _ = tx_clone.send(NetworkResponse::Success(id, title, body, final_url, kind)).await;
                         }
                         if let Some(problem) = anubis_problem {
                             let _ = tx_clone
-                                .send(NetworkResponse::Info(id, format!("This is a bot check (Anubis), and {}", problem)))
+                                .send(NetworkResponse::Info(
+                                    id,
+                                    format!("This is a bot check (Anubis), and {}", problem),
+                                ))
                                 .await;
                         }
                     }
@@ -1308,8 +1315,7 @@ impl App {
         let raw_name = Url::parse(url)
             .ok()
             .and_then(|u| {
-                u.path_segments()
-                    .and_then(|mut segments| segments.rfind(|s| !s.is_empty()).map(str::to_string))
+                u.path_segments().and_then(|mut segments| segments.rfind(|s| !s.is_empty()).map(str::to_string))
             })
             .unwrap_or_default();
         let decoded = percent_encoding::percent_decode_str(&raw_name).decode_utf8_lossy();
@@ -1320,10 +1326,7 @@ impl App {
     fn sanitize_filename(filename: &str) -> String {
         // Get just the filename part, stripping any path components
         let path = Path::new(filename);
-        let filename_only = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("download.dat");
+        let filename_only = path.file_name().and_then(|n| n.to_str()).unwrap_or("download.dat");
 
         // Remove any dangerous characters and ensure it's safe
         let safe_name = filename_only
@@ -1346,11 +1349,7 @@ impl App {
             || ((stem.starts_with("COM") || stem.starts_with("LPT"))
                 && stem.chars().count() == 4
                 && stem.chars().nth(3).is_some_and(|c| c.is_ascii_digit() || "¹²³".contains(c)));
-        if is_device {
-            format!("_{}", safe_name)
-        } else {
-            safe_name
-        }
+        if is_device { format!("_{}", safe_name) } else { safe_name }
     }
 
     /// Keep names well under the 255-byte limit of common filesystems, preserving the extension
@@ -1394,10 +1393,8 @@ impl App {
     /// The origin is also recorded where Finder's "Where from" and the Gatekeeper dialog read it.
     #[cfg(target_os = "macos")]
     fn mark_downloaded(path: &Path, url: &str) -> std::io::Result<()> {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let timestamp =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         let value = format!("0081;{:08x};rynx_browser;", timestamp);
         xattr::set(path, "com.apple.quarantine", value.as_bytes())?;
         let where_from = Self::binary_plist_string_array(&Self::origin_url(url));
@@ -1507,7 +1504,8 @@ impl App {
 
             // Don't save a server's error page as if it were the file
             if !res.status().is_success() {
-                let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Server returned {}", res.status()))).await;
+                let _ =
+                    tx.send(NetworkResponse::DownloadError(tab_id, format!("Server returned {}", res.status()))).await;
                 return;
             }
 
@@ -1523,32 +1521,40 @@ impl App {
                 let chunk = match item {
                     Ok(chunk) => chunk,
                     Err(e) => {
-                        let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Download interrupted: {}", e))).await;
+                        let _ = tx
+                            .send(NetworkResponse::DownloadError(tab_id, format!("Download interrupted: {}", e)))
+                            .await;
                         return;
                     }
                 };
                 if file_handle.is_none() {
                     // 2. Create Downloads Directory
                     if let Some(dir) = target_path.parent()
-                        && let Err(e) = tokio::fs::create_dir_all(dir).await {
-                            let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Folder error: {}", e))).await;
-                            return;
-                        }
+                        && let Err(e) = tokio::fs::create_dir_all(dir).await
+                    {
+                        let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Folder error: {}", e))).await;
+                        return;
+                    }
 
                     // 3. Sniff Extension; only the confirmed path may be overwritten
                     let mut file_path = target_path.clone();
                     if file_path.extension().is_none()
-                        && let Some(ext) = crate::network::sniff_extension(&chunk) {
-                            file_path = Self::unused_path(&file_path.with_extension(ext));
-                        }
+                        && let Some(ext) = crate::network::sniff_extension(&chunk)
+                    {
+                        file_path = Self::unused_path(&file_path.with_extension(ext));
+                    }
 
                     // 4. Safe File Creation (No unwraps). Never write through a symbolic link: one
                     // planted in Downloads could point the write at e.g. ~/.bashrc
-                    let is_symlink = tokio::fs::symlink_metadata(&file_path)
-                        .await
-                        .is_ok_and(|meta| meta.file_type().is_symlink());
+                    let is_symlink =
+                        tokio::fs::symlink_metadata(&file_path).await.is_ok_and(|meta| meta.file_type().is_symlink());
                     if is_symlink {
-                        let _ = tx.send(NetworkResponse::DownloadError(tab_id, "Refusing to save over a symbolic link".to_string())).await;
+                        let _ = tx
+                            .send(NetworkResponse::DownloadError(
+                                tab_id,
+                                "Refusing to save over a symbolic link".to_string(),
+                            ))
+                            .await;
                         return;
                     }
                     let file = match tokio::fs::File::create(&file_path).await {

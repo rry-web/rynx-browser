@@ -1,8 +1,8 @@
 use crate::app::App;
+use crate::constants::*;
 use crate::constants::{MOUSE_SCROLL_LINES, UI_HEIGHT_OFFSET, UI_ROW_OFFSET};
 use crate::models::{DownloadStatus, InputMode};
 use crate::network::NetworkResponse;
-use crate::constants::*;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::io::Result;
@@ -12,17 +12,15 @@ use std::io::Result;
 /// turns out not to be displayable gets a download page anyway.
 fn is_downloadable_file(url: &str) -> bool {
     const BINARY_EXTENSIONS: &[&str] = &[
-        "zip", "pdf", "exe", "dmg", "pkg", "deb", "iso", "mp4", "mp3", "png", "jpg", "jpeg", "gif",
-        "docx", "xlsx", "tar", "gz", "ogg",
+        "zip", "pdf", "exe", "dmg", "pkg", "deb", "iso", "mp4", "mp3", "png", "jpg", "jpeg", "gif", "docx", "xlsx",
+        "tar", "gz", "ogg",
     ];
     // Only the path's file name counts, not the host or a query like ?file=a.zip
     let Ok(parsed) = url::Url::parse(url) else {
         return false;
     };
     let file_name = parsed.path_segments().and_then(|mut s| s.next_back()).unwrap_or("");
-    file_name
-        .rsplit_once('.')
-        .is_some_and(|(_, ext)| BINARY_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
+    file_name.rsplit_once('.').is_some_and(|(_, ext)| BINARY_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
 }
 
 /// Rows available for page content: tab bar (3) + URL bar (3) + content borders (2) are subtracted
@@ -30,12 +28,7 @@ fn viewport_height(terminal_height: u16) -> usize {
     terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize
 }
 
-pub fn handle_key_event(
-    app: &mut App,
-    key: KeyEvent,
-    terminal_width: u16,
-    terminal_height: u16,
-) -> Result<bool> {
+pub fn handle_key_event(app: &mut App, key: KeyEvent, terminal_width: u16, terminal_height: u16) -> Result<bool> {
     // Confirmation boxes take every key until they're answered
     if app.current_tab().tool_prompt.is_some() {
         match key.code {
@@ -74,12 +67,7 @@ pub fn handle_key_event(
 }
 
 /// Typing into a form field
-fn handle_form_edit_mode(
-    app: &mut App,
-    key: KeyEvent,
-    terminal_width: u16,
-    terminal_height: u16,
-) -> Result<bool> {
+fn handle_form_edit_mode(app: &mut App, key: KeyEvent, terminal_width: u16, terminal_height: u16) -> Result<bool> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let tab = app.current_tab();
     let Some(control) = tab.editing_control.and_then(|i| tab.controls.get(i)).cloned() else {
@@ -129,12 +117,7 @@ fn handle_form_edit_mode(
     Ok(false)
 }
 
-fn handle_normal_mode(
-    app: &mut App,
-    key: KeyEvent,
-    terminal_width: u16,
-    terminal_height: u16,
-) -> Result<bool> {
+fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, terminal_height: u16) -> Result<bool> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let page = viewport_height(terminal_height) as isize;
     // Clearing the history needs two x presses in a row
@@ -220,13 +203,9 @@ fn handle_normal_mode(
         }
         KeyCode::Char('/') => {
             app.current_tab().input_mode = InputMode::Search;
-            app.current_tab().search_state = Some(crate::models::SearchState {
-                query: String::new(),
-                matches: Vec::new(),
-                current_match_index: 0,
-            });
-            app.current_tab().status_message =
-                String::from("SEARCH MODE - Type query and press Enter");
+            app.current_tab().search_state =
+                Some(crate::models::SearchState { query: String::new(), matches: Vec::new(), current_match_index: 0 });
+            app.current_tab().status_message = String::from("SEARCH MODE - Type query and press Enter");
         }
         KeyCode::Char('>') | KeyCode::Char('<') => {
             let tab = app.current_tab();
@@ -236,11 +215,8 @@ fn handle_normal_mode(
                 tab.previous_search_match();
             }
             // Auto-scroll to the current search match
-            let current_line = tab
-                .search_state
-                .as_ref()
-                .and_then(|s| s.matches.get(s.current_match_index))
-                .map(|m| m.line_index);
+            let current_line =
+                tab.search_state.as_ref().and_then(|s| s.matches.get(s.current_match_index)).map(|m| m.line_index);
             if let Some(line) = current_line {
                 tab.scroll_to_line(line, viewport_height(terminal_height));
             }
@@ -254,27 +230,18 @@ fn handle_normal_mode(
             tab.content_changed();
 
             // Update the status message
-            tab.status_message = if tab.is_source_view {
-                String::from("Viewing Source")
-            } else {
-                String::from("Viewing Rendered")
-            };
+            tab.status_message =
+                if tab.is_source_view { String::from("Viewing Source") } else { String::from("Viewing Rendered") };
 
             // Re-render immediately
             app.render_tab(active_index, terminal_width);
         }
 
         // --- VISUAL NAV ---
-        KeyCode::Char('h') => {
-            app.current_tab().cursor_char = app.current_tab().cursor_char.saturating_sub(1)
-        }
+        KeyCode::Char('h') => app.current_tab().cursor_char = app.current_tab().cursor_char.saturating_sub(1),
         KeyCode::Char('l') => {
             let tab = app.current_tab();
-            let line_len = tab
-                .rendered_content
-                .get(tab.cursor_line)
-                .map(crate::renderer::display_width)
-                .unwrap_or(0);
+            let line_len = tab.rendered_content.get(tab.cursor_line).map(crate::renderer::display_width).unwrap_or(0);
             tab.cursor_char = (tab.cursor_char + 1).min(line_len);
         }
         KeyCode::Char('k') => {
@@ -297,8 +264,7 @@ fn handle_normal_mode(
             let tab = app.current_tab();
             if !tab.link_regions.is_empty() {
                 if key.code == KeyCode::Tab {
-                    tab.selected_link_index =
-                        (tab.selected_link_index + 1) % tab.link_regions.len();
+                    tab.selected_link_index = (tab.selected_link_index + 1) % tab.link_regions.len();
                 } else {
                     //backward tab traversal
                     tab.selected_link_index = if tab.selected_link_index > 0 {
@@ -500,12 +466,7 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent, terminal_height: u16) -> Res
     Ok(false)
 }
 
-pub fn handle_mouse_event(
-    app: &mut App,
-    mouse: MouseEvent,
-    terminal_width: u16,
-    terminal_height: u16,
-) -> Result<()> {
+pub fn handle_mouse_event(app: &mut App, mouse: MouseEvent, terminal_width: u16, terminal_height: u16) -> Result<()> {
     // The tool confirmation box is answered with the keyboard only, so a stray click can't run a tool
     if app.current_tab().tool_prompt.is_some() {
         return Ok(());
@@ -526,8 +487,10 @@ pub fn handle_mouse_event(
                 let popup_w = terminal_width / DOWNLOAD_PROMPT_WIDTH_DIVISOR;
                 let popup_h = DOWNLOAD_PROMPT_HEIGHT;
 
-                if mouse.column >= popup_x && mouse.column < (popup_x + popup_w) &&
-                   mouse.row >= popup_y && mouse.row < popup_y + popup_h
+                if mouse.column >= popup_x
+                    && mouse.column < (popup_x + popup_w)
+                    && mouse.row >= popup_y
+                    && mouse.row < popup_y + popup_h
                 {
                     // Detect clicks on the button line (popup_y + offset)
                     if mouse.row == popup_y + DOWNLOAD_PROMPT_BUTTON_ROW_OFFSET {
@@ -557,9 +520,7 @@ pub fn handle_mouse_event(
                 // 2. Search the Link Regions for a match
                 // We filter for links on this specific line
                 let found = tab.link_regions.iter().position(|link| {
-                    link.line_index == real_line_idx
-                        && click_x >= link.x_start
-                        && click_x < link.x_end
+                    link.line_index == real_line_idx && click_x >= link.x_start && click_x < link.x_end
                 });
 
                 if let Some(control) = found.and_then(|i| tab.link_regions[i].control) {
@@ -596,11 +557,7 @@ pub fn process_network_events(app: &mut App, terminal_width: u16) -> Result<()> 
     Ok(())
 }
 
-pub fn handle_network_event(
-    app: &mut App,
-    response: NetworkResponse,
-    terminal_width: u16,
-) -> Result<()> {
+pub fn handle_network_event(app: &mut App, response: NetworkResponse, terminal_width: u16) -> Result<()> {
     let target_id = match &response {
         NetworkResponse::Success(id, ..) => *id,
         NetworkResponse::Error(id, ..) => *id,
@@ -704,10 +661,7 @@ pub fn handle_network_event(
                 let tab = &mut app.tabs[index];
                 tab.page_title = String::from("Error");
                 tab.set_content(
-                    format!(
-                        "<h1>Error</h1><hr><p style='color:red'>{}</p>",
-                        crate::network::escape_html(&msg)
-                    ),
+                    format!("<h1>Error</h1><hr><p style='color:red'>{}</p>", crate::network::escape_html(&msg)),
                     crate::network::PageKind::Html,
                 );
                 tab.reset_page_state();

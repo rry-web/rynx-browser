@@ -6,9 +6,7 @@
 //! `FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render`, and split a long run across
 //! processes with `FUZZ_START=<first seed>`.
 
-use crossterm::event::{
-    KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers, MouseEvent, MouseEventKind,
-};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers, MouseEvent, MouseEventKind};
 use ratatui::{Terminal, backend::TestBackend};
 use rynx_browser::app::App;
 use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, handle_network_event};
@@ -39,31 +37,145 @@ impl Rng {
 }
 
 const TAGS: &[&str] = &[
-    "p", "div", "a", "b", "strong", "i", "em", "pre", "code", "ul", "ol", "li", "h1", "h2", "h3",
-    "table", "tr", "td", "th", "img", "br", "hr", "span", "section", "article", "nav", "header",
-    "footer", "aside", "main", "script", "style", "head", "title", "blockquote", "unknown", "dl",
-    "dt", "dd", "q", "sup", "sub", "del", "mark", "kbd", "details", "summary", "noscript", "iframe",
-    "video", "source", "menu", "figure", "figcaption", "h4", "h5", "h6", "svg", "thead", "tbody",
-    "tfoot", "caption", "table", "tr", "td", "form", "input", "textarea", "select", "option",
-    "optgroup", "button", "label",
+    "p",
+    "div",
+    "a",
+    "b",
+    "strong",
+    "i",
+    "em",
+    "pre",
+    "code",
+    "ul",
+    "ol",
+    "li",
+    "h1",
+    "h2",
+    "h3",
+    "table",
+    "tr",
+    "td",
+    "th",
+    "img",
+    "br",
+    "hr",
+    "span",
+    "section",
+    "article",
+    "nav",
+    "header",
+    "footer",
+    "aside",
+    "main",
+    "script",
+    "style",
+    "head",
+    "title",
+    "blockquote",
+    "unknown",
+    "dl",
+    "dt",
+    "dd",
+    "q",
+    "sup",
+    "sub",
+    "del",
+    "mark",
+    "kbd",
+    "details",
+    "summary",
+    "noscript",
+    "iframe",
+    "video",
+    "source",
+    "menu",
+    "figure",
+    "figcaption",
+    "h4",
+    "h5",
+    "h6",
+    "svg",
+    "thead",
+    "tbody",
+    "tfoot",
+    "caption",
+    "table",
+    "tr",
+    "td",
+    "form",
+    "input",
+    "textarea",
+    "select",
+    "option",
+    "optgroup",
+    "button",
+    "label",
 ];
 
 const TEXT: &[&str] = &[
-    "hello", "world", " ", "  ", "\n", "\t", "a", "longwordwithoutanyspacesatallthatmustbehardwrapped",
-    "漢字テキスト", "中文", "🦀", "👨‍👩‍👧", "e\u{301}", "\u{200b}", "\u{202e}rtl", "\u{1b}[31m",
-    "\u{1b}]52;c;cHduZWQ=\u{7}", "\u{9b}2J", "\r", "\u{0}", "&amp;", "&lt;b&gt;", "&#x1F980;", "&nbsp;",
-    "x\u{fe0f}", "\u{fffd}", "https://example.com/a(b).", "see http://x.y/z,", "<https://q.r/>",
+    "hello",
+    "world",
+    " ",
+    "  ",
+    "\n",
+    "\t",
+    "a",
+    "longwordwithoutanyspacesatallthatmustbehardwrapped",
+    "漢字テキスト",
+    "中文",
+    "🦀",
+    "👨‍👩‍👧",
+    "e\u{301}",
+    "\u{200b}",
+    "\u{202e}rtl",
+    "\u{1b}[31m",
+    "\u{1b}]52;c;cHduZWQ=\u{7}",
+    "\u{9b}2J",
+    "\r",
+    "\u{0}",
+    "&amp;",
+    "&lt;b&gt;",
+    "&#x1F980;",
+    "&nbsp;",
+    "x\u{fe0f}",
+    "\u{fffd}",
+    "https://example.com/a(b).",
+    "see http://x.y/z,",
+    "<https://q.r/>",
     "https://",
 ];
 
 const NUMBERS: &[&str] = &[
-    "0", "1", "-3", "26", "27", "3999", "4000", "9223372036854775807", "-9223372036854775808",
-    "99999999999999999999", "x", "",
+    "0",
+    "1",
+    "-3",
+    "26",
+    "27",
+    "3999",
+    "4000",
+    "9223372036854775807",
+    "-9223372036854775808",
+    "99999999999999999999",
+    "x",
+    "",
 ];
 
 const HREFS: &[&str] = &[
-    "#top", "#ch1", "#", "", "page.html", "../up", "//other.example/x", "https://example.com/a?b=c#d",
-    "http://[::1]/", "mailto:a@b.c", "javascript:void(0)", "data:,x", "\u{1b}[2J", "%zz", "https://",
+    "#top",
+    "#ch1",
+    "#",
+    "",
+    "page.html",
+    "../up",
+    "//other.example/x",
+    "https://example.com/a?b=c#d",
+    "http://[::1]/",
+    "mailto:a@b.c",
+    "javascript:void(0)",
+    "data:,x",
+    "\u{1b}[2J",
+    "%zz",
+    "https://",
     "https://xn--pple-43d.com/",
 ];
 
@@ -99,14 +211,31 @@ fn random_html_into(rng: &mut Rng, depth: usize, html: &mut String) {
                         6 => html.push_str(&format!(" value=\"{}\"", rng.pick(NUMBERS))),
                         7 => html.push_str(&format!(
                             " type=\"{}\"",
-                            rng.pick(&["a", "A", "i", "I", "1", "x", "text", "submit", "checkbox", "radio", "password", "hidden", "file", "image", "button"])
+                            rng.pick(&[
+                                "a", "A", "i", "I", "1", "x", "text", "submit", "checkbox", "radio", "password",
+                                "hidden", "file", "image", "button"
+                            ])
                         )),
                         8 => html.push_str(&format!(" colspan=\"{}\"", rng.pick(NUMBERS))),
                         _ => html.push_str(rng.pick(&[
-                            " hidden", " reversed", " style=\"display:none\"", " name=\"q\"", " size=\"0\"",
-                            " size=\"99999\"", " checked", " selected", " disabled", " method=\"post\"",
-                            " action=\"javascript:x\"", " form=\"f\"", " id=\"f\"", " maxlength=\"2\"",
-                            " class=\"site-nav\"", " class=\"hlist\"", " role=\"navigation\"", " class=\"MainMenuList\"",
+                            " hidden",
+                            " reversed",
+                            " style=\"display:none\"",
+                            " name=\"q\"",
+                            " size=\"0\"",
+                            " size=\"99999\"",
+                            " checked",
+                            " selected",
+                            " disabled",
+                            " method=\"post\"",
+                            " action=\"javascript:x\"",
+                            " form=\"f\"",
+                            " id=\"f\"",
+                            " maxlength=\"2\"",
+                            " class=\"site-nav\"",
+                            " class=\"hlist\"",
+                            " role=\"navigation\"",
+                            " class=\"MainMenuList\"",
                         ])),
                     }
                 }
@@ -132,10 +261,7 @@ fn check_render_invariants(seed: u64, html: &str, width: usize) {
 
     for line in lines {
         let text = line.to_string();
-        assert!(
-            !text.contains(char::is_control),
-            "seed {seed}: control character in rendered line {text:?}"
-        );
+        assert!(!text.contains(char::is_control), "seed {seed}: control character in rendered line {text:?}");
     }
     for link in &renderer.links {
         assert!(link.line_index < lines.len(), "seed {seed}: link on missing line");
@@ -154,10 +280,7 @@ fn check_plain_text_invariants(seed: u64, text: &str, width: usize) {
     let mut renderer = DomRenderer::new(width);
     renderer.render_plain_text(text);
     for line in &renderer.lines {
-        assert!(
-            !line.to_string().contains(char::is_control),
-            "seed {seed}: control character in plain text line"
-        );
+        assert!(!line.to_string().contains(char::is_control), "seed {seed}: control character in plain text line");
     }
     for link in &renderer.links {
         assert!(link.line_index < renderer.lines.len(), "seed {seed}: plain link on missing line");
@@ -170,12 +293,7 @@ fn check_plain_text_invariants(seed: u64, text: &str, width: usize) {
 }
 
 fn key(code: KeyCode) -> KeyEvent {
-    KeyEvent {
-        code,
-        modifiers: KeyModifiers::empty(),
-        kind: KeyEventKind::Press,
-        state: KeyEventState::empty(),
-    }
+    KeyEvent { code, modifiers: KeyModifiers::empty(), kind: KeyEventKind::Press, state: KeyEventState::empty() }
 }
 
 /// Load the page into the app and hammer it with input that doesn't touch the network.
@@ -207,11 +325,7 @@ fn drive_app(app: &mut App, rng: &mut Rng, html: &str) {
             10 => handle_key_event(app, key(KeyCode::Char('V')), width, height),
             11 => handle_key_event(app, key(KeyCode::Down), width, height),
             12 => {
-                let kind = if rng.below(2) == 0 {
-                    MouseEventKind::ScrollDown
-                } else {
-                    MouseEventKind::ScrollUp
-                };
+                let kind = if rng.below(2) == 0 { MouseEventKind::ScrollDown } else { MouseEventKind::ScrollUp };
                 let event = MouseEvent { kind, column: 5, row: 9, modifiers: KeyModifiers::empty() };
                 handle_mouse_event(app, event, width, height).map(|_| false)
             }
@@ -263,14 +377,8 @@ async fn fuzz_render_and_ui() {
         run_case(&mut new_app(), seed.parse().expect("FUZZ_SEED must be a number"));
         return;
     }
-    let iterations: u64 = std::env::var("FUZZ_ITERATIONS")
-        .ok()
-        .and_then(|n| n.parse().ok())
-        .unwrap_or(100);
-    let start: u64 = std::env::var("FUZZ_START")
-        .ok()
-        .and_then(|n| n.parse().ok())
-        .unwrap_or(0);
+    let iterations: u64 = std::env::var("FUZZ_ITERATIONS").ok().and_then(|n| n.parse().ok()).unwrap_or(100);
+    let start: u64 = std::env::var("FUZZ_START").ok().and_then(|n| n.parse().ok()).unwrap_or(0);
     let mut app = new_app();
     for seed in start..start + iterations {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_case(&mut app, seed)));

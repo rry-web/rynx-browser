@@ -102,15 +102,20 @@ fn results_are_shown_safely() {
     });
     assert!(mcp::tools_page_html("https://x.example/mcp", &[]).contains("offers no tools"));
     let html = mcp::result_page_html("https://x.example/mcp", "Search", &Ok(result));
-    assert!(html.contains("<p>Line &lt;one&gt;<br>line two</p><p>Second paragraph<br>&nbsp;&nbsp;- nested</p>"), "{html}");
+    assert!(
+        html.contains("<p>Line &lt;one&gt;<br>line two</p><p>Second paragraph<br>&nbsp;&nbsp;- nested</p>"),
+        "{html}"
+    );
     assert!(html.contains("<a href=\"https://x.example/doc\">The doc</a>"));
     assert!(html.contains("image (image/png)"));
     assert!(html.contains("<pre>  indented</pre>"));
     assert!(html.contains(&mcp::tools_address("https://x.example/mcp")), "links back to the tools");
 
-    let error = mcp::result_page_html("https://x.example/mcp", "Search", &Ok(json!({ "isError": true, "content": [] })));
+    let error =
+        mcp::result_page_html("https://x.example/mcp", "Search", &Ok(json!({ "isError": true, "content": [] })));
     assert!(error.contains("reported an error"));
-    let structured = mcp::result_page_html("https://x.example/mcp", "S", &Ok(json!({ "structuredContent": { "n": 1 } })));
+    let structured =
+        mcp::result_page_html("https://x.example/mcp", "S", &Ok(json!({ "structuredContent": { "n": 1 } })));
     assert!(structured.contains("&quot;n&quot;: 1"), "{structured}");
 }
 
@@ -166,7 +171,9 @@ impl Respond for FakeServer {
                     "content": [{ "type": "text", "text": format!("Found 3 results for {}", args["query"]) }]
                 })))
             }
-            _ => ResponseTemplate::new(200).set_body_json(json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32601, "message": "no such method" } })),
+            _ => ResponseTemplate::new(200).set_body_json(
+                json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32601, "message": "no such method" } }),
+            ),
         }
     }
 }
@@ -212,7 +219,8 @@ fn test_app() -> App {
 }
 
 fn press(app: &mut App, code: KeyCode) -> bool {
-    let key = KeyEvent { code, modifiers: KeyModifiers::empty(), kind: KeyEventKind::Press, state: KeyEventState::empty() };
+    let key =
+        KeyEvent { code, modifiers: KeyModifiers::empty(), kind: KeyEventKind::Press, state: KeyEventState::empty() };
     handle_key_event(app, key, 80, 24).unwrap()
 }
 
@@ -351,7 +359,10 @@ async fn servers_that_redirect_or_fail_are_explained() {
         .await;
     Mock::given(path("/login")).respond_with(ResponseTemplate::new(401)).mount(&server).await;
     Mock::given(path("/old"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "jsonrpc": "2.0", "id": 1, "result": { "protocolVersion": "2024-11-05" } })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "jsonrpc": "2.0", "id": 1, "result": { "protocolVersion": "2024-11-05" } })),
+        )
         .mount(&server)
         .await;
 
@@ -374,7 +385,8 @@ async fn live_mcp_server() {
     let tools = client.list_tools(&http, server).await.unwrap();
     println!("{}", tools.iter().map(|t| format!("{} ({})", t.title, t.name)).collect::<Vec<_>>().join(", "));
     let tool = tools.iter().find(|t| t.name == "read_wiki_structure").expect("a known tool");
-    let args = mcp::arguments(tool, &[("repoName".to_string(), mcp::FieldValue::Text("rust-lang/rust".into()))].into()).unwrap();
+    let args = mcp::arguments(tool, &[("repoName".to_string(), mcp::FieldValue::Text("rust-lang/rust".into()))].into())
+        .unwrap();
     let result = client.call_tool(&http, server, &tool.name, args).await.unwrap();
     let html = mcp::result_page_html(server, &tool.title, &Ok(result));
     println!("{}", &html[..html.len().min(600)]);

@@ -92,9 +92,7 @@ impl Settings {
             let value = value.trim().trim_matches('"').trim();
             match key {
                 "home_page" if is_web_url(value) => settings.home_page = Some(value.to_string()),
-                "search_url" if is_web_url(&value.replace("{query}", "x")) => {
-                    settings.search_url = value.to_string()
-                }
+                "search_url" if is_web_url(&value.replace("{query}", "x")) => settings.search_url = value.to_string(),
                 "i2p_proxy" if is_web_url(value) && value.starts_with("http://") => {
                     settings.i2p_proxy = value.to_string()
                 }
@@ -102,7 +100,9 @@ impl Settings {
                 "history" if matches!(value, "on" | "off") => settings.save_history = value == "on",
                 "anubis" if matches!(value, "on" | "off") => settings.solve_anubis = value == "on",
                 // Sent as a header: printable ASCII only, so it can't add headers or break requests
-                "user_agent" if !value.is_empty() && value.len() <= 256 && value.bytes().all(|b| (0x20..0x7f).contains(&b)) => {
+                "user_agent"
+                    if !value.is_empty() && value.len() <= 256 && value.bytes().all(|b| (0x20..0x7f).contains(&b)) =>
+                {
                     settings.user_agent = value.to_string()
                 }
                 "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" | "user_agent" | "anubis" => {

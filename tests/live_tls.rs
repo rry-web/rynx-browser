@@ -5,21 +5,16 @@ use rynx_browser::network::NetworkManager;
 
 async fn fetch(url: &str) -> Result<reqwest::Response, String> {
     let manager = NetworkManager::new().unwrap();
-    manager
-        .get_client(false)
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| {
-            // The useful detail is at the bottom of the error chain
-            let mut detail = e.to_string();
-            let mut source = std::error::Error::source(&e);
-            while let Some(s) = source {
-                detail = s.to_string();
-                source = s.source();
-            }
-            detail
-        })
+    manager.get_client(false).get(url).send().await.map_err(|e| {
+        // The useful detail is at the bottom of the error chain
+        let mut detail = e.to_string();
+        let mut source = std::error::Error::source(&e);
+        while let Some(s) = source {
+            detail = s.to_string();
+            source = s.source();
+        }
+        detail
+    })
 }
 
 #[tokio::test]

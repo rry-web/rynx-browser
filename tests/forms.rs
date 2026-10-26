@@ -24,7 +24,11 @@ fn text(page: &rynx_browser::renderer::RenderedPage) -> Vec<String> {
 }
 
 /// Submit form 0 of `html` with the initial values changed by `edit`
-fn submit(html: &str, submitter: Option<usize>, edit: impl FnOnce(&mut Vec<ControlValue>)) -> Result<rynx_browser::forms::Submission, String> {
+fn submit(
+    html: &str,
+    submitter: Option<usize>,
+    edit: impl FnOnce(&mut Vec<ControlValue>),
+) -> Result<rynx_browser::forms::Submission, String> {
     let page = render(html);
     let mut values: Vec<ControlValue> = page.controls.iter().map(|c| c.initial_value()).collect();
     edit(&mut values);
@@ -111,7 +115,8 @@ fn forms_cannot_target_non_web_addresses() {
 fn disabled_controls_are_shown_but_not_sent() {
     let page = render("<form><input name=a value=1 disabled><input name=b value=2></form>");
     assert_eq!(page.controls.len(), 1);
-    let submission = submit("<form><input name=a value=1 disabled><input name=b value=2></form>", None, |_| {}).unwrap();
+    let submission =
+        submit("<form><input name=a value=1 disabled><input name=b value=2></form>", None, |_| {}).unwrap();
     assert!(submission.url.ends_with("?b=2"), "{}", submission.url);
 }
 
@@ -218,7 +223,11 @@ async fn post_forms_are_sent_and_redirects_become_get() {
         .await;
 
     let mut app = test_app();
-    arrive(&mut app, &format!("{}/", server.uri()), "<form method=post action=/comment><input name=text><input type=submit value=Post></form>");
+    arrive(
+        &mut app,
+        &format!("{}/", server.uri()),
+        "<form method=post action=/comment><input name=text><input type=submit value=Post></form>",
+    );
     press(&mut app, KeyCode::Enter);
     type_text(&mut app, "hi there");
     press(&mut app, KeyCode::Esc);
@@ -262,8 +271,12 @@ async fn typed_values_are_shown_and_passwords_masked() {
 #[tokio::test]
 async fn checkboxes_radios_and_choices_respond_to_enter() {
     let mut app = test_app();
-    arrive(&mut app, PAGE, "<form><input type=checkbox name=c><input type=radio name=r value=1 checked><input type=radio name=r value=2>\
-                            <select name=s><option>a</option><option>b</option></select></form>");
+    arrive(
+        &mut app,
+        PAGE,
+        "<form><input type=checkbox name=c><input type=radio name=r value=1 checked><input type=radio name=r value=2>\
+                            <select name=s><option>a</option><option>b</option></select></form>",
+    );
     press(&mut app, KeyCode::Enter); // checkbox on
     press(&mut app, KeyCode::Tab);
     press(&mut app, KeyCode::Tab);
@@ -272,7 +285,12 @@ async fn checkboxes_radios_and_choices_respond_to_enter() {
     press(&mut app, KeyCode::Enter); // next option
     assert_eq!(
         app.current_tab().control_values,
-        [ControlValue::Checked(true), ControlValue::Checked(false), ControlValue::Checked(true), ControlValue::Selected(1)]
+        [
+            ControlValue::Checked(true),
+            ControlValue::Checked(false),
+            ControlValue::Checked(true),
+            ControlValue::Selected(1)
+        ]
     );
 }
 

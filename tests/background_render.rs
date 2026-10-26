@@ -27,10 +27,8 @@ fn deliver(app: &mut App, html: String) {
 async fn settle(app: &mut App) -> usize {
     let mut renders = 0;
     while app.is_rendering(app.active_tab_index) {
-        let resp = tokio::time::timeout(Duration::from_secs(60), app.rx.recv())
-            .await
-            .expect("render never finished")
-            .unwrap();
+        let resp =
+            tokio::time::timeout(Duration::from_secs(60), app.rx.recv()).await.expect("render never finished").unwrap();
         if matches!(resp, NetworkResponse::Rendered(..)) {
             renders += 1;
         }
@@ -61,7 +59,12 @@ async fn slow_pages_do_not_block_the_ui() {
     assert_eq!(app.current_tab().status_message, RENDERING_STATUS);
 
     // Input is handled while the page is being laid out
-    let key = KeyEvent { code: KeyCode::Char('j'), modifiers: KeyModifiers::empty(), kind: KeyEventKind::Press, state: KeyEventState::empty() };
+    let key = KeyEvent {
+        code: KeyCode::Char('j'),
+        modifiers: KeyModifiers::empty(),
+        kind: KeyEventKind::Press,
+        state: KeyEventState::empty(),
+    };
     let started = Instant::now();
     handle_key_event(&mut app, key, WIDTH, 24).unwrap();
     assert!(started.elapsed() < Duration::from_millis(50));

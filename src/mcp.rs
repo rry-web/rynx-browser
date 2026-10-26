@@ -199,7 +199,8 @@ pub fn tools_page_html(server: &str, tools: &[Tool]) -> String {
         if let Some(warning) = tool.warning() {
             html.push_str(&format!("<p><i>{}</i></p>", warning));
         }
-        let action: String = url::form_urlencoded::Serializer::new(String::new()).append_pair("tool", &tool.name).finish();
+        let action: String =
+            url::form_urlencoded::Serializer::new(String::new()).append_pair("tool", &tool.name).finish();
         html.push_str(&format!("<form action=\"{}?{}\">", CALL_ACTION, escape_html(&action)));
         for (name, schema, required) in tool.fields() {
             let label = schema.get("title").and_then(Value::as_str).unwrap_or(&name);
@@ -301,10 +302,9 @@ fn typed_value(name: &str, schema: &Value, text: &str) -> Result<Value, String> 
             .ok_or_else(|| format!("\"{}\" must be one of the listed choices", name));
     }
     match schema_type(schema) {
-        "integer" => trimmed
-            .parse::<i64>()
-            .map(Value::from)
-            .map_err(|_| format!("\"{}\" must be a whole number", name)),
+        "integer" => {
+            trimmed.parse::<i64>().map(Value::from).map_err(|_| format!("\"{}\" must be a whole number", name))
+        }
         "number" => trimmed
             .parse::<f64>()
             .ok()
@@ -385,7 +385,8 @@ fn back_link(server: &str) -> String {
 /// Whether a response to an ordinary page request is a JSON-RPC message: what an MCP server
 /// answers when its address is opened as a page
 pub fn is_endpoint_answer(content_type: Option<&str>, body: &str) -> bool {
-    let json = content_type.is_some_and(|ct| ct.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("application/json"));
+    let json = content_type
+        .is_some_and(|ct| ct.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("application/json"));
     json && body.len() < 64 * 1024
         && serde_json::from_str::<Value>(body).is_ok_and(|v| v.get("jsonrpc").and_then(Value::as_str) == Some("2.0"))
 }
@@ -461,12 +462,24 @@ impl Client {
     }
 
     /// Run a tool
-    pub async fn call_tool(&self, http: &reqwest::Client, server: &str, tool: &str, arguments: Value) -> Result<Value, String> {
+    pub async fn call_tool(
+        &self,
+        http: &reqwest::Client,
+        server: &str,
+        tool: &str,
+        arguments: Value,
+    ) -> Result<Value, String> {
         self.request(http, server, "tools/call", json!({ "name": tool, "arguments": arguments })).await
     }
 
     /// Send a request, starting a session first if needed, and once more if the session expired
-    async fn request(&self, http: &reqwest::Client, server: &str, method: &str, params: Value) -> Result<Value, String> {
+    async fn request(
+        &self,
+        http: &reqwest::Client,
+        server: &str,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, String> {
         for _ in 0..2 {
             let session = self.session(http, server).await?;
             match self.rpc(http, server, Some(&session), method, params.clone()).await {
@@ -507,7 +520,13 @@ impl Client {
         Ok(session)
     }
 
-    async fn notify(&self, http: &reqwest::Client, server: &str, session: &Session, method: &str) -> Result<(), String> {
+    async fn notify(
+        &self,
+        http: &reqwest::Client,
+        server: &str,
+        session: &Session,
+        method: &str,
+    ) -> Result<(), String> {
         let body = json!({ "jsonrpc": "2.0", "method": method });
         let response = post(http, server, Some(session), &body).await?;
         if !response.status().is_success() {
@@ -536,7 +555,9 @@ impl Client {
             return Err(RpcError::Failed("MCP servers can't redirect".to_string()));
         }
         if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-            return Err(RpcError::Failed("This server needs you to sign in, which rynx doesn't support yet".to_string()));
+            return Err(RpcError::Failed(
+                "This server needs you to sign in, which rynx doesn't support yet".to_string(),
+            ));
         }
         if !status.is_success() {
             return Err(RpcError::Failed(format!("The server answered {}", status)));
@@ -557,7 +578,8 @@ impl Client {
         let messages: Vec<Value> = if streamed {
             server_sent_events(&text).iter().filter_map(|data| serde_json::from_str(data).ok()).collect()
         } else {
-            let value: Value = serde_json::from_str(&text).map_err(|_| "The server's answer isn't valid JSON".to_string())?;
+            let value: Value =
+                serde_json::from_str(&text).map_err(|_| "The server's answer isn't valid JSON".to_string())?;
             // A batch is an array of messages
             match value {
                 Value::Array(messages) => messages,
@@ -576,7 +598,12 @@ impl Client {
     }
 }
 
-async fn post(http: &reqwest::Client, server: &str, session: Option<&Session>, body: &Value) -> Result<reqwest::Response, String> {
+async fn post(
+    http: &reqwest::Client,
+    server: &str,
+    session: Option<&Session>,
+    body: &Value,
+) -> Result<reqwest::Response, String> {
     let mut request = http
         .post(server)
         .header(reqwest::header::CONTENT_TYPE, "application/json")

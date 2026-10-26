@@ -66,7 +66,8 @@ impl FakeAnubis {
     /// Check an answer as Anubis does
     fn valid(&self, issued: &Issued, q: &HashMap<String, String>) -> bool {
         if self.algorithm == "metarefresh" {
-            return q.get("challenge") == Some(&issued.random) && issued.at.elapsed().as_millis() >= 800 * self.difficulty as u128;
+            return q.get("challenge") == Some(&issued.random)
+                && issued.at.elapsed().as_millis() >= 800 * self.difficulty as u128;
         }
         let (Some(response), Some(nonce)) = (q.get("response"), q.get("nonce")) else { return false };
         if q.get("elapsedTime").and_then(|t| t.parse::<f64>().ok()).is_none() {
@@ -156,7 +157,13 @@ impl Respond for FakeAnubis {
     }
 }
 
-async fn guarded_site(algorithm: &'static str, difficulty: u32, random: &'static str, css_load: bool, stubborn: bool) -> (MockServer, Arc<Mutex<State>>) {
+async fn guarded_site(
+    algorithm: &'static str,
+    difficulty: u32,
+    random: &'static str,
+    css_load: bool,
+    stubborn: bool,
+) -> (MockServer, Arc<Mutex<State>>) {
     let server = MockServer::start().await;
     let state = Arc::new(Mutex::new(State::default()));
     Mock::given(wiremock::matchers::any())

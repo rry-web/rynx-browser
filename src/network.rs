@@ -1,6 +1,6 @@
 use crate::constants::{
-    BROWSING_TIMEOUT_SECS, DOWNLOAD_TIMEOUT_SECS, I2P_PROXY_URL, I2P_USER_AGENT, JUMP_SERVICES,
-    MAX_REDIRECTS, USER_AGENT,
+    BROWSING_TIMEOUT_SECS, DOWNLOAD_TIMEOUT_SECS, I2P_PROXY_URL, I2P_USER_AGENT, JUMP_SERVICES, MAX_REDIRECTS,
+    USER_AGENT,
 };
 use reqwest::{Client, StatusCode};
 use std::time::Duration;
@@ -52,20 +52,21 @@ pub enum ContentClass {
 }
 
 pub fn classify_content_type(content_type: Option<&str>) -> ContentClass {
-    let mime = content_type
-        .and_then(|ct| ct.split(';').next())
-        .unwrap_or("")
-        .trim()
-        .to_ascii_lowercase();
+    let mime = content_type.and_then(|ct| ct.split(';').next()).unwrap_or("").trim().to_ascii_lowercase();
     match mime.as_str() {
         // A missing type is treated as HTML, as before
         "" | "text/html" | "application/xhtml+xml" => ContentClass::Html,
         m if m.starts_with("text/") => ContentClass::Text,
-        "application/json" | "application/xml" | "application/javascript"
-        | "application/ecmascript" | "application/x-javascript" | "application/x-sh"
-        | "application/toml" | "application/yaml" | "application/x-yaml" | "application/sql" => {
-            ContentClass::Text
-        }
+        "application/json"
+        | "application/xml"
+        | "application/javascript"
+        | "application/ecmascript"
+        | "application/x-javascript"
+        | "application/x-sh"
+        | "application/toml"
+        | "application/yaml"
+        | "application/x-yaml"
+        | "application/sql" => ContentClass::Text,
         m if m.ends_with("+json") || m.ends_with("+xml") => ContentClass::Text,
         _ => ContentClass::Binary(mime),
     }
@@ -73,11 +74,7 @@ pub fn classify_content_type(content_type: Option<&str>) -> ContentClass {
 
 /// Escape text for inclusion in generated HTML, so it can't inject markup or links
 pub fn escape_html(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
+    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&#39;")
 }
 
 /// A short name for a page that has no <title>: its file name, or else its host
@@ -89,9 +86,7 @@ pub fn title_from_url(url: &str) -> String {
         .path_segments()
         .and_then(|mut segments| segments.rfind(|s| !s.is_empty()))
         .map(|s| percent_encoding::percent_decode_str(s).decode_utf8_lossy().into_owned());
-    segment
-        .or_else(|| parsed.host_str().map(str::to_string))
-        .unwrap_or_else(|| url.to_string())
+    segment.or_else(|| parsed.host_str().map(str::to_string)).unwrap_or_else(|| url.to_string())
 }
 
 fn format_size(bytes: u64) -> String {
@@ -102,11 +97,7 @@ fn format_size(bytes: u64) -> String {
         size /= 1024.0;
         unit += 1;
     }
-    if unit == 0 {
-        format!("{} bytes", bytes)
-    } else {
-        format!("{:.1} {}", size, UNITS[unit])
-    }
+    if unit == 0 { format!("{} bytes", bytes) } else { format!("{:.1} {}", size, UNITS[unit]) }
 }
 
 /// A page standing in for a file that can't be shown, offering it for download.
@@ -226,10 +217,8 @@ impl NetworkManager {
         cookies: &std::sync::Arc<crate::anubis::Cookies>,
     ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
         // The only cookies kept are Anubis's bot-check passes
-        let mut builder = Client::builder()
-            .user_agent(user_agent)
-            .timeout(timeout)
-            .cookie_provider(std::sync::Arc::clone(cookies));
+        let mut builder =
+            Client::builder().user_agent(user_agent).timeout(timeout).cookie_provider(std::sync::Arc::clone(cookies));
 
         // The OS verifier fetches revocation data directly, outside the I2P proxy, which would
         // reveal the site being visited; I2P clients use the bundled webpki roots instead
@@ -250,9 +239,7 @@ impl NetworkManager {
     /// operating system, which uses its own trust store (kept current by OS updates) and, on macOS
     /// and Windows, checks revocation. Otherwise they're checked against the bundled webpki roots.
     /// reqwest uses the config as-is, so the TLS 1.2 minimum and ALPN are set here.
-    fn tls_config(
-        use_os_verifier: bool,
-    ) -> Result<rustls::ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
+    fn tls_config(use_os_verifier: bool) -> Result<rustls::ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
         use rustls_platform_verifier::BuilderVerifierExt;
 
         let provider = std::sync::Arc::new(rustls::crypto::ring::default_provider());
@@ -317,28 +304,15 @@ impl NetworkManager {
             &i2p_cookies,
         )?;
 
-        Ok(Self {
-            client,
-            i2p_client,
-            download_client,
-            i2p_download_client,
-        })
+        Ok(Self { client, i2p_client, download_client, i2p_download_client })
     }
 
     pub fn get_client(&self, i2p_mode: bool) -> &Client {
-        if i2p_mode {
-            &self.i2p_client
-        } else {
-            &self.client
-        }
+        if i2p_mode { &self.i2p_client } else { &self.client }
     }
 
     pub fn get_download_client(&self, i2p_mode: bool) -> &Client {
-        if i2p_mode {
-            &self.i2p_download_client
-        } else {
-            &self.download_client
-        }
+        if i2p_mode { &self.i2p_download_client } else { &self.download_client }
     }
 }
 
@@ -368,9 +342,7 @@ fn is_local_network_host(url: &Url) -> bool {
         return true;
     }
     match host_of(url) {
-        Some(Host::Ipv4(ip)) => {
-            ip.is_private() || ip.is_link_local() || ip.is_unspecified() || ip.is_broadcast()
-        }
+        Some(Host::Ipv4(ip)) => ip.is_private() || ip.is_link_local() || ip.is_unspecified() || ip.is_broadcast(),
         Some(Host::Ipv6(ip)) => {
             let first = ip.segments()[0];
             ip.is_unspecified()
@@ -393,10 +365,7 @@ fn is_i2p_host(url: &Url) -> bool {
 pub fn enforce_https(url: &str, i2p_mode: bool) -> String {
     match Url::parse(url) {
         Ok(mut parsed)
-            if !i2p_mode
-                && parsed.scheme() == "http"
-                && !is_i2p_host(&parsed)
-                && !is_loopback_host(&parsed) =>
+            if !i2p_mode && parsed.scheme() == "http" && !is_i2p_host(&parsed) && !is_loopback_host(&parsed) =>
         {
             // Only the scheme changes; set_scheme between http and https always succeeds
             let _ = parsed.set_scheme("https");
@@ -418,11 +387,7 @@ pub fn check_redirect(from: &Url, to: &Url) -> Result<(), String> {
 }
 
 /// GET a URL, following redirects manually so every hop is upgraded to HTTPS and SSRF-checked
-pub async fn get_following_redirects(
-    client: &Client,
-    url: &str,
-    i2p_mode: bool,
-) -> Result<reqwest::Response, String> {
+pub async fn get_following_redirects(client: &Client, url: &str, i2p_mode: bool) -> Result<reqwest::Response, String> {
     send_following_redirects(client, url, i2p_mode, None).await
 }
 
@@ -434,8 +399,7 @@ pub async fn send_following_redirects(
     i2p_mode: bool,
     mut form_body: Option<String>,
 ) -> Result<reqwest::Response, String> {
-    let mut current =
-        Url::parse(&enforce_https(url, i2p_mode)).map_err(|e| format!("Invalid URL: {}", e))?;
+    let mut current = Url::parse(&enforce_https(url, i2p_mode)).map_err(|e| format!("Invalid URL: {}", e))?;
     for _ in 0..=MAX_REDIRECTS {
         // Without the I2P proxy the name would be looked up through ordinary DNS, telling the
         // resolver which eepsite is being visited
@@ -455,12 +419,8 @@ pub async fn send_following_redirects(
             Some(location) if response.status().is_redirection() => location,
             _ => return Ok(response),
         };
-        let location = location
-            .to_str()
-            .map_err(|_| "Redirect location is not valid text".to_string())?;
-        let next = current
-            .join(location)
-            .map_err(|e| format!("Invalid redirect location: {}", e))?;
+        let location = location.to_str().map_err(|_| "Redirect location is not valid text".to_string())?;
+        let next = current.join(location).map_err(|e| format!("Invalid redirect location: {}", e))?;
         let next = Url::parse(&enforce_https(next.as_str(), i2p_mode))
             .map_err(|e| format!("Invalid redirect location: {}", e))?;
         check_redirect(&current, &next)?;
@@ -476,8 +436,7 @@ pub async fn send_following_redirects(
 pub fn should_attempt_jump(use_i2p: bool, domain: &str, status: StatusCode) -> bool {
     use_i2p
         && domain.ends_with(".i2p")
-        && (status == StatusCode::INTERNAL_SERVER_ERROR
-            || status == StatusCode::SERVICE_UNAVAILABLE)
+        && (status == StatusCode::INTERNAL_SERVER_ERROR || status == StatusCode::SERVICE_UNAVAILABLE)
 }
 
 pub async fn attempt_jump(
@@ -497,20 +456,10 @@ pub async fn attempt_jump_with(
     tx: mpsc::Sender<NetworkResponse>,
     id: usize,
 ) -> Result<reqwest::Response, Box<dyn std::error::Error + Send + Sync>> {
-    let _ = tx
-        .send(NetworkResponse::Info(
-            id,
-            "Address not found. Requesting Jump Helper...".to_string(),
-        ))
-        .await;
+    let _ = tx.send(NetworkResponse::Info(id, "Address not found. Requesting Jump Helper...".to_string())).await;
     for service_base in services {
         let jump_url = format!("{}{}", service_base, target_domain);
-        let _ = tx
-            .send(NetworkResponse::Info(
-                id,
-                format!("Contacting jump service: {}", service_base),
-            ))
-            .await;
+        let _ = tx.send(NetworkResponse::Info(id, format!("Contacting jump service: {}", service_base))).await;
         match get_following_redirects(client, &jump_url, true).await {
             Ok(response) if response.status() == StatusCode::OK => return Ok(response),
             // Unreachable or no entry; try the next service
@@ -524,9 +473,7 @@ pub async fn attempt_jump_with(
 fn charset_from_content_type(content_type: &str) -> Option<&str> {
     content_type.split(';').skip(1).find_map(|param| {
         let (name, value) = param.split_once('=')?;
-        name.trim()
-            .eq_ignore_ascii_case("charset")
-            .then(|| value.trim().trim_matches('"'))
+        name.trim().eq_ignore_ascii_case("charset").then(|| value.trim().trim_matches('"'))
     })
 }
 
@@ -556,13 +503,21 @@ pub async fn read_text_limited(mut resp: reqwest::Response, limit: u64) -> Resul
 
 /// Detects file extensions based on magic bytes (file signatures)
 pub fn sniff_extension(h: &[u8]) -> Option<&'static str> {
-    if h.starts_with(&[0x89, 0x50, 0x4E, 0x47]) { Some("png") }
-    else if h.starts_with(&[0xFF, 0xD8, 0xFF]) { Some("jpg") }
-    else if h.starts_with(&[0x25, 0x50, 0x44, 0x46]) { Some("pdf") }
-    else if h.starts_with(&[0x50, 0x4B, 0x03, 0x04]) { Some("zip") }
-    else if h.starts_with(&[0x4D, 0x5A]) { Some("exe") }
-    else if h.starts_with(b"GIF8") { Some("gif") }
-    else { None }
+    if h.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+        Some("png")
+    } else if h.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("jpg")
+    } else if h.starts_with(&[0x25, 0x50, 0x44, 0x46]) {
+        Some("pdf")
+    } else if h.starts_with(&[0x50, 0x4B, 0x03, 0x04]) {
+        Some("zip")
+    } else if h.starts_with(&[0x4D, 0x5A]) {
+        Some("exe")
+    } else if h.starts_with(b"GIF8") {
+        Some("gif")
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -571,10 +526,7 @@ mod tests {
 
     /// A client with the I2P clients' TLS config but no proxy, so it can be checked without a router
     fn bundled_roots_client() -> reqwest::Client {
-        reqwest::Client::builder()
-            .use_preconfigured_tls(NetworkManager::tls_config(false).unwrap())
-            .build()
-            .unwrap()
+        reqwest::Client::builder().use_preconfigured_tls(NetworkManager::tls_config(false).unwrap()).build().unwrap()
     }
 
     // Live checks: run with `cargo test --lib -- --ignored`

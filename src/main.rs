@@ -1,9 +1,9 @@
 use rynx_browser::app::App;
 use rynx_browser::bookmarks::Bookmarks;
+use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, process_network_events};
 use rynx_browser::history::History;
 use rynx_browser::sandbox::SandboxStatus;
 use rynx_browser::settings::Settings;
-use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, process_network_events};
 use rynx_browser::ui::ui;
 
 use std::{error::Error, fmt, io, time::Duration};

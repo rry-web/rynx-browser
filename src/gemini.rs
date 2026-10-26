@@ -109,10 +109,9 @@ impl ServerCertVerifier for TofuVerifier {
             None => true,
             Some(known) if *known == pin => true,
             // Certificates signed by an authority are renewed every few months; that's expected
-            Some(_) => self
-                .webpki
-                .verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now)
-                .is_ok(),
+            Some(_) => {
+                self.webpki.verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now).is_ok()
+            }
         };
         if !accepted {
             *self.changed.lock().unwrap_or_else(|e| e.into_inner()) = true;
@@ -191,16 +190,13 @@ async fn request(url: &Url, known_hosts: &Mutex<KnownHosts>, limit: u64) -> Resu
         let tcp = tokio::net::TcpStream::connect((host.trim_matches(['[', ']']), port))
             .await
             .map_err(|e| format!("Couldn't connect to {}: {}", host_key, e))?;
-        let mut tls = tokio_rustls::TlsConnector::from(Arc::new(config))
-            .connect(name, tcp)
-            .await
-            .map_err(|e| {
-                if *verifier.changed.lock().unwrap_or_else(|e| e.into_inner()) {
-                    certificate_changed_message(&host_key)
-                } else {
-                    format!("Secure connection to {} failed: {}", host_key, e)
-                }
-            })?;
+        let mut tls = tokio_rustls::TlsConnector::from(Arc::new(config)).connect(name, tcp).await.map_err(|e| {
+            if *verifier.changed.lock().unwrap_or_else(|e| e.into_inner()) {
+                certificate_changed_message(&host_key)
+            } else {
+                format!("Secure connection to {} failed: {}", host_key, e)
+            }
+        })?;
         if let Some(pin) = verifier.seen.lock().unwrap_or_else(|e| e.into_inner()).as_deref() {
             known_hosts.lock().unwrap_or_else(|e| e.into_inner()).set(&host_key, pin);
         }
@@ -321,9 +317,7 @@ fn success_page(url: &Url, meta: &str, body: &[u8]) -> Page {
         .filter_map(|p| p.split_once('='))
         .find(|(k, _)| k.trim().eq_ignore_ascii_case("charset"))
         .map(|(_, v)| v.trim().trim_matches('"'));
-    let encoding = charset
-        .and_then(|c| encoding_rs::Encoding::for_label(c.as_bytes()))
-        .unwrap_or(encoding_rs::UTF_8);
+    let encoding = charset.and_then(|c| encoding_rs::Encoding::for_label(c.as_bytes())).unwrap_or(encoding_rs::UTF_8);
     let page_url = url.to_string();
     let title = crate::network::title_from_url(&page_url);
     match mime.as_str() {
@@ -332,9 +326,7 @@ fn success_page(url: &Url, meta: &str, body: &[u8]) -> Page {
             let (heading, html) = gemtext_to_html(&text);
             Page { title: heading.unwrap_or(title), body: html, url: page_url, kind: PageKind::Html }
         }
-        "text/html" => {
-            Page { title, body: encoding.decode(body).0.into_owned(), url: page_url, kind: PageKind::Html }
-        }
+        "text/html" => Page { title, body: encoding.decode(body).0.into_owned(), url: page_url, kind: PageKind::Html },
         m if crate::network::classify_content_type(Some(m)) == crate::network::ContentClass::Text => {
             Page { title, body: encoding.decode(body).0.into_owned(), url: page_url, kind: PageKind::PlainText }
         }

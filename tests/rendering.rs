@@ -106,10 +106,7 @@ fn block_content_in_list_items_starts_beside_the_marker() {
 
 #[test]
 fn definition_lists_indent_definitions() {
-    assert_eq!(
-        text_lines("<dl><dt>Term</dt><dd>Meaning of it</dd></dl>", 80),
-        ["Term", "    Meaning of it"]
-    );
+    assert_eq!(text_lines("<dl><dt>Term</dt><dd>Meaning of it</dd></dl>", 80), ["Term", "    Meaning of it"]);
 }
 
 #[test]
@@ -256,7 +253,10 @@ fn table_cells_can_hold_lists_and_tables() {
         ["left │   • item"]
     );
     assert_eq!(
-        text_lines("<table><tr><td>outer</td><td><table><tr><td>in1</td><td>in2</td></tr></table></td></tr></table>", 40),
+        text_lines(
+            "<table><tr><td>outer</td><td><table><tr><td>in1</td><td>in2</td></tr></table></td></tr></table>",
+            40
+        ),
         ["outer │ in1 │ in2"]
     );
 }
@@ -304,7 +304,8 @@ fn submenus_get_a_labelled_line() {
 #[test]
 fn menus_are_recognised_by_class_names() {
     for class in ["hlist", "site-nav", "MainNavigationList", "vector-menu-content-list", "breadcrumb"] {
-        let html = format!("<div class='{class}'><ul><li><a href='/a'>A</a></li><li><a href='/b'>B</a></li></ul></div>");
+        let html =
+            format!("<div class='{class}'><ul><li><a href='/a'>A</a></li><li><a href='/b'>B</a></li></ul></div>");
         assert_eq!(text_lines(&html, 80), ["A · B"], "class {class}");
     }
     // "canvas" contains "nav" but isn't the word
@@ -318,7 +319,8 @@ fn content_lists_stay_lists() {
     let links = "<ul><li><a href='/a'>Alpha</a></li><li><a href='/b'>Beta</a></li></ul>";
     assert_eq!(text_lines(links, 80), ["  • Alpha", "  • Beta"]);
     // In navigation, items with more than a short link are content
-    let long = format!("<nav><ul><li><a href='/a'>A</a> {}</li><li><a href='/b'>B</a></li></ul></nav>", "words ".repeat(15));
+    let long =
+        format!("<nav><ul><li><a href='/a'>A</a> {}</li><li><a href='/b'>B</a></li></ul></nav>", "words ".repeat(15));
     assert!(text_lines(&long, 80)[0].starts_with("  • A"));
     let two_links = "<nav><ul><li><a href='/a'>A</a> and <a href='/c'>C</a></li><li><a href='/b'>B</a></li></ul></nav>";
     assert!(text_lines(two_links, 80)[0].starts_with("  • A"));
@@ -396,7 +398,9 @@ fn menus_of_buttons_keep_working_buttons() {
 #[test]
 fn a_menu_repeated_for_another_screen_size_appears_once() {
     let menu = r#"<li><a href="/ai/">AI</a></li><li><a href="/cars/">Cars</a></li>"#;
-    let html = format!(r#"<nav><ul>{menu}</ul></nav><p>Middle</p><ul class="lg:flex">{menu}</ul><nav><ul><li><a href="/ai/">AI</a></li><li><a href="/x/">Other</a></li></ul></nav>"#);
+    let html = format!(
+        r#"<nav><ul>{menu}</ul></nav><p>Middle</p><ul class="lg:flex">{menu}</ul><nav><ul><li><a href="/ai/">AI</a></li><li><a href="/x/">Other</a></li></ul></nav>"#
+    );
     assert_eq!(text_lines(&html, 80), ["AI · Cars", "Middle", "AI · Other"]);
 }
 

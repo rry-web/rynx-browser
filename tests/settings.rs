@@ -112,7 +112,13 @@ async fn pages_can_be_bookmarked_and_listed() {
     let url = "https://example.com/article";
     let id = app.current_tab().id;
     app.current_tab().url_input = url.into();
-    let resp = NetworkResponse::Success(id, "x".into(), "<title>An Article</title><p>text</p>".into(), url.into(), PageKind::Html);
+    let resp = NetworkResponse::Success(
+        id,
+        "x".into(),
+        "<title>An Article</title><p>text</p>".into(),
+        url.into(),
+        PageKind::Html,
+    );
     handle_network_event(&mut app, resp, 80).unwrap();
     press(&mut app, KeyCode::Char('b'));
     assert!(app.bookmarks.contains(url));
@@ -199,7 +205,8 @@ async fn visits_are_listed_on_the_history_page_and_can_be_cleared() {
     let url = "https://user:hunter2@example.com/page";
     let id = app.current_tab().id;
     app.current_tab().url_input = url.into();
-    let resp = NetworkResponse::Success(id, "x".into(), "<title>A Page</title><p>text</p>".into(), url.into(), PageKind::Html);
+    let resp =
+        NetworkResponse::Success(id, "x".into(), "<title>A Page</title><p>text</p>".into(), url.into(), PageKind::Html);
     handle_network_event(&mut app, resp, 80).unwrap();
     assert_eq!(app.history.entries.len(), 1);
     assert_eq!(app.history.entries[0].url, "https://example.com/page", "credentials are stripped");

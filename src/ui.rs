@@ -1,6 +1,8 @@
 use crate::app::App;
+use crate::constants::*;
 use crate::constants::{TAB_BAR_HEIGHT, URL_BAR_HEIGHT};
 use crate::models::{InputMode, LinkRegion};
+use crate::renderer::sanitize_for_terminal;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -8,25 +10,16 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Gauge, Paragraph, Tabs},
 };
-use crate::constants::*;
-use crate::renderer::sanitize_for_terminal;
 
 /// Render the tab bar showing all open tabs
 fn render_tabs(f: &mut Frame, app: &App, area: Rect) {
-    let titles: Vec<Line> = app
-        .tabs
-        .iter()
-        .map(|t| Line::from(format!(" {} ", sanitize_for_terminal(&t.page_title))))
-        .collect();
+    let titles: Vec<Line> =
+        app.tabs.iter().map(|t| Line::from(format!(" {} ", sanitize_for_terminal(&t.page_title)))).collect();
 
     let tabs = Tabs::new(titles)
         .select(app.active_tab_index)
         .block(Block::default().borders(Borders::ALL).title("Tabs"))
-        .highlight_style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        );
+        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
 
     f.render_widget(tabs, area);
 }
@@ -47,12 +40,22 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
             let (query, count, current) = active_tab
                 .search_state
                 .as_ref()
-                .map(|s| (s.query.as_str(), s.matches.len(), if s.matches.is_empty() { 0 } else { s.current_match_index + 1 }))
+                .map(|s| {
+                    (
+                        s.query.as_str(),
+                        s.matches.len(),
+                        if s.matches.is_empty() { 0 } else { s.current_match_index + 1 },
+                    )
+                })
                 .unwrap_or(("", 0, 0));
             (
                 Line::from(vec![
                     badge("FIND", Color::Magenta),
-                    Span::raw(if count == 0 { String::from(" no matches ") } else { format!(" match {} of {} ", current, count) }),
+                    Span::raw(if count == 0 {
+                        String::from(" no matches ")
+                    } else {
+                        format!(" match {} of {} ", current, count)
+                    }),
                 ]),
                 Line::from(sanitize_for_terminal(query).into_owned()),
             )
@@ -60,7 +63,10 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
         InputMode::Visual => {
             let selected = active_tab.extract_text_from_selection().chars().count();
             (
-                Line::from(vec![badge("COPY MODE", Color::Cyan), Span::raw(format!(" {} characters selected ", selected))]),
+                Line::from(vec![
+                    badge("COPY MODE", Color::Cyan),
+                    Span::raw(format!(" {} characters selected ", selected)),
+                ]),
                 Line::from(vec![
                     Span::raw("Move with "),
                     key("h j k l"),
@@ -80,8 +86,12 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
                 crate::network::mask_password(&active_tab.url_input)
             };
             let label = match mode {
-                InputMode::Editing => Line::from(vec![badge("EDITING ADDRESS", Color::Yellow), Span::raw(" Enter goes, Esc cancels ")]),
-                InputMode::FormEdit => Line::from(vec![badge("TYPING INTO FORM", Color::Green), Span::raw(" Enter sends, Esc stops ")]),
+                InputMode::Editing => {
+                    Line::from(vec![badge("EDITING ADDRESS", Color::Yellow), Span::raw(" Enter goes, Esc cancels ")])
+                }
+                InputMode::FormEdit => {
+                    Line::from(vec![badge("TYPING INTO FORM", Color::Green), Span::raw(" Enter sends, Esc stops ")])
+                }
                 _ => Line::from(" Address "),
             };
             let style = if mode == InputMode::Editing { Style::default().fg(Color::Yellow) } else { Style::default() };
@@ -101,38 +111,19 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
         InputMode::FormEdit => Style::default().fg(Color::Green),
         InputMode::Normal => Style::default(),
     };
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(border)
-        .title(label)
-        .title(network.right_aligned());
+    let block = Block::default().borders(Borders::ALL).border_style(border).title(label).title(network.right_aligned());
     f.render_widget(Paragraph::new(body).block(block), area);
 }
 
 /// Apply visual mode selection highlighting to content lines
-fn apply_visual_highlights(
-    lines: &mut [Line],
-    selection: &crate::models::Selection,
-    start_index: usize,
-) {
+fn apply_visual_highlights(lines: &mut [Line], selection: &crate::models::Selection, start_index: usize) {
     // Normalize bounds for rendering
-    let (s_line, s_char, e_line, e_char) = if (selection.start_line, selection.start_char)
-        <= (selection.end_line, selection.end_char)
-    {
-        (
-            selection.start_line,
-            selection.start_char,
-            selection.end_line,
-            selection.end_char,
-        )
-    } else {
-        (
-            selection.end_line,
-            selection.end_char,
-            selection.start_line,
-            selection.start_char,
-        )
-    };
+    let (s_line, s_char, e_line, e_char) =
+        if (selection.start_line, selection.start_char) <= (selection.end_line, selection.end_char) {
+            (selection.start_line, selection.start_char, selection.end_line, selection.end_char)
+        } else {
+            (selection.end_line, selection.end_char, selection.start_line, selection.start_char)
+        };
 
     for (i, line) in lines.iter_mut().enumerate() {
         let current_line_idx = start_index + i;
@@ -201,24 +192,25 @@ fn apply_search_highlights(
 
         // Highlight current search match with different color (green background)
         if let Some(current_match) = search_state.matches.get(search_state.current_match_index)
-            && current_match.line_index >= start_index && current_match.line_index < end_index {
-                let relative_line_idx = current_match.line_index - start_index;
+            && current_match.line_index >= start_index
+            && current_match.line_index < end_index
+        {
+            let relative_line_idx = current_match.line_index - start_index;
 
-                if let Some(line) = lines.get_mut(relative_line_idx) {
-                    let mut current_x = 0;
-                    for span in line.spans.iter_mut() {
-                        let span_width = span.width();
-                        let span_end = current_x + span_width;
+            if let Some(line) = lines.get_mut(relative_line_idx) {
+                let mut current_x = 0;
+                for span in line.spans.iter_mut() {
+                    let span_width = span.width();
+                    let span_end = current_x + span_width;
 
-                        if current_x < current_match.end_char && span_end > current_match.start_char
-                        {
-                            // Current match gets green background
-                            span.style = span.style.bg(Color::Green).fg(Color::Black);
-                        }
-                        current_x = span_end;
+                    if current_x < current_match.end_char && span_end > current_match.start_char {
+                        // Current match gets green background
+                        span.style = span.style.bg(Color::Green).fg(Color::Black);
                     }
+                    current_x = span_end;
                 }
             }
+        }
     }
 }
 
@@ -388,10 +380,7 @@ fn link_preview(tab: &crate::app::BrowserTab) -> Line<'static> {
             let target = crate::network::resolve_url(tab.link_base(), &link.url);
             let mut spans = vec![
                 Span::raw(" Link: "),
-                Span::styled(
-                    sanitize_for_terminal(&target).into_owned(),
-                    Style::default().fg(Color::Cyan),
-                ),
+                Span::styled(sanitize_for_terminal(&target).into_owned(), Style::default().fg(Color::Cyan)),
                 Span::raw(" "),
             ];
             spans.extend(hidden_destination_warning(&target));
@@ -412,10 +401,7 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
     // Pages are stored with one span per run of same-styled text; split just the visible lines
     // into one span per character so highlights can style exactly the characters they cover
     let mut viewport_content: Vec<Line> = if start_index < total_lines {
-        active_tab.rendered_content[start_index..end_index]
-            .iter()
-            .map(split_into_characters)
-            .collect()
+        active_tab.rendered_content[start_index..end_index].iter().map(split_into_characters).collect()
     } else {
         Vec::new()
     };
@@ -436,12 +422,7 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
     );
 
     // Apply search result highlighting
-    apply_search_highlights(
-        &mut viewport_content,
-        active_tab.search_state.as_ref(),
-        start_index,
-        end_index,
-    );
+    apply_search_highlights(&mut viewport_content, active_tab.search_state.as_ref(), start_index, end_index);
 
     // Apply cursor highlighting for Normal and Visual modes
     if active_tab.input_mode == InputMode::Normal || active_tab.input_mode == InputMode::Visual {
@@ -491,13 +472,9 @@ pub fn ui(f: &mut Frame, app: &App) {
 fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
     if let Some(state) = &app.tabs[app.active_tab_index].download_state {
         // Clip to the frame so small terminals don't underflow or draw out of bounds
-        let popup_area = Rect {
-            x: area.width / 4,
-            y: (area.height / 2).saturating_sub(2),
-            width: area.width / 2,
-            height: 5,
-        }
-        .intersection(f.area());
+        let popup_area =
+            Rect { x: area.width / 4, y: (area.height / 2).saturating_sub(2), width: area.width / 2, height: 5 }
+                .intersection(f.area());
 
         // Clear the background to prevent content bleed
         f.render_widget(Clear, popup_area);
@@ -576,12 +553,10 @@ fn render_tool_prompt(f: &mut Frame, app: &App) {
     let host = url::Url::parse(&prompt.server).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
     let inner = width.saturating_sub(4) as usize;
 
-    let mut text = vec![
-        Line::from(Span::styled(
-            format!("Run \"{}\" on {}?", sanitize_for_terminal(&prompt.title), sanitize_for_terminal(&host)),
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-    ];
+    let mut text = vec![Line::from(Span::styled(
+        format!("Run \"{}\" on {}?", sanitize_for_terminal(&prompt.title), sanitize_for_terminal(&host)),
+        Style::default().add_modifier(Modifier::BOLD),
+    ))];
     if let Some(warning) = prompt.warning {
         text.push(Line::from(Span::styled(warning, Style::default().fg(Color::Red))));
     }
@@ -608,17 +583,10 @@ fn render_tool_prompt(f: &mut Frame, app: &App) {
     text.push(Line::from(" [Y] Run   /   [N] Cancel "));
 
     let height = (text.len() as u16 + 2).min(area.height);
-    let popup_area = Rect {
-        x: (area.width - width) / 2,
-        y: (area.height - height) / 2,
-        width,
-        height,
-    };
+    let popup_area = Rect { x: (area.width - width) / 2, y: (area.height - height) / 2, width, height };
     f.render_widget(Clear, popup_area);
-    let block = Block::default()
-        .title(" Run a tool ")
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow));
+    let block =
+        Block::default().title(" Run a tool ").borders(Borders::ALL).border_style(Style::default().fg(Color::Yellow));
     f.render_widget(Paragraph::new(text).block(block), popup_area);
 }
 
@@ -642,10 +610,7 @@ fn render_download_prompt(f: &mut Frame, app: &App) {
 
         f.render_widget(Clear, popup_area);
 
-        let mut text = vec![
-            Line::from(format!("File: {}", sanitize_for_terminal(&prompt.filename))),
-            Line::from(""),
-        ];
+        let mut text = vec![Line::from(format!("File: {}", sanitize_for_terminal(&prompt.filename))), Line::from("")];
 
         if prompt.file_exists {
             text.push(Line::from(vec![
@@ -662,9 +627,7 @@ fn render_download_prompt(f: &mut Frame, app: &App) {
         }
         text.push(Line::from(" [Y] Yes   /   [N] No "));
 
-        let paragraph = Paragraph::new(text)
-            .block(block)
-            .alignment(ratatui::layout::Alignment::Center);
+        let paragraph = Paragraph::new(text).block(block).alignment(ratatui::layout::Alignment::Center);
 
         f.render_widget(paragraph, popup_area);
     }

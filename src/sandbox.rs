@@ -72,8 +72,7 @@ const DEVICE_PATHS: &[&str] = &["/dev/tty", "/dev/null"];
 #[cfg(target_os = "linux")]
 pub fn restrict_filesystem(writable: &[&Path]) -> SandboxStatus {
     use landlock::{
-        ABI, Access, AccessFs, Ruleset, RulesetAttr, RulesetCreatedAttr, RulesetStatus,
-        path_beneath_rules,
+        ABI, Access, AccessFs, Ruleset, RulesetAttr, RulesetCreatedAttr, RulesetStatus, path_beneath_rules,
     };
 
     let abi = ABI::V5;

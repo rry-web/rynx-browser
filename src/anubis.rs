@@ -225,7 +225,12 @@ fn redirect_target(page_url: &Url, challenge: &Challenge) -> String {
 }
 
 /// The address that hands in the answer
-pub fn pass_address(page_url: &str, challenge: &Challenge, answer: Option<&Answer>, elapsed: Duration) -> Result<String, String> {
+pub fn pass_address(
+    page_url: &str,
+    challenge: &Challenge,
+    answer: Option<&Answer>,
+    elapsed: Duration,
+) -> Result<String, String> {
     let page = Url::parse(page_url).map_err(|_| "the bot check's page has no valid address".to_string())?;
     let base = format!("{}{}api/pass-challenge", challenge.base_prefix.trim_end_matches('/'), ANUBIS_PATH);
     let mut url = page.join(&base).map_err(|_| "the bot check's address is invalid".to_string())?;
@@ -359,7 +364,13 @@ impl reqwest::cookie::CookieStore for Cookies {
             };
             cookies.retain(|c| !(c.name == name && c.domain == domain));
             if !expired {
-                cookies.push(StoredCookie { domain, host_only, secure, name: name.to_string(), value: value.to_string() });
+                cookies.push(StoredCookie {
+                    domain,
+                    host_only,
+                    secure,
+                    name: name.to_string(),
+                    value: value.to_string(),
+                });
                 if cookies.len() > MAX_COOKIES {
                     cookies.remove(0);
                 }

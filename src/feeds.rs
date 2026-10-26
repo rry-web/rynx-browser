@@ -182,7 +182,11 @@ pub fn feed_to_html(xml: &str) -> (String, String) {
     if feed.link.is_empty() {
         html.push_str(&format!("<p>Feed with {}.</p>", count));
     } else {
-        html.push_str(&format!("<p>Feed with {}. <a href=\"{}\">Visit the site</a></p>", count, escape_html(feed.link.trim())));
+        html.push_str(&format!(
+            "<p>Feed with {}. <a href=\"{}\">Visit the site</a></p>",
+            count,
+            escape_html(feed.link.trim())
+        ));
     }
     for entry in &entries {
         let entry_title = clean(&entry.title);
@@ -191,7 +195,11 @@ pub fn feed_to_html(xml: &str) -> (String, String) {
         if entry.link.trim().is_empty() {
             html.push_str(&format!("<h2>{}</h2>", escape_html(&entry_title)));
         } else {
-            html.push_str(&format!("<h2><a href=\"{}\">{}</a></h2>", escape_html(entry.link.trim()), escape_html(&entry_title)));
+            html.push_str(&format!(
+                "<h2><a href=\"{}\">{}</a></h2>",
+                escape_html(entry.link.trim()),
+                escape_html(&entry_title)
+            ));
         }
         if !entry.date.trim().is_empty() {
             html.push_str(&format!("<p><i>{}</i></p>", escape_html(entry.date.trim())));
@@ -211,7 +219,13 @@ pub fn feed_to_html(xml: &str) -> (String, String) {
     (title, html)
 }
 
-fn append(feed: &mut Entry, entries: &mut [Entry], subtitle: &mut String, field: Option<(Field, bool, usize)>, text: &str) {
+fn append(
+    feed: &mut Entry,
+    entries: &mut [Entry],
+    subtitle: &mut String,
+    field: Option<(Field, bool, usize)>,
+    text: &str,
+) {
     let Some((field, in_entry, _)) = field else { return };
     if field == Field::Subtitle {
         subtitle.push_str(text);

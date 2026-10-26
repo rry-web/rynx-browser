@@ -127,7 +127,6 @@ fn pages_show_the_feeds_they_announce() {
 
 #[tokio::test]
 async fn feeds_served_as_xml_open_as_a_page() {
-    
     use rynx_browser::app::App;
     use rynx_browser::event_handler::handle_network_event;
     use rynx_browser::network::NetworkResponse;

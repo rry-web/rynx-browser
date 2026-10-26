@@ -160,10 +160,7 @@ fn utc_date_time(seconds: u64) -> (String, String) {
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
-    (
-        format!("{:04}-{:02}-{:02}", year, month, day),
-        format!("{:02}:{:02}", in_day / 3600, in_day % 3600 / 60),
-    )
+    (format!("{:04}-{:02}-{:02}", year, month, day), format!("{:02}:{:02}", in_day / 3600, in_day % 3600 / 60))
 }
 
 #[cfg(test)]
