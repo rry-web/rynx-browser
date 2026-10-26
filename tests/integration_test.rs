@@ -652,3 +652,30 @@ async fn test_missing_clipboard_reports_instead_of_panicking() {
     }
     assert_eq!(app.current_tab().status_message, "Clipboard unavailable");
 }
+
+#[tokio::test]
+async fn test_cursor_movement_scrolls_in_normal_and_visual_mode() {
+    let mut app = test_app();
+    let lines: String = (0..60).map(|i| format!("line {i}<br>")).collect();
+    load_page(&mut app, &lines);
+    // 24 rows minus tab bar, URL bar and borders leaves 16 visible content rows
+    let visible = 16;
+
+    for _ in 0..20 {
+        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('j')), 80, 24).unwrap();
+    }
+    assert_eq!(app.current_tab().cursor_line, 20);
+    assert_eq!(app.current_tab().scroll, 20 + 1 - visible);
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('v')), 80, 24).unwrap();
+    for _ in 0..20 {
+        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('j')), 80, 24).unwrap();
+    }
+    assert_eq!(app.current_tab().cursor_line, 40);
+    assert_eq!(app.current_tab().scroll, 40 + 1 - visible, "visual mode did not scroll");
+
+    for _ in 0..40 {
+        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('k')), 80, 24).unwrap();
+    }
+    assert_eq!(app.current_tab().scroll, 0);
+}

@@ -69,6 +69,16 @@ impl BrowserTab {
         }
     }
 
+    /// Scroll the minimum amount needed to bring `line` into a viewport of `viewport_height` rows
+    pub fn scroll_to_line(&mut self, line: usize, viewport_height: usize) {
+        let viewport_height = viewport_height.max(1);
+        if line < self.scroll {
+            self.scroll = line;
+        } else if line >= self.scroll + viewport_height {
+            self.scroll = line + 1 - viewport_height;
+        }
+    }
+
     /// Keep the selected link and cursor inside the current content after a re-render
     fn clamp_positions(&mut self) {
         if self.selected_link_index >= self.link_regions.len() {

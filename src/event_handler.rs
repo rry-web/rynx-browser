@@ -26,6 +26,11 @@ fn is_downloadable_file(url: &str) -> bool {
     ["/download/", "/files/", "/assets/", "/attachments/"].iter().any(|p| u.contains(p))
 }
 
+/// Rows available for page content: tab bar (3) + URL bar (3) + content borders (2) are subtracted
+fn viewport_height(terminal_height: u16) -> usize {
+    terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize
+}
+
 pub fn handle_key_event<B: Backend>(
     app: &mut App,
     key: KeyEvent,
@@ -37,7 +42,7 @@ pub fn handle_key_event<B: Backend>(
     match active_mode {
         InputMode::Normal => handle_normal_mode::<B>(app, key, terminal_width, terminal_height),
         InputMode::Editing => handle_editing_mode(app, key),
-        InputMode::Visual => handle_visual_mode(app, key),
+        InputMode::Visual => handle_visual_mode(app, key, terminal_height),
         InputMode::Search => handle_search_mode(app, key),
     }
 }
@@ -126,44 +131,21 @@ fn handle_normal_mode<B: Backend>(
             app.current_tab().status_message =
                 String::from("SEARCH MODE - Type query and press Enter");
         }
-        KeyCode::Char('>') => {
+        KeyCode::Char('>') | KeyCode::Char('<') => {
             let tab = app.current_tab();
-            tab.next_search_match();
-            // Auto-scroll to the current search match
-            if let Some(search_state) = &tab.search_state {
-                if let Some(current_match) =
-                    search_state.matches.get(search_state.current_match_index)
-                {
-                    let viewport_height = terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize;
-
-                    if current_match.line_index < tab.scroll {
-                        // If match is above current view, jump to it
-                        tab.scroll = current_match.line_index;
-                    } else if current_match.line_index >= tab.scroll + viewport_height {
-                        // If match is below, scroll just enough to make it visible at the bottom
-                        tab.scroll = current_match.line_index - viewport_height + 1;
-                    }
-                }
+            if key.code == KeyCode::Char('>') {
+                tab.next_search_match();
+            } else {
+                tab.previous_search_match();
             }
-        }
-        KeyCode::Char('<') => {
-            let tab = app.current_tab();
-            tab.previous_search_match();
             // Auto-scroll to the current search match
-            if let Some(search_state) = &tab.search_state {
-                if let Some(current_match) =
-                    search_state.matches.get(search_state.current_match_index)
-                {
-                    let viewport_height = terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize;
-
-                    if current_match.line_index < tab.scroll {
-                        // If match is above current view, jump to it
-                        tab.scroll = current_match.line_index;
-                    } else if current_match.line_index >= tab.scroll + viewport_height {
-                        // If match is below, scroll just enough to make it visible at the bottom
-                        tab.scroll = current_match.line_index - viewport_height + 1;
-                    }
-                }
+            let current_line = tab
+                .search_state
+                .as_ref()
+                .and_then(|s| s.matches.get(s.current_match_index))
+                .map(|m| m.line_index);
+            if let Some(line) = current_line {
+                tab.scroll_to_line(line, viewport_height(terminal_height));
             }
         }
         KeyCode::Down => app.current_tab().scroll = app.current_tab().scroll.saturating_add(1),
@@ -200,21 +182,13 @@ fn handle_normal_mode<B: Backend>(
         KeyCode::Char('k') => {
             let tab = app.current_tab();
             tab.cursor_line = tab.cursor_line.saturating_sub(1);
-            // Auto-scroll up if cursor goes off-screen
-            if tab.cursor_line < tab.scroll {
-                tab.scroll = tab.cursor_line;
-            }
+            tab.scroll_to_line(tab.cursor_line, viewport_height(terminal_height));
         }
         KeyCode::Char('j') => {
             let tab = app.current_tab();
             let max_lines = tab.rendered_content.len().saturating_sub(1);
             tab.cursor_line = (tab.cursor_line + 1).min(max_lines);
-
-            // Auto-scroll down if cursor goes off-screen
-            let viewport_height = terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize;
-            if tab.cursor_line >= tab.scroll + viewport_height {
-                tab.scroll = tab.cursor_line - viewport_height + 1;
-            }
+            tab.scroll_to_line(tab.cursor_line, viewport_height(terminal_height));
         }
 
         // HISTORY BACK
@@ -242,19 +216,8 @@ fn handle_normal_mode<B: Backend>(
                     };
                 }
 
-                // --- IMPROVED AUTOSCROLL ---
-                let selected = &tab.link_regions[tab.selected_link_index];
-                // We subtract 6 for the Tab bar (3) and URL bar (3),
-                // and another 2 for the borders of the Browser block.
-                let viewport_height = terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize;
-
-                if selected.line_index < tab.scroll {
-                    // If link is above current view, jump to it
-                    tab.scroll = selected.line_index;
-                } else if selected.line_index >= tab.scroll + viewport_height {
-                    // If link is below, scroll just enough to make it visible at the bottom
-                    tab.scroll = selected.line_index - viewport_height + 1;
-                }
+                let selected_line = tab.link_regions[tab.selected_link_index].line_index;
+                tab.scroll_to_line(selected_line, viewport_height(terminal_height));
             }
         }
 
@@ -356,7 +319,7 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
     Ok(false)
 }
 
-fn handle_visual_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
+fn handle_visual_mode(app: &mut App, key: KeyEvent, terminal_height: u16) -> Result<bool> {
     match key.code {
         KeyCode::Char('h') => {
             let tab = app.current_tab();
@@ -370,6 +333,7 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
             let tab = app.current_tab();
             let max_lines = tab.rendered_content.len().saturating_sub(1);
             tab.cursor_line = (tab.cursor_line + 1).min(max_lines);
+            tab.scroll_to_line(tab.cursor_line, viewport_height(terminal_height));
 
             // Ensure cursor_char is valid for the new line
             let line_len = tab.rendered_content.get(tab.cursor_line).map(|l| l.width()).unwrap_or(0);
@@ -384,6 +348,7 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
         KeyCode::Char('k') => {
             let tab = app.current_tab();
             tab.cursor_line = tab.cursor_line.saturating_sub(1);
+            tab.scroll_to_line(tab.cursor_line, viewport_height(terminal_height));
 
             let line_len = tab.rendered_content.get(tab.cursor_line).map(|l| l.width()).unwrap_or(0);
             tab.cursor_char = tab.cursor_char.min(line_len);
