@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  # New advisories are published against unchanged dependencies, so audit weekly too
+  schedule:
+    - cron: "0 6 * * 1"
+
+# Least privilege: the jobs only need to read the code
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --locked
+      - name: Test (includes 100 randomised renderer cases)
+        run: cargo test --locked
+
+  fuzz:
+    name: Extended renderer fuzzing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Fuzz 20,000 cases starting at a fresh offset each run
+        run: |
+          start=$(( (GITHUB_RUN_NUMBER * 20000) % 100000000 ))
+          echo "Seeds $start..$((start + 19999)); reproduce a failure with FUZZ_SEED=<seed>"
+          FUZZ_START=$start FUZZ_ITERATIONS=20000 cargo test --locked --release --test fuzz_render
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: Check for known vulnerabilities
+        run: cargo audit
