@@ -338,7 +338,7 @@ impl BrowserTab {
 
         let sanitized_name = App::download_filename(&url);
         let target_path = download_dir.join(&sanitized_name);
-        let file_exists = target_path.exists();
+        let file_exists = App::path_taken(&target_path);
 
         self.download_prompt = Some(crate::models::DownloadPrompt {
             url,
@@ -695,14 +695,49 @@ impl App {
             .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '-' || *c == '_')
             .collect::<String>();
 
-        // Ensure we have a valid filename
-        if safe_name.is_empty() || safe_name == "." || safe_name == ".." {
-            "download.dat".to_string()
+        // No hidden files (".bashrc"), and no trailing dots, which Windows silently drops
+        let safe_name = safe_name.trim_start_matches('.').trim_end_matches('.');
+        if safe_name.is_empty() {
+            return "download.dat".to_string();
+        }
+        let safe_name = Self::limit_filename_length(safe_name);
+
+        // On Windows, CON, NUL, COM1... (even with an extension) name devices, not files
+        let stem = safe_name.split('.').next().unwrap_or("").to_ascii_uppercase();
+        // COM and LPT take a digit, including the superscripts ¹²³ that Windows also accepts
+        let is_device = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+            || ((stem.starts_with("COM") || stem.starts_with("LPT"))
+                && stem.chars().count() == 4
+                && stem.chars().nth(3).is_some_and(|c| c.is_ascii_digit() || "¹²³".contains(c)));
+        if is_device {
+            format!("_{}", safe_name)
         } else {
             safe_name
         }
     }
-    /// Start downloading a confirmed prompt into exactly the path that was shown to the user
+
+    /// Keep names well under the 255-byte limit of common filesystems, preserving the extension
+    fn limit_filename_length(name: &str) -> String {
+        const MAX_BYTES: usize = 200;
+        if name.len() <= MAX_BYTES {
+            return name.to_string();
+        }
+        let (stem, ext) = match name.rfind('.') {
+            Some(dot) if name.len() - dot <= 20 => name.split_at(dot),
+            _ => (name, ""),
+        };
+        let mut cut = MAX_BYTES - ext.len();
+        while !stem.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        format!("{}{}", &stem[..cut], ext)
+    }
+
+    /// Whether anything is at `path`, including a symbolic link (even one pointing nowhere)
+    fn path_taken(path: &Path) -> bool {
+        std::fs::symlink_metadata(path).is_ok()
+    }
+
     /// Tag a download as coming from the internet, as Safari and Chrome do, so macOS Gatekeeper
     /// checks it before it is first opened. Value format: flags;hex timestamp;agent;event id.
     #[cfg(target_os = "macos")]
@@ -722,7 +757,7 @@ impl App {
 
     /// Return `path`, or `name_1.ext`, `name_2.ext`, ... if it already exists
     fn unused_path(path: &Path) -> PathBuf {
-        if !path.exists() {
+        if !Self::path_taken(path) {
             return path.to_path_buf();
         }
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("download");
@@ -735,10 +770,11 @@ impl App {
                 };
                 path.with_file_name(name)
             })
-            .find(|candidate| !candidate.exists())
+            .find(|candidate| !Self::path_taken(candidate))
             .expect("unbounded range always finds a free name")
     }
 
+    /// Start downloading a confirmed prompt into exactly the path that was shown to the user
     pub fn trigger_download(&mut self, prompt: crate::models::DownloadPrompt) {
         let tab = self.current_tab();
         let tab_id = tab.id;
@@ -808,7 +844,15 @@ impl App {
                         }
                     }
 
-                    // 4. Safe File Creation (No unwraps)
+                    // 4. Safe File Creation (No unwraps). Never write through a symbolic link: one
+                    // planted in Downloads could point the write at e.g. ~/.bashrc
+                    let is_symlink = tokio::fs::symlink_metadata(&file_path)
+                        .await
+                        .is_ok_and(|meta| meta.file_type().is_symlink());
+                    if is_symlink {
+                        let _ = tx.send(NetworkResponse::DownloadError(tab_id, "Refusing to save over a symbolic link".to_string())).await;
+                        return;
+                    }
                     let file = match tokio::fs::File::create(&file_path).await {
                         Ok(f) => f,
                         Err(e) => {

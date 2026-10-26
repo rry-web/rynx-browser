@@ -1441,3 +1441,60 @@ async fn test_pages_use_the_full_content_width() {
     let screen = screen_text(&terminal);
     assert!(screen.contains(&format!("│{}│", "─".repeat(78))), "rule doesn't span the content area");
 }
+
+#[test]
+fn test_download_filenames_are_safe_on_every_platform() {
+    let long_stem = "a".repeat(300);
+    let cases: Vec<(String, String)> = vec![
+        // Windows device names, with or without an extension, in any case
+        ("https://x.com/CON".into(), "_CON".into()),
+        ("https://x.com/nul.txt".into(), "_nul.txt".into()),
+        ("https://x.com/com1.tar.gz".into(), "_com1.tar.gz".into()),
+        ("https://x.com/LPT9".into(), "_LPT9".into()),
+        ("https://x.com/COM%C2%B9".into(), "_COM¹".into()),
+        // Similar names that aren't devices
+        ("https://x.com/CONSOLE.txt".into(), "CONSOLE.txt".into()),
+        ("https://x.com/COM10".into(), "COM10".into()),
+        // No hidden files, no trailing dots
+        ("https://x.com/.bashrc".into(), "bashrc".into()),
+        ("https://x.com/report.".into(), "report".into()),
+        ("https://x.com/...".into(), "download.dat".into()),
+    ];
+    for (url, expected) in cases {
+        assert_eq!(App::download_filename(&url), expected, "for {url}");
+    }
+    let long = App::download_filename(&format!("https://x.com/{long_stem}.pdf"));
+    assert!(long.len() <= 200 && long.ends_with(".pdf"), "{long}");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_downloads_never_write_through_symlinks() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/victim.txt"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"attacker content".to_vec()))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let dir = app.download_dir.clone();
+    std::fs::create_dir_all(&dir).unwrap();
+    // A link planted in Downloads, pointing at a file elsewhere (e.g. ~/.bashrc)
+    let target = dir.with_extension("target");
+    std::fs::write(&target, b"precious").unwrap();
+    std::os::unix::fs::symlink(&target, dir.join("victim.txt")).unwrap();
+
+    let url = format!("{}/victim.txt", mock_server.uri());
+    app.current_tab().initiate_download_request(url, &dir);
+    let prompt = app.current_tab().download_prompt.take().unwrap();
+    assert!(prompt.file_exists, "the link should count as an existing file");
+    app.trigger_download(prompt);
+    let (resp, _) = finish_download(&mut app).await;
+
+    let NetworkResponse::DownloadError(_, msg) = resp else { panic!("wrote through the symlink") };
+    assert!(msg.contains("symbolic link"), "{msg}");
+    assert_eq!(std::fs::read(&target).unwrap(), b"precious");
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_file(&target);
+}
