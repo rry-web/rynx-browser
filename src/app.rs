@@ -495,6 +495,8 @@ impl App {
 
             match resp_result {
                 Ok(resp) => {
+                    // Fast rejection when the server declares the size; read_text_limited
+                    // enforces the limit when it doesn't
                     if let Some(len) = resp.content_length() {
                         if len > MAX_PAGE_SIZE_BYTES {
                             let _ = tx_clone
@@ -506,7 +508,7 @@ impl App {
 
                     // Where redirects actually led; relative links resolve against this
                     let final_url = resp.url().to_string();
-                    match resp.text().await {
+                    match crate::network::read_text_limited(resp, MAX_PAGE_SIZE_BYTES).await {
                         Ok(html_text) => {
                             let metadata = parse_html_metadata(&html_text);
                             let _ = tx_clone
@@ -519,9 +521,7 @@ impl App {
                                 .await;
                         }
                         Err(e) => {
-                            let _ = tx_clone
-                                .send(NetworkResponse::Error(id, e.to_string()))
-                                .await;
+                            let _ = tx_clone.send(NetworkResponse::Error(id, e)).await;
                         }
                     }
                 }

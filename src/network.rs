@@ -312,6 +312,40 @@ pub async fn attempt_jump_with(
     Err("All jump services failed.".into())
 }
 
+/// The charset parameter of a Content-Type header, e.g. "text/html; charset=ISO-8859-1"
+fn charset_from_content_type(content_type: &str) -> Option<&str> {
+    content_type.split(';').skip(1).find_map(|param| {
+        let (name, value) = param.split_once('=')?;
+        name.trim()
+            .eq_ignore_ascii_case("charset")
+            .then(|| value.trim().trim_matches('"'))
+    })
+}
+
+/// Read a response body as text without buffering more than `limit` bytes. Content-Length
+/// can't enforce this: it is absent for chunked responses and for compressed ones, where a
+/// small download can expand enormously. Decodes using the declared charset, like resp.text().
+pub async fn read_text_limited(mut resp: reqwest::Response, limit: u64) -> Result<String, String> {
+    let encoding = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(charset_from_content_type)
+        .and_then(|label| encoding_rs::Encoding::for_label(label.as_bytes()))
+        .unwrap_or(encoding_rs::UTF_8);
+
+    let mut body = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+        if (body.len() + chunk.len()) as u64 > limit {
+            return Err(format!("Page too large (over {} MB)", limit / (1024 * 1024)));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    // decode() also honours a byte order mark, as resp.text() does
+    let (text, _, _) = encoding.decode(&body);
+    Ok(text.into_owned())
+}
+
 /// Detects file extensions based on magic bytes (file signatures)
 pub fn sniff_extension(h: &[u8]) -> Option<&'static str> {
     if h.starts_with(&[0x89, 0x50, 0x4E, 0x47]) { Some("png") }

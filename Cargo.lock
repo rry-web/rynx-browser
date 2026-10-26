@@ -1893,6 +1893,8 @@ dependencies = [
  "crossterm",
  "directories",
  "ego-tree",
+ "encoding_rs",
+ "flate2",
  "futures-util",
  "percent-encoding",
  "ratatui",

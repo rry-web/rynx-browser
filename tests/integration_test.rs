@@ -1061,3 +1061,73 @@ async fn test_control_characters_never_reach_the_terminal() {
     assert!(text.iter().any(|l| l.contains("safe ]52;c;ZWNobyBoaQ==[2J31mtext")), "{text:?}");
     assert!(text.iter().any(|l| l.contains("col1    col2")), "{text:?}");
 }
+
+fn gzip(data: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(data).unwrap();
+    encoder.finish().unwrap()
+}
+
+#[tokio::test]
+async fn test_compressed_page_cannot_exceed_size_limit() {
+    // ~20MB of HTML compresses to a few KB and arrives without a usable Content-Length
+    let huge = format!("<p>{}</p>", "a ".repeat(10 * 1024 * 1024));
+    let compressed = gzip(huge.as_bytes());
+    assert!(compressed.len() < 100_000);
+
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/bomb"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("Content-Encoding", "gzip")
+                .set_body_raw(compressed, "text/html"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let resp = load_url(&mut app, &format!("{}/bomb", mock_server.uri())).await;
+    let NetworkResponse::Error(_, msg) = resp else { panic!("oversized page was accepted") };
+    assert!(msg.contains("too large"), "{msg}");
+}
+
+#[tokio::test]
+async fn test_compressed_page_under_limit_still_loads() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/small"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("Content-Encoding", "gzip")
+                .set_body_raw(gzip(b"<title>Small</title><p>compressed ok</p>"), "text/html"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let resp = load_url(&mut app, &format!("{}/small", mock_server.uri())).await;
+    let NetworkResponse::Success(_, title, body, _) = resp else { panic!("small page failed") };
+    assert_eq!(title, "Small");
+    assert!(body.contains("compressed ok"));
+}
+
+#[tokio::test]
+async fn test_page_charset_is_honoured() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/latin1"))
+        .respond_with(
+            // "café" in windows-1252, where é is the single byte 0xE9
+            ResponseTemplate::new(200)
+                .set_body_raw(b"<p>caf\xe9</p>".to_vec(), "text/html; charset=windows-1252"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let resp = load_url(&mut app, &format!("{}/latin1", mock_server.uri())).await;
+    let NetworkResponse::Success(_, _, body, _) = resp else { panic!("page failed") };
+    assert!(body.contains("café"), "{body}");
+}
