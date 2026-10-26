@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0-beta.5]
+
+A settings page, with a lock to keep rynx on I2P (or off it), and archived copies of pages.
 
 ### Added
 - A settings page (`S`, or `about:settings`): every setting as a form, checked like the settings

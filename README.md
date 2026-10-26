@@ -3,7 +3,7 @@
 A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**, with absolutely
 **zero JavaScript**.
 
-> **Status: beta.** Version 0.2.0-beta.4 is the latest release. rynx is under active development:
+> **Status: beta.** Version 0.2.0-beta.5 is the latest release. rynx is under active development:
 > security protections and fixes keep arriving as issues are found, and some protections (the
 > filesystem sandbox on Linux and macOS in particular) are preliminary and haven't yet been checked on a wide
 > range of systems. Please report problems, and anything that looks like a security issue, as
@@ -38,7 +38,7 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
 With [Rust](https://rustup.rs) 1.88 or newer installed:
 
 ```sh
-cargo install rynx --version 0.2.0-beta.4
+cargo install rynx --version 0.2.0-beta.5
 ```
 
 Then run `rynx`. (Cargo skips beta versions unless you name one with `--version`.)
@@ -297,7 +297,7 @@ with results recorded in [TEST_LOG.md](TEST_LOG.md). Changes are listed in
 
 CI tests every push on Linux, macOS and Windows, fuzzes the renderer and audits dependencies. To
 make a release, set the version in `Cargo.toml`, add its section to `CHANGELOG.md`, and push a
-matching tag (`git tag v0.2.0-beta.4 && git push origin v0.2.0-beta.4`): the release workflow
+matching tag (`git tag v0.2.0-beta.5 && git push origin v0.2.0-beta.5`): the release workflow
 builds every platform and publishes the release. Tags containing `-` become pre-releases.
 
 ## Roadmap
