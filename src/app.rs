@@ -350,7 +350,6 @@ impl App {
 
     pub fn render_tab(&mut self, tab_index: usize, width: u16) {
         if let Some(tab) = self.tabs.get_mut(tab_index) {
-            let content_width = (width as usize).saturating_sub(2);
             if tab.is_source_view {
                 tab.rendered_content = tab
                     .html_source
@@ -360,7 +359,8 @@ impl App {
                 tab.link_regions.clear();
                 tab.anchors.clear();
             } else {
-                let mut renderer = DomRenderer::new(content_width);
+                // DomRenderer::new leaves room for the page's border itself
+                let mut renderer = DomRenderer::new(width as usize);
                 match tab.page_kind {
                     PageKind::Html => renderer.render(&Html::parse_document(&tab.html_source)),
                     PageKind::PlainText => renderer.render_plain_text(&tab.html_source),

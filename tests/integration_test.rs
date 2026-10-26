@@ -1410,3 +1410,23 @@ async fn test_binary_files_offer_a_download_instead_of_garbage() {
     handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('d')), 80, 24).unwrap();
     assert_eq!(app.current_tab().download_prompt.as_ref().map(|p| p.filename.as_str()), Some("photo.png"));
 }
+
+#[tokio::test]
+async fn test_pages_use_the_full_content_width() {
+    // An 80-column terminal leaves 78 columns inside the page's border
+    let mut app = test_app();
+    load_page(&mut app, &format!("<p>{}</p><hr>", "word ".repeat(200)));
+    let widths: Vec<usize> = app
+        .current_tab()
+        .rendered_content
+        .iter()
+        .map(rynx_browser::renderer::display_width)
+        .collect();
+    assert_eq!(widths.iter().max(), Some(&78), "{widths:?}");
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal.draw(|f| ui(f, &app)).unwrap();
+    // The horizontal rule reaches the right border without being cut off
+    let screen = screen_text(&terminal);
+    assert!(screen.contains(&format!("│{}│", "─".repeat(78))), "rule doesn't span the content area");
+}
