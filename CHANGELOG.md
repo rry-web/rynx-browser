@@ -9,6 +9,11 @@
   different screen sizes are shown once. It stays on while following links, and pages without an
   article are shown whole with a note.
 
+- A filesystem sandbox on macOS, using Seatbelt (as Safari, Chrome and Firefox do): no reading
+  in the home folder except the Downloads and settings folders, and no writing anywhere but those
+  and the terminal. HTTPS certificate checks, the clipboard, DNS and download tagging are checked
+  to keep working inside it.
+
 ### Fixed
 - An image sent twice in a row (one copy per screen size, as on Ars Technica) is shown once.
 

@@ -399,6 +399,16 @@ Worth repeating after any dependency upgrade.
       a few HTTPS sites, download a file, and copy text with `v`/`y`.
       *Expected:* all of it works; the download lands in `~/Downloads`. If anything fails, note
       the distribution, then retry with `--no-sandbox` to confirm the sandbox is the cause.
+- [ ] **PLAT-09 (priority) macOS sandbox status.** On macOS, start the browser.
+      *Expected:* the status line reads "Ready (filesystem sandbox active)". (Checked on macOS 27
+      during development; other versions untested.)
+- [ ] **PLAT-10 (priority) macOS sandbox doesn't break browsing.** With the sandbox active, browse
+      a few HTTPS sites, download a file, bookmark a page, copy text with `v`/`y`, and open a
+      Gemini site.
+      *Expected:* all of it works. Run once from `cargo install` (in `~/.cargo/bin`) and once
+      from an unpacked release archive. If anything fails, note the macOS version and retry with
+      `--no-sandbox`. `cargo test --test sandbox -- --ignored` checks HTTPS, certificate
+      rejection, the clipboard and download tagging inside the sandbox automatically.
 - [ ] **PLAT-03 Linux download origin.** After a download, run
       `getfattr -n user.xdg.origin.url ~/Downloads/<file>`.
       *Expected:* it prints the URL the file came from.

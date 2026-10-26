@@ -8,6 +8,13 @@
 //!
 //! Landlock restricts the calling thread and threads it starts later, so this must run before
 //! any other thread exists: before the async runtime, the clipboard and background rendering.
+//!
+//! On macOS it uses Seatbelt, the sandbox Safari, Chrome and Firefox confine their page processes
+//! with, with the same rules for files: no reading or writing in the home folder except the
+//! Downloads and settings folders, and no writing anywhere else except the terminal's devices.
+//! Unlike Landlock it applies to the whole process at once; programs it starts inherit it. The
+//! policy starts from "allow" and denies file access, rather than listing every system service the
+//! browser uses (certificate checks, DNS, the clipboard), which differ between macOS versions.
 
 use std::path::Path;
 
@@ -18,7 +25,7 @@ pub enum SandboxStatus {
     Enforced,
     /// The kernel supports only some restrictions (an older Landlock version)
     Partial,
-    /// The kernel has no Landlock support
+    /// The operating system doesn't support this sandbox (no Landlock in the kernel)
     Unavailable,
     /// Setting up the sandbox failed
     Failed(String),
@@ -114,7 +121,105 @@ pub fn restrict_filesystem(writable: &[&Path]) -> SandboxStatus {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+/// The Seatbelt policy: reading and writing in `home` only inside `writable`, and writing
+/// elsewhere only to devices (the terminal, /dev/null). The browser's own executable and the
+/// listing of its folder stay readable: macOS's certificate checks look at the running program
+/// (and fail outright without it), and a `cargo install`ed rynx lives in ~/.cargo/bin.
+#[cfg(target_os = "macos")]
+fn seatbelt_policy(home: &Path, writable: &[&Path], executable: Option<&Path>) -> String {
+    // Paths go in as string literals; Seatbelt compares real paths, so symlinks are resolved
+    let quote = |path: &Path| {
+        let real = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        format!("\"{}\"", real.to_string_lossy().replace('\\', "\\\\").replace('"', "\\\""))
+    };
+    let allowed: String = writable.iter().map(|dir| format!(" (subpath {})", quote(dir))).collect();
+    let home = quote(home);
+    let mut policy = format!(
+        "(version 1)\n\
+         (allow default)\n\
+         (deny file-write*)\n\
+         (allow file-write* (subpath \"/dev\"){allowed})\n\
+         (deny file-read* (subpath {home}))\n\
+         (allow file-read-metadata (literal {home}))\n"
+    );
+    // Only with folders to name: "(allow file-read*)" alone would allow reading everything
+    if !allowed.is_empty() {
+        policy.push_str(&format!("(allow file-read*{allowed})\n"));
+    }
+    if let Some(executable) = executable {
+        let folder = executable.parent().map(|f| format!(" (literal {})", quote(f))).unwrap_or_default();
+        policy.push_str(&format!("(allow file-read* (literal {}){folder})\n", quote(executable)));
+    }
+    policy
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::seatbelt_policy;
+    use std::path::Path;
+
+    #[test]
+    fn the_policy_never_allows_all_reads() {
+        let policy = seatbelt_policy(Path::new("/Users/nobody"), &[], None);
+        assert!(!policy.contains("(allow file-read*)"), "{policy}");
+        let policy = seatbelt_policy(Path::new("/Users/nobody"), &[Path::new("/Users/nobody/Down\"loads")], None);
+        assert!(policy.contains("(allow file-read* (subpath \"/Users/nobody/Down\\\"loads\"))"), "{policy}");
+    }
+}
+
+/// Restrict filesystem access to what the browser needs, allowing writes only in `writable`
+/// folders (Downloads and the settings folder), and reads in the home folder only there
+#[cfg(target_os = "macos")]
+pub fn restrict_filesystem(writable: &[&Path]) -> SandboxStatus {
+    let home = match std::env::var_os("HOME").filter(|h| !h.is_empty()) {
+        Some(home) => std::path::PathBuf::from(home),
+        None => match directories::BaseDirs::new() {
+            Some(dirs) => dirs.home_dir().to_path_buf(),
+            None => return SandboxStatus::Failed("no home folder".to_string()),
+        },
+    };
+    let executable = std::env::current_exe().ok();
+    match seatbelt::apply(&seatbelt_policy(&home, writable, executable.as_deref())) {
+        Ok(()) => SandboxStatus::Enforced,
+        Err(e) => SandboxStatus::Failed(e),
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+mod seatbelt {
+    use std::ffi::{CStr, CString, c_char};
+
+    // libsandbox, part of libSystem. Deprecated in its header since macOS 10.8, but it's the same
+    // interface the major browsers' sandboxes are built on, and still works.
+    unsafe extern "C" {
+        fn sandbox_init(profile: *const c_char, flags: u64, errorbuf: *mut *mut c_char) -> i32;
+        fn sandbox_free_error(errorbuf: *mut c_char);
+    }
+
+    /// Apply a policy (Seatbelt's profile language) to this process, irreversibly
+    pub fn apply(policy: &str) -> Result<(), String> {
+        let policy = CString::new(policy).map_err(|_| "policy contains a NUL byte".to_string())?;
+        let mut error: *mut c_char = std::ptr::null_mut();
+        // SAFETY: the policy is a valid C string for the call's duration; flags 0 means it's a
+        // policy text rather than a named profile; on failure the error string is ours to free.
+        let result = unsafe { sandbox_init(policy.as_ptr(), 0, &mut error) };
+        if result == 0 {
+            return Ok(());
+        }
+        let message = if error.is_null() {
+            "sandbox_init failed".to_string()
+        } else {
+            // SAFETY: a non-null error is a C string from libsandbox, freed once here
+            let text = unsafe { CStr::from_ptr(error) }.to_string_lossy().into_owned();
+            unsafe { sandbox_free_error(error) };
+            text
+        };
+        Err(message)
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub fn restrict_filesystem(_writable: &[&Path]) -> SandboxStatus {
     SandboxStatus::Unsupported
 }

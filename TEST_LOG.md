@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 122 (21 priority).
+Total checks: 124 (23 priority).
 
 
 ## Automated checks
@@ -178,6 +178,8 @@ Total checks: 122 (21 priority).
 | PLAT-05 | macOS "Where from" |  |  |  |  |
 | PLAT-06 | Device-name downloads |  |  |  |  |
 | PLAT-07 | Command-line options |  |  |  |  |
+| PLAT-09 | macOS sandbox status | Yes | Pass | 2026-10-26 | macOS 27.0.1, run from the build folder |
+| PLAT-10 | macOS sandbox doesn't break browsing | Yes | Partly | 2026-10-26 | HTTPS, bad certificate rejected, clipboard, download tagging checked automatically on macOS 27.0.1 |
 
 ## Releases
 

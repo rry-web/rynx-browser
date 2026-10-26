@@ -1,6 +1,7 @@
-//! The Linux filesystem sandbox. Restrictions can't be lifted once applied, so the test re-runs
-//! itself in a child process that sandboxes itself and reports what it could and couldn't do.
-#![cfg(target_os = "linux")]
+//! The filesystem sandbox (Landlock on Linux, Seatbelt on macOS). Restrictions can't be lifted
+//! once applied, so the test re-runs itself in a child process that sandboxes itself and reports
+//! what it could and couldn't do.
+#![cfg(any(target_os = "linux", target_os = "macos"))]
 
 use rynx::sandbox::{SandboxStatus, restrict_filesystem};
 use std::path::{Path, PathBuf};
@@ -39,7 +40,8 @@ fn sandbox_allows_downloads_and_system_files_only() {
         return child(&dirs("SBX_DOWNLOADS"), &dirs("SBX_SECRET"), &dirs("SBX_OUTSIDE"));
     }
 
-    // Stand-ins for the Downloads folder and for private files elsewhere (e.g. ~/.ssh)
+    // Stand-ins for the home folder, its Downloads folder, and private files elsewhere in it (e.g.
+    // ~/.ssh). On macOS the sandbox protects the home folder, so the child gets this one.
     let root = std::env::temp_dir().join(format!("rynx-sandbox-test-{}", std::process::id()));
     let downloads = root.join("Downloads");
     std::fs::create_dir_all(&downloads).unwrap();
@@ -53,6 +55,7 @@ fn sandbox_allows_downloads_and_system_files_only() {
         .env("SBX_DOWNLOADS", &downloads)
         .env("SBX_SECRET", &secret)
         .env("SBX_OUTSIDE", &outside)
+        .env("HOME", &root)
         .output()
         .unwrap();
     let report = String::from_utf8_lossy(&output.stdout).to_string();
@@ -82,4 +85,79 @@ fn sandbox_allows_downloads_and_system_files_only() {
     assert_eq!(value("read_etc"), "allowed", "{report}");
     assert_eq!(value("open_tty"), "allowed", "{report}");
     assert_eq!(value("spawned_thread_secret"), "denied", "{report}");
+}
+
+/// Runs inside the sandboxed child, with the real home folder: what the browser does all day
+#[cfg(target_os = "macos")]
+fn working_child(downloads: &Path, config: &Path) {
+    let status = restrict_filesystem(&[downloads, config]);
+    println!("status={:?}", status);
+    let home = PathBuf::from(std::env::var("HOME").unwrap());
+    println!("read_home_file={}", outcome(std::fs::read_dir(&home)));
+    println!("write_config={}", outcome(std::fs::write(config.join("bookmarks.txt"), b"x")));
+    let file = downloads.join("page.html");
+    println!("write_download={}", outcome(std::fs::write(&file, b"x")));
+    // Download tagging (quarantine) writes extended attributes
+    println!("xattr_download={}", outcome(xattr::set(&file, "com.apple.quarantine", b"0081;00000000;rynx;")));
+    // HTTPS with the operating system's certificate checks, and DNS
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let https = runtime.block_on(async {
+        let manager = rynx::network::NetworkManager::new().unwrap();
+        let client = manager.get_client(false);
+        match rynx::network::get_following_redirects(client, "https://example.com/", false).await {
+            Ok(response) => format!("status {}", response.status().as_u16()),
+            Err(e) => format!("error {e}"),
+        }
+    });
+    println!("https={https}");
+    let bad_cert = runtime.block_on(async {
+        let manager = rynx::network::NetworkManager::new().unwrap();
+        rynx::network::get_following_redirects(manager.get_client(false), "https://expired.badssl.com/", false)
+            .await
+            .is_err()
+    });
+    println!("bad_cert_rejected={bad_cert}");
+    let clipboard = arboard::Clipboard::new()
+        .and_then(|mut c| {
+            c.set_text("rynx sandbox check")?;
+            c.get_text()
+        })
+        .map(|text| (text == "rynx sandbox check").to_string())
+        .unwrap_or_else(|e| format!("error {e}"));
+    println!("clipboard={clipboard}");
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+#[ignore = "needs the internet and the clipboard; run with --ignored"]
+fn the_browser_works_inside_the_macos_sandbox() {
+    if std::env::var(CHILD_ENV).is_ok() {
+        let dirs = |name: &str| -> PathBuf { PathBuf::from(std::env::var(name).unwrap()) };
+        return working_child(&dirs("SBX_DOWNLOADS"), &dirs("SBX_CONFIG"));
+    }
+    let root = std::env::temp_dir().join(format!("rynx-sandbox-works-{}", std::process::id()));
+    let (downloads, config) = (root.join("Downloads"), root.join("config"));
+    std::fs::create_dir_all(&downloads).unwrap();
+    std::fs::create_dir_all(&config).unwrap();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args(["the_browser_works_inside_the_macos_sandbox", "--exact", "--nocapture", "--ignored", "--test-threads=1"])
+        .env(CHILD_ENV, "1")
+        .env("SBX_DOWNLOADS", &downloads)
+        .env("SBX_CONFIG", &config)
+        .output()
+        .unwrap();
+    let report = String::from_utf8_lossy(&output.stdout).to_string();
+    let _ = std::fs::remove_dir_all(&root);
+    println!("{report}");
+    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+    let value =
+        |key: &str| report.lines().find_map(|l| l.split(&format!("{key}=")).nth(1)).unwrap_or("missing").to_string();
+    assert_eq!(value("status"), "Enforced", "{report}");
+    assert_eq!(value("read_home_file"), "denied", "{report}");
+    assert_eq!(value("write_config"), "allowed", "{report}");
+    assert_eq!(value("write_download"), "allowed", "{report}");
+    assert_eq!(value("xattr_download"), "allowed", "{report}");
+    assert_eq!(value("https"), "status 200", "{report}");
+    assert_eq!(value("bad_cert_rejected"), "true", "{report}");
+    assert_eq!(value("clipboard"), "true", "{report}");
 }

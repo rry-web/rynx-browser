@@ -50,7 +50,7 @@ Usage: rynx [OPTIONS]
 A terminal web browser with no JavaScript.
 
 Options:
-      --no-sandbox  Don't restrict filesystem access (Linux). Use only to troubleshoot, e.g. if
+      --no-sandbox  Don't restrict filesystem access (Linux, macOS). Use only to troubleshoot, e.g. if
                     downloads fail because your Downloads folder is somewhere unusual.
   -V, --version     Print the version and exit
   -h, --help        Print this help and exit

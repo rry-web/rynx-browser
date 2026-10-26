@@ -5,7 +5,7 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
 
 > **Status: beta.** Version 0.2.0-beta.3 is the latest release. rynx is under active development:
 > security protections and fixes keep arriving as issues are found, and some protections (the
-> Linux filesystem sandbox in particular) are preliminary and haven't yet been checked on a wide
+> filesystem sandbox on Linux and macOS in particular) are preliminary and haven't yet been checked on a wide
 > range of systems. Please report problems, and anything that looks like a security issue, as
 > [GitHub issues](https://github.com/rry-web/rynx-browser/issues).
 
@@ -22,8 +22,8 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
   in-page links jump without reloading, and `/` finds text on the page.
 - **Fast:** pages are laid out on a background thread, so even huge or slow pages never freeze the
   screen.
-- **Private and hardened:** no cookies, no JavaScript, HTTPS everywhere, and on Linux a filesystem
-  sandbox. See [Security and privacy](#security-and-privacy).
+- **Private and hardened:** no cookies, no JavaScript, HTTPS everywhere, and on Linux and macOS a
+  filesystem sandbox. See [Security and privacy](#security-and-privacy).
 - **The small web:** [Gemini](https://geminiprotocol.net) and Gopher sites, and RSS/Atom feeds
   shown as readable pages.
 - **Site tools instead of JavaScript:** sites can offer interactive features as
@@ -74,7 +74,7 @@ Command-line options:
 | :--- | :--- |
 | `--version`, `-V` | Print the version |
 | `--help`, `-h` | Print usage |
-| `--no-sandbox` | Turn off the Linux filesystem sandbox (for troubleshooting) |
+| `--no-sandbox` | Turn off the filesystem sandbox (for troubleshooting) |
 
 ## Using it
 
@@ -234,10 +234,13 @@ that:
 - **HTTPS everywhere:** addresses, redirects, downloads and form submissions are upgraded to HTTPS
   (except `localhost` and `.i2p` sites). Certificates are checked by your operating system,
   including revocation on macOS and Windows, with TLS 1.2 or newer.
-- **Linux sandbox (preliminary):** the browser restricts itself with Landlock (kernel 5.13+): it can write only
-  to your Downloads folder and its settings folder, and can't read the rest of your home directory, so a bug can't be used
-  to read SSH keys or plant files. The status line shows whether it's active. It hasn't yet been
-  tested across many distributions and kernels; macOS and Windows have no sandbox yet.
+- **Filesystem sandbox (preliminary):** on Linux (Landlock, kernel 5.13+) and macOS (Seatbelt, the
+  sandbox Safari, Chrome and Firefox use), the browser restricts itself at startup: it can write
+  only to your Downloads folder and its settings folder, and can't read the rest of your home
+  folder, so a bug can't be used to read SSH keys or documents, or plant files. Programs it could
+  be tricked into starting inherit the same limits. The status line shows whether it's active.
+  It hasn't yet been tested on many Linux distributions and kernels or macOS versions, and
+  Windows has no sandbox yet.
 - **Hostile pages are contained:** escape sequences that could take over your terminal are
   stripped; oversized, deeply nested or compressed "bomb" pages can't freeze or crash the browser;
   public pages can't redirect into your local network.
