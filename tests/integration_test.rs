@@ -176,3 +176,80 @@ async fn test_input_handling_switch_to_edit_mode() {
         rynx_browser::models::InputMode::Editing
     );
 }
+
+// --- Regression test helpers ---
+
+fn test_app() -> App {
+    let (tx, rx) = mpsc::channel(10);
+    App::new(tx, rx).expect("Failed to create App")
+}
+
+fn key(code: KeyCode) -> KeyEvent {
+    KeyEvent {
+        code,
+        modifiers: KeyModifiers::empty(),
+        kind: KeyEventKind::Press,
+        state: KeyEventState::empty(),
+    }
+}
+
+/// Deliver a page to the active tab as if it had just finished loading
+fn load_page(app: &mut App, html: &str) {
+    let id = app.current_tab().id;
+    handle_network_event::<TestBackend>(
+        app,
+        NetworkResponse::Success(id, "Page".to_string(), html.to_string()),
+        80,
+    )
+    .unwrap();
+}
+
+fn links_page(count: usize) -> String {
+    (0..count)
+        .map(|i| format!("<p><a href='/l{i}'>link {i}</a></p>"))
+        .collect()
+}
+
+#[tokio::test]
+async fn test_new_page_resets_stale_link_selection() {
+    let mut app = test_app();
+    load_page(&mut app, &links_page(30));
+    app.current_tab().selected_link_index = 25;
+    app.current_tab().cursor_line = 40;
+
+    // A shorter page arrives without going through Enter-on-link (e.g. typed URL, history back)
+    load_page(&mut app, &links_page(2));
+
+    assert_eq!(app.current_tab().selected_link_index, 0);
+    assert_eq!(app.current_tab().cursor_line, 0);
+    assert!(app.current_tab().search_state.is_none());
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal.draw(|f| ui(f, &app)).unwrap();
+}
+
+#[tokio::test]
+async fn test_rerender_clamps_link_selection() {
+    let mut app = test_app();
+    load_page(&mut app, &links_page(30));
+    app.current_tab().selected_link_index = 25;
+
+    // Source view has no links, so the selection must be pulled back in range
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
+    assert_eq!(app.current_tab().selected_link_index, 0);
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal.draw(|f| ui(f, &app)).unwrap();
+}
+
+#[tokio::test]
+async fn test_visual_mode_on_empty_page_does_not_panic() {
+    let mut app = test_app();
+    // Source view of the help tab has no html_source, so there are no lines at all
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
+    assert!(app.current_tab().rendered_content.is_empty());
+
+    for code in [KeyCode::Char('v'), KeyCode::Char('j'), KeyCode::Char('k'), KeyCode::Char('l')] {
+        handle_key_event::<TestBackend>(&mut app, key(code), 80, 24).unwrap();
+    }
+}

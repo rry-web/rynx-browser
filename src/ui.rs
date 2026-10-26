@@ -208,11 +208,9 @@ fn apply_link_highlights(
     start_index: usize,
     end_index: usize,
 ) {
-    if link_regions.is_empty() {
+    let Some(selected_link) = link_regions.get(selected_link_index) else {
         return;
-    }
-
-    let selected_link = &link_regions[selected_link_index];
+    };
 
     // Check if the link is within the lines we are currently displaying
     if selected_link.line_index >= start_index && selected_link.line_index < end_index {

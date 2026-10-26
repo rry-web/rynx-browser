@@ -356,7 +356,7 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
             tab.cursor_line = (tab.cursor_line + 1).min(max_lines);
 
             // Ensure cursor_char is valid for the new line
-            let line_len = tab.rendered_content[tab.cursor_line].width();
+            let line_len = tab.rendered_content.get(tab.cursor_line).map(|l| l.width()).unwrap_or(0);
             tab.cursor_char = tab.cursor_char.min(line_len);
 
             if let Some(ref mut sel) = tab.selection {
@@ -369,7 +369,7 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
             let tab = app.current_tab();
             tab.cursor_line = tab.cursor_line.saturating_sub(1);
 
-            let line_len = tab.rendered_content[tab.cursor_line].width();
+            let line_len = tab.rendered_content.get(tab.cursor_line).map(|l| l.width()).unwrap_or(0);
             tab.cursor_char = tab.cursor_char.min(line_len);
 
             if let Some(ref mut sel) = tab.selection {
@@ -380,7 +380,7 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
         // MOVE RIGHT
         KeyCode::Char('l') => {
             let tab = app.current_tab();
-            let line_len = tab.rendered_content[tab.cursor_line].width();
+            let line_len = tab.rendered_content.get(tab.cursor_line).map(|l| l.width()).unwrap_or(0);
             tab.cursor_char = (tab.cursor_char + 1).min(line_len);
 
             if let Some(ref mut sel) = tab.selection {
@@ -544,7 +544,7 @@ pub fn handle_network_event<B: Backend>(
                 let tab = &mut app.tabs[index];
                 tab.page_title = title;
                 tab.html_source = html_source;
-                tab.scroll = 0;
+                tab.reset_page_state();
                 tab.status_message = String::from("Loaded");
                 app.render_tab(index, terminal_width);
             }
@@ -555,7 +555,7 @@ pub fn handle_network_event<B: Backend>(
                 }
                 tab.page_title = String::from("Error");
                 tab.html_source = format!("<h1>Error</h1><hr><p style='color:red'>{}</p>", msg);
-                tab.scroll = 0;
+                tab.reset_page_state();
                 tab.status_message = String::from("Error");
                 app.render_tab(index, terminal_width);
             }

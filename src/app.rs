@@ -51,6 +51,30 @@ impl BrowserTab {
             end_char: self.cursor_char,
         });
     }
+    /// Clear state that refers to positions in the previous page's content
+    pub fn reset_page_state(&mut self) {
+        self.scroll = 0;
+        self.selected_link_index = 0;
+        self.cursor_line = 0;
+        self.cursor_char = 0;
+        self.selection = None;
+        self.search_state = None;
+        // Leave Edit mode alone so a page finishing in the background doesn't eat typing
+        if self.input_mode == InputMode::Visual || self.input_mode == InputMode::Search {
+            self.input_mode = InputMode::Normal;
+        }
+    }
+
+    /// Keep the selected link and cursor inside the current content after a re-render
+    fn clamp_positions(&mut self) {
+        if self.selected_link_index >= self.link_regions.len() {
+            self.selected_link_index = 0;
+        }
+        self.cursor_line = self
+            .cursor_line
+            .min(self.rendered_content.len().saturating_sub(1));
+    }
+
     pub fn extract_text_from_selection(&self) -> String {
         match &self.selection {
             Some(sel) => sel.extract_text(&self.rendered_content),
@@ -233,6 +257,7 @@ impl App {
                 tab.rendered_content = renderer.lines;
                 tab.link_regions = renderer.links;
             }
+            tab.clamp_positions();
         }
     }
 
