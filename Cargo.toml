@@ -2,6 +2,15 @@
 name = "rynx_browser"
 version = "0.2.0-beta.2"
 edition = "2024"
+# let-chains (stable in 1.88 for edition 2024)
+rust-version = "1.88"
+description = "A private, hardened terminal web browser with no JavaScript: web, Gemini, Gopher, feeds, and site tools over MCP"
+repository = "https://github.com/rry-web/rynx-browser"
+readme = "README.md"
+keywords = ["browser", "terminal", "tui", "gemini", "gopher"]
+categories = ["command-line-utilities", "network-programming"]
+# What is needed to build, test and read about it; the manual test checklists and CI stay on GitHub
+include = ["/src", "/assets", "/examples", "/tests", "/README.md", "/CHANGELOG.md", "/LICENSE.txt", "/Cargo.lock"]
 
 [dependencies]
 # rustls without a bundled crypto provider: network.rs supplies ring and every TLS config
