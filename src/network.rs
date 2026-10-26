@@ -8,7 +8,7 @@ use scraper::{Html, Selector};
 use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use url::Url;
+use url::{Host, Url};
 
 pub enum NetworkResponse {
     Success(usize, String, String, String), // tab_id, title, html, final URL after redirects
@@ -87,10 +87,8 @@ impl NetworkManager {
             builder = builder.proxy(proxy);
         }
 
-        // Always apply redirect policy for browsing clients
-        if include_headers {
-            builder = builder.redirect(strict_redirect_policy());
-        }
+        // Redirects are followed by get_following_redirects so every hop is checked and upgraded
+        builder = builder.redirect(reqwest::redirect::Policy::none());
 
         Ok(builder.build()?)
     }
@@ -168,18 +166,102 @@ pub fn parse_html_metadata(html: &str) -> PageMetadata {
     PageMetadata { title }
 }
 
-pub fn strict_redirect_policy() -> reqwest::redirect::Policy {
-    reqwest::redirect::Policy::custom(|attempt| {
-        if attempt.previous().len() > MAX_REDIRECTS {
-            return attempt.error("Too many redirects");
+/// Loopback hosts, which are reachable over plain HTTP for local development
+fn is_loopback_host(url: &Url) -> bool {
+    match url.host() {
+        Some(Host::Domain(d)) => d.eq_ignore_ascii_case("localhost") || d.ends_with(".localhost"),
+        Some(Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
+    }
+}
+
+/// Hosts on this machine or the local network, which a public page must not redirect into
+fn is_local_network_host(url: &Url) -> bool {
+    if is_loopback_host(url) {
+        return true;
+    }
+    match url.host() {
+        Some(Host::Ipv4(ip)) => {
+            ip.is_private() || ip.is_link_local() || ip.is_unspecified() || ip.is_broadcast()
         }
-        if let Some(host) = attempt.url().host_str() {
-            if host == "localhost" || host == "127.0.0.1" || host == "::1" {
-                return attempt.error("Blocked redirect to local network (SSRF Protection)");
-            }
+        Some(Host::Ipv6(ip)) => {
+            let first = ip.segments()[0];
+            ip.is_unspecified()
+                || (first & 0xfe00) == 0xfc00 // unique local fc00::/7
+                || (first & 0xffc0) == 0xfe80 // link-local fe80::/10
+                || ip.to_ipv4_mapped().is_some_and(|v4| {
+                    v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified()
+                })
         }
-        attempt.follow()
-    })
+        _ => false,
+    }
+}
+
+fn is_i2p_host(url: &Url) -> bool {
+    url.host_str().is_some_and(|h| h.ends_with(".i2p"))
+}
+
+/// Upgrade http:// to https:// for clearweb hosts. Loopback addresses and .i2p sites stay on
+/// http, and nothing is upgraded in I2P mode, where traffic goes through the I2P proxy.
+pub fn enforce_https(url: &str, i2p_mode: bool) -> String {
+    match Url::parse(url) {
+        Ok(mut parsed)
+            if !i2p_mode
+                && parsed.scheme() == "http"
+                && !is_i2p_host(&parsed)
+                && !is_loopback_host(&parsed) =>
+        {
+            // Only the scheme changes; set_scheme between http and https always succeeds
+            let _ = parsed.set_scheme("https");
+            parsed.to_string()
+        }
+        _ => url.to_string(),
+    }
+}
+
+/// Reject redirects to non-web schemes, or from a public site into the local network (SSRF)
+pub fn check_redirect(from: &Url, to: &Url) -> Result<(), String> {
+    if to.scheme() != "http" && to.scheme() != "https" {
+        return Err(format!("Blocked redirect to unsupported scheme: {}", to.scheme()));
+    }
+    if is_local_network_host(to) && !is_local_network_host(from) {
+        return Err("Blocked redirect to local network (SSRF Protection)".to_string());
+    }
+    Ok(())
+}
+
+/// GET a URL, following redirects manually so every hop is upgraded to HTTPS and SSRF-checked
+pub async fn get_following_redirects(
+    client: &Client,
+    url: &str,
+    i2p_mode: bool,
+) -> Result<reqwest::Response, String> {
+    let mut current =
+        Url::parse(&enforce_https(url, i2p_mode)).map_err(|e| format!("Invalid URL: {}", e))?;
+    for _ in 0..=MAX_REDIRECTS {
+        let response = client
+            .get(current.clone())
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        // A 3xx without Location (e.g. 304) is returned as-is
+        let location = match response.headers().get(reqwest::header::LOCATION) {
+            Some(location) if response.status().is_redirection() => location,
+            _ => return Ok(response),
+        };
+        let location = location
+            .to_str()
+            .map_err(|_| "Redirect location is not valid text".to_string())?;
+        let next = current
+            .join(location)
+            .map_err(|e| format!("Invalid redirect location: {}", e))?;
+        let next = Url::parse(&enforce_https(next.as_str(), i2p_mode))
+            .map_err(|e| format!("Invalid redirect location: {}", e))?;
+        check_redirect(&current, &next)?;
+        current = next;
+    }
+    Err("Too many redirects".to_string())
 }
 
 /// Jump services only know I2P addresses, so only consult them for .i2p sites in I2P mode
@@ -221,7 +303,7 @@ pub async fn attempt_jump_with(
                 format!("Contacting jump service: {}", service_base),
             ))
             .await;
-        match client.get(&jump_url).send().await {
+        match get_following_redirects(client, &jump_url, true).await {
             Ok(response) if response.status() == StatusCode::OK => return Ok(response),
             // Unreachable or no entry; try the next service
             Ok(_) | Err(_) => continue,

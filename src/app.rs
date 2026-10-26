@@ -461,26 +461,7 @@ impl App {
 
         // Enforce HTTPS for clearweb requests (security hardening)
         // Allow HTTP for local addresses (localhost, 127.0.0.1, etc.)
-        if !use_i2p && target_url.starts_with("http://") && !target_url.contains(".i2p") {
-            if let Ok(url) = Url::parse(&target_url) {
-                if let Some(host) = url.host_str() {
-                    let is_local = match host {
-                        "localhost" => true,
-                        "127.0.0.1" => true,
-                        "::1" => true,
-                        host if host.starts_with("127.") => true, // 127.x.x.x range
-                        _ => false,
-                    };
-
-                    if !is_local {
-                        target_url = target_url.replace("http://", "https://");
-                    }
-                } else {
-                    // If we can't parse the host, enforce HTTPS for security
-                    target_url = target_url.replace("http://", "https://");
-                }
-            }
-        }
+        let target_url = crate::network::enforce_https(&target_url, use_i2p);
 
         tab.url_input = target_url.clone();
         // The server never sees the #fragment, so remember it to jump to after loading
@@ -499,7 +480,8 @@ impl App {
             let _ = tx_clone.send(NetworkResponse::Loading(id)).await;
 
             let client = network_manager.get_client(use_i2p);
-            let mut resp_result = client.get(&target_url).send().await;
+            let mut resp_result =
+                crate::network::get_following_redirects(client, &target_url, use_i2p).await;
 
             if let Ok(ref resp) = resp_result {
                 if should_attempt_jump(use_i2p, &domain_for_jump, resp.status()) {
@@ -544,9 +526,7 @@ impl App {
                     }
                 }
                 Err(e) => {
-                    let _ = tx_clone
-                        .send(NetworkResponse::Error(id, e.to_string()))
-                        .await;
+                    let _ = tx_clone.send(NetworkResponse::Error(id, e)).await;
                 }
             }
         });
@@ -630,7 +610,7 @@ impl App {
             let client = nm.get_download_client(use_i2p);
 
             // 1. Send request
-            let res = match client.get(&url).send().await {
+            let res = match crate::network::get_following_redirects(client, &url, use_i2p).await {
                 Ok(r) => r,
                 Err(e) => {
                     let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Connection failed: {}", e))).await;

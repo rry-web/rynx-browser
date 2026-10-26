@@ -867,3 +867,146 @@ async fn test_redirected_page_resolves_links_against_final_url() {
     let resolved = rynx_browser::network::resolve_url(tab.link_base(), &tab.link_regions[0].url);
     assert_eq!(resolved, "https://example.com/cache/epub/1/images/cover.jpg");
 }
+
+#[test]
+fn test_enforce_https_rules() {
+    use rynx_browser::network::enforce_https;
+
+    let cases = [
+        // Only the scheme changes, not http:// inside the query
+        ("http://example.com/?next=http://other.com", false, "https://example.com/?next=http://other.com"),
+        // ".i2p" elsewhere in the URL must not exempt a clearweb host
+        ("http://evil.com/?x=.i2p", false, "https://evil.com/?x=.i2p"),
+        ("http://site.i2p/page", false, "http://site.i2p/page"),
+        ("http://localhost:8080/", false, "http://localhost:8080/"),
+        ("http://127.0.0.5/", false, "http://127.0.0.5/"),
+        ("http://[::1]:3000/", false, "http://[::1]:3000/"),
+        ("https://example.com/", false, "https://example.com/"),
+        // I2P mode routes everything through the proxy unchanged
+        ("http://example.com/", true, "http://example.com/"),
+    ];
+    for (url, i2p_mode, expected) in cases {
+        assert_eq!(enforce_https(url, i2p_mode), expected, "for {url} (i2p_mode={i2p_mode})");
+    }
+}
+
+#[test]
+fn test_redirect_checks_block_local_network_from_public_sites() {
+    use rynx_browser::network::check_redirect;
+    use url::Url;
+
+    let public = Url::parse("https://example.com/").unwrap();
+    let local = Url::parse("http://127.0.0.1:8000/").unwrap();
+    for target in [
+        "http://127.0.0.1/",
+        "http://127.0.0.2/",
+        "http://localhost/",
+        "http://[::1]/",
+        "http://0.0.0.0/",
+        "http://10.0.0.1/",
+        "http://192.168.1.1/",
+        "http://172.16.0.1/",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://[fd00::1]/",
+        "http://[::ffff:127.0.0.1]/",
+    ] {
+        let to = Url::parse(target).unwrap();
+        assert!(check_redirect(&public, &to).is_err(), "public -> {target} was allowed");
+    }
+    assert!(check_redirect(&public, &Url::parse("https://other.org/").unwrap()).is_ok());
+    // Browsing a local server and being redirected within it is fine
+    assert!(check_redirect(&local, &Url::parse("http://localhost:8000/x").unwrap()).is_ok());
+    assert!(check_redirect(&public, &Url::parse("file:///etc/passwd").unwrap()).is_err());
+}
+
+/// Load a URL in the active tab and wait for the page or error to arrive
+async fn load_url(app: &mut App, url: &str) -> NetworkResponse {
+    app.current_tab().url_input = url.to_string();
+    app.submit_request();
+    loop {
+        let resp = tokio::time::timeout(std::time::Duration::from_secs(10), app.rx.recv())
+            .await
+            .expect("load timed out")
+            .unwrap();
+        if matches!(resp, NetworkResponse::Success(..) | NetworkResponse::Error(..)) {
+            return resp;
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_redirects_are_followed_to_final_page() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/old"))
+        .respond_with(ResponseTemplate::new(302).insert_header("Location", "/new"))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/new"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw("<p>moved here</p>", "text/html"))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let resp = load_url(&mut app, &format!("{}/old", mock_server.uri())).await;
+    let NetworkResponse::Success(_, _, body, final_url) = resp else { panic!("redirect not followed") };
+    assert!(body.contains("moved here"));
+    assert_eq!(final_url, format!("{}/new", mock_server.uri()));
+}
+
+#[tokio::test]
+async fn test_redirect_to_http_is_upgraded_to_https() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/out"))
+        .respond_with(
+            ResponseTemplate::new(302).insert_header("Location", "http://example.invalid/book.html"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    // .invalid never resolves, so the error shows which URL the browser actually tried
+    let resp = load_url(&mut app, &format!("{}/out", mock_server.uri())).await;
+    let NetworkResponse::Error(_, msg) = resp else { panic!("expected a connection error") };
+    assert!(msg.contains("https://example.invalid/book.html"), "redirect was not upgraded: {msg}");
+}
+
+#[tokio::test]
+async fn test_redirect_loop_is_stopped() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/loop"))
+        .respond_with(ResponseTemplate::new(302).insert_header("Location", "/loop"))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let resp = load_url(&mut app, &format!("{}/loop", mock_server.uri())).await;
+    let NetworkResponse::Error(_, msg) = resp else { panic!("loop not stopped") };
+    assert!(msg.contains("Too many redirects"));
+}
+
+#[tokio::test]
+async fn test_download_follows_redirects() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/get/report.pdf"))
+        .respond_with(ResponseTemplate::new(301).insert_header("Location", "/files/real.pdf"))
+        .mount(&mock_server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/files/real.pdf"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"%PDF-1.7 data".to_vec()))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let dir = app.download_dir.clone();
+    start_download(&mut app, &format!("{}/get/report.pdf", mock_server.uri()));
+    let (resp, _) = finish_download(&mut app).await;
+    let NetworkResponse::DownloadFinished(_, saved) = resp else { panic!("download failed") };
+    assert_eq!(std::fs::read(&saved).unwrap(), b"%PDF-1.7 data");
+    let _ = std::fs::remove_dir_all(&dir);
+}
