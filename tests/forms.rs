@@ -294,3 +294,81 @@ fn controls_outside_forms_are_inert() {
     assert_eq!(page.links.iter().filter(|l| l.control.is_some()).count(), 1);
     assert!(text(&page)[0].contains("Hide"));
 }
+
+// --- Protections ---
+
+fn submit_from(page_url: &str, action: &str) -> Result<rynx_browser::forms::Submission, String> {
+    let page = render(&format!("<form action='{action}' method=post><input name=q value=x></form>"));
+    let values: Vec<ControlValue> = page.controls.iter().map(|c| c.initial_value()).collect();
+    build_submission(&page.forms, &page.controls, &values, 0, None, page_url)
+}
+
+#[test]
+fn public_pages_cannot_submit_forms_to_the_local_network() {
+    for action in [
+        "http://192.168.1.1/apply.cgi",
+        "http://10.0.0.5/admin",
+        "http://localhost:8080/api",
+        "http://127.0.0.1/",
+        "http://[::1]/",
+        "http://169.254.169.254/latest",
+    ] {
+        let err = submit_from("https://evil.example/page", action).unwrap_err();
+        assert!(err.contains("local network"), "{action}: {err}");
+    }
+    // A page on the local network may submit to itself or its neighbours
+    assert!(submit_from("http://localhost:8000/", "/save").is_ok());
+    assert!(submit_from("http://192.168.1.1/", "http://192.168.1.1/apply").is_ok());
+    // Public to public is fine
+    assert!(submit_from("https://a.example/", "https://b.example/search").is_ok());
+}
+
+#[test]
+fn forms_whose_address_hides_its_real_site_are_refused() {
+    let err = submit_from("https://a.example/", "https://paypal.com@evil.example/login").unwrap_err();
+    assert!(err.contains("evil.example"), "{err}");
+}
+
+#[tokio::test]
+async fn links_that_hide_their_real_site_are_blocked_and_flagged() {
+    let mut app = test_app();
+    arrive(&mut app, PAGE, "<a href='https://paypal.com@evil.example/login'>PayPal login</a>");
+
+    // The preview warns before anything is followed
+    let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    terminal.draw(|f| ui(f, &app)).unwrap();
+    let screen: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+    assert!(screen.contains("really goes to evil.example"), "no warning in preview");
+
+    for code in [KeyCode::Enter, KeyCode::Char('t')] {
+        press(&mut app, code);
+        assert!(app.current_tab().status_message.contains("evil.example"), "{code:?}");
+        assert_eq!(app.tabs.len(), 1);
+        assert_eq!(app.current_tab().url_input, PAGE);
+    }
+}
+
+#[tokio::test]
+async fn typed_addresses_with_credentials_still_work() {
+    // The user chose this address; only links from pages are blocked
+    let mut app = test_app();
+    app.current_tab().url_input = "https://user@intranet.example/".into();
+    app.submit_request();
+    assert_eq!(app.current_tab().url_input, "https://user@intranet.example/");
+}
+
+#[tokio::test]
+async fn typed_passwords_are_hidden_and_never_bookmarked() {
+    let mut app = test_app();
+    let url = "https://ray:hunter2@intranet.example/wiki";
+    arrive(&mut app, url, "<title>Wiki</title><p>page</p>");
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    terminal.draw(|f| ui(f, &app)).unwrap();
+    let screen: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+    assert!(!screen.contains("hunter2"), "password shown in the address bar");
+    assert!(screen.contains("https://ray:••••@intranet.example/wiki"));
+
+    press(&mut app, KeyCode::Char('b'));
+    assert_eq!(app.bookmarks.entries[0].url, "https://intranet.example/wiki");
+}

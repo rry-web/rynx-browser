@@ -217,6 +217,15 @@ pub fn build_submission(
     if let Some(scheme) = crate::network::unsupported_link_scheme(&target) {
         return Err(format!("Not sent: forms can't be submitted to {}: addresses", scheme));
     }
+    if let Some(host) = crate::network::hidden_destination(&target) {
+        return Err(format!("Not sent: this form's address hides where it really goes ({})", host));
+    }
+    // A public page could otherwise make you send requests to your router, printer or local
+    // services, many of which trust anything from inside the network (cross-site request forgery)
+    if crate::network::is_local_network_url(&target) && !crate::network::is_local_network_url(base_url) {
+        let host = url::Url::parse(&target).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+        return Err(format!("Not sent: a public page's form can't send data to your local network ({})", host));
+    }
     let mut url = url::Url::parse(&target).map_err(|_| format!("Not sent: invalid form address {}", target))?;
     url.set_fragment(None);
 

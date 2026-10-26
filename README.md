@@ -145,9 +145,12 @@ that:
 - **Hostile pages are contained:** escape sequences that could take over your terminal are
   stripped; oversized, deeply nested or compressed "bomb" pages can't freeze or crash the browser;
   public pages can't redirect into your local network.
-- **Careful with links and forms:** `mailto:`, `javascript:` and `file:` links are refused; a form
-  is never allowed to put a password in a web address; the destination of every link and form is
-  shown before you use it.
+- **Careful with links and forms:** the destination of every link and form is shown before you
+  use it. `mailto:`, `javascript:` and `file:` links are refused, and so are links and forms that
+  disguise their real site with a user name (`https://paypal.com@evil.example/`). A form is never
+  allowed to put a password in a web address, and a public page's form can't send data to your
+  router or other devices on your local network. Passwords typed into the address bar are hidden
+  on screen and never saved in bookmarks.
 - **Safe downloads:** files are tagged as coming from the internet (macOS quarantine, Windows Mark
   of the Web, Linux `user.xdg.origin.url`) so your OS checks them before they run; filenames are
   made safe on every OS, and existing files are never overwritten silently.

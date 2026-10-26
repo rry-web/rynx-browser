@@ -547,7 +547,8 @@ impl App {
     /// Bookmark the current page, or remove its bookmark
     pub fn toggle_bookmark(&mut self) {
         let tab = &self.tabs[self.active_tab_index];
-        let Some(url) = tab.page_url.clone() else {
+        // A user name or password typed into the address must never be written to disk
+        let Some(url) = tab.page_url.as_deref().map(crate::network::without_credentials) else {
             self.current_tab().status_message = String::from("Only web pages can be bookmarked");
             return;
         };
@@ -682,13 +683,19 @@ impl App {
 
     /// Refuse links the browser can't open, explaining why in the status line
     fn reject_unsupported_link(&mut self, url: &str) -> bool {
-        match crate::network::unsupported_link_scheme(url) {
-            Some(scheme) => {
-                self.current_tab().status_message = format!("Unsupported link type: {}", scheme);
-                true
-            }
-            None => false,
+        if let Some(scheme) = crate::network::unsupported_link_scheme(url) {
+            self.current_tab().status_message = format!("Unsupported link type: {}", scheme);
+            return true;
         }
+        // https://paypal.com@evil.example/ goes to evil.example: a classic phishing disguise
+        if let Some(host) = crate::network::hidden_destination(url) {
+            self.current_tab().status_message = format!(
+                "Blocked: this link hides where it really goes ({}). Type the address if you trust it.",
+                host
+            );
+            return true;
+        }
+        false
     }
 
     /// Follow a link in the current tab, recording the current page in history

@@ -195,6 +195,19 @@ Worth repeating after any dependency upgrade.
       choices cycle through their options.
 - [ ] **FORM-04 Passwords.** On any login form, type into the password field.
       *Expected:* only `•` characters are shown. (Logging in won't stick: there are no cookies.)
+- [ ] **FORM-06 Forms can't reach your local network.** Open your router's admin page (e.g.
+      `http://192.168.1.1/`) and use a form there.
+      *Expected:* it works: local pages may submit to local addresses. (The other direction, a
+      public site's form aimed at your router or `localhost`, is refused with "can't send data to
+      your local network"; that needs a hostile public page, so automated tests cover it.)
+- [ ] **FORM-07 Disguised links.** Open a page containing a link like
+      `https://paypal.com@example.com/` (e.g. add one to `evil.html` on the test server).
+      *Expected:* the bottom bar warns "⚠ really goes to example.com"; Enter refuses to follow it
+      and names the real site.
+- [ ] **FORM-08 Passwords in typed addresses.** Type `https://user:secret@example.com/` into the
+      address bar and press Enter, then press `b`.
+      *Expected:* the address bar shows `user:••••@`, and the bookmark is saved without the
+      user name or password.
 - [ ] **FORM-05 Typing keeps up.** Type quickly into a field on a large page (e.g. Wikipedia).
       *Expected:* characters appear immediately.
 

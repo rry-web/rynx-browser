@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 95 (17 priority).
+Total checks: 98 (17 priority).
 
 
 ## Automated checks
@@ -78,6 +78,9 @@ Total checks: 95 (17 priority).
 | FORM-02 | Search in a table |  |  |  |  |
 | FORM-03 | Checkboxes, options and choices |  |  |  |  |
 | FORM-04 | Passwords |  |  |  |  |
+| FORM-06 | Forms can't reach your local network |  |  |  |  |
+| FORM-07 | Disguised links |  |  |  |  |
+| FORM-08 | Passwords in typed addresses |  |  |  |  |
 | FORM-05 | Typing keeps up |  |  |  |  |
 
 ## History and paging

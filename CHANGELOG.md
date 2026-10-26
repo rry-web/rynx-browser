@@ -22,7 +22,10 @@ GitHub issues; [TESTING.md](https://github.com/rry-web/rynx-browser/blob/main/TE
 - Search boxes and other forms work: text and password fields, text areas, checkboxes, radio
   buttons, choices and buttons, submitted with GET or POST.
 - The bottom bar shows where a form sends what you type; GET forms never put a password in the
-  address.
+  address; a public page's form can't send data to your local network.
+- Links and forms that disguise their real site with a user name (`https://bank.com@evil.example`)
+  are blocked and flagged in the preview; passwords in typed addresses are hidden on screen and
+  never saved in bookmarks.
 
 ### Navigation
 - Back and Forward (`Right` / `L`) return to where you were on each page; `r` reloads.

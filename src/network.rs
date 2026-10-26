@@ -124,6 +124,46 @@ pub fn unsupported_link_scheme(url: &str) -> Option<String> {
     (scheme != "http" && scheme != "https").then_some(scheme)
 }
 
+/// Whether `url` is on this machine or the local network (localhost, 127.x, 10.x, 192.168.x,
+/// link-local and similar addresses)
+pub fn is_local_network_url(url: &str) -> bool {
+    Url::parse(url).is_ok_and(|u| is_local_network_host(&u))
+}
+
+/// The real site of an address that hides it behind a user name or password:
+/// "evil.example" for https://paypal.com@evil.example/. None for ordinary addresses.
+pub fn hidden_destination(url: &str) -> Option<String> {
+    let parsed = Url::parse(url).ok()?;
+    if parsed.username().is_empty() && parsed.password().is_none() {
+        return None;
+    }
+    parsed.host_str().map(str::to_string)
+}
+
+/// `url` without any user name or password, e.g. before it's written to disk
+pub fn without_credentials(url: &str) -> String {
+    match Url::parse(url) {
+        Ok(mut parsed) if !parsed.username().is_empty() || parsed.password().is_some() => {
+            let _ = parsed.set_username("");
+            let _ = parsed.set_password(None);
+            parsed.to_string()
+        }
+        _ => url.to_string(),
+    }
+}
+
+/// `url` with any password replaced by dots, for showing on screen
+pub fn mask_password(url: &str) -> String {
+    match Url::parse(url) {
+        Ok(mut parsed) if parsed.password().is_some() => {
+            let _ = parsed.set_password(Some("••••"));
+            // The dots are percent-encoded in the serialized URL; show them as dots
+            parsed.to_string().replacen("%E2%80%A2%E2%80%A2%E2%80%A2%E2%80%A2", "••••", 1)
+        }
+        _ => url.to_string(),
+    }
+}
+
 /// Resolve relative URLs against a base URL
 pub fn resolve_url(base: &str, target: &str) -> String {
     // If target is already a full URL (e.g. https://google.com), return it immediately

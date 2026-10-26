@@ -92,7 +92,13 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
         ),
     };
 
-    let input = Paragraph::new(sanitize_for_terminal(display_text))
+    // A password typed into the address is hidden except while editing it
+    let display_text = if active_tab.input_mode == InputMode::Editing {
+        display_text.to_string()
+    } else {
+        crate::network::mask_password(display_text)
+    };
+    let input = Paragraph::new(sanitize_for_terminal(&display_text).into_owned())
         .style(input_style)
         .block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(input, area);
@@ -339,6 +345,16 @@ fn split_into_characters<'a>(line: &'a Line<'a>) -> Line<'a> {
     Line::from(spans)
 }
 
+/// A warning for addresses that disguise their real site with a user name
+fn hidden_destination_warning(target: &str) -> Option<Span<'static>> {
+    crate::network::hidden_destination(target).map(|host| {
+        Span::styled(
+            format!(" ⚠ really goes to {} ", sanitize_for_terminal(&host)),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )
+    })
+}
+
 /// Where the selected link really goes, so link text can't disguise its destination
 fn link_preview(tab: &crate::app::BrowserTab) -> Line<'static> {
     let link_style = Style::default().fg(Color::Cyan);
@@ -356,6 +372,7 @@ fn link_preview(tab: &crate::app::BrowserTab) -> Line<'static> {
             let target = crate::forms::form_target(form, tab.link_base());
             spans.push(Span::raw(format!(" → sends to{} ", method)));
             spans.push(Span::styled(sanitize_for_terminal(&target).into_owned(), link_style));
+            spans.extend(hidden_destination_warning(&target));
         }
         spans.push(Span::raw(" "));
         return Line::from(spans);
@@ -363,14 +380,16 @@ fn link_preview(tab: &crate::app::BrowserTab) -> Line<'static> {
     match tab.link_regions.get(tab.selected_link_index) {
         Some(link) => {
             let target = crate::network::resolve_url(tab.link_base(), &link.url);
-            Line::from(vec![
+            let mut spans = vec![
                 Span::raw(" Link: "),
                 Span::styled(
                     sanitize_for_terminal(&target).into_owned(),
                     Style::default().fg(Color::Cyan),
                 ),
                 Span::raw(" "),
-            ])
+            ];
+            spans.extend(hidden_destination_warning(&target));
+            Line::from(spans)
         }
         None => Line::from(""),
     }
