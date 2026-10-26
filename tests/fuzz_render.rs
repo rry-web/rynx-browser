@@ -106,6 +106,7 @@ fn random_html_into(rng: &mut Rng, depth: usize, html: &mut String) {
                             " hidden", " reversed", " style=\"display:none\"", " name=\"q\"", " size=\"0\"",
                             " size=\"99999\"", " checked", " selected", " disabled", " method=\"post\"",
                             " action=\"javascript:x\"", " form=\"f\"", " id=\"f\"", " maxlength=\"2\"",
+                            " class=\"site-nav\"", " class=\"hlist\"", " role=\"navigation\"", " class=\"MainMenuList\"",
                         ])),
                     }
                 }

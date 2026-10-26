@@ -114,6 +114,11 @@ Worth repeating after any dependency upgrade.
 - [ ] **RENDER-08 Non-text files.** Open `http://localhost:8000/icon.icns` (or any image URL).
       *Expected:* a page naming the file and its type with a download link, instead of garbage;
       selecting the link and pressing `d` offers to save it.
+- [ ] **RENDER-11 Site menus.** Open `https://www.bbc.com/news` and `https://en.wikipedia.org/`.
+      *Expected:* the navigation menus at the top are compact lines like
+      `Home · News · Sport · …` (submenus as `News: US & Canada · UK · …`) rather than long
+      columns of single links, and each entry is still selectable with Tab. Lists in the article
+      itself (e.g. "See also", infobox entries) are still drawn as bulleted lists.
 - [ ] **RENDER-09 Full width.** On any text-heavy page, check the right edge.
       *Expected:* text runs to within a column of the right border (it used to stop 2 short).
 - [ ] **RENDER-10 No-JavaScript notices.** Visit a site that relies on JavaScript.

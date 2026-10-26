@@ -8,6 +8,8 @@ GitHub issues; [TESTING.md](https://github.com/rry-web/rynx-browser/blob/main/TE
 ### Rendering
 - Headings h1–h6, numbered and nested lists, blockquotes, definition lists, `<details>`.
 - Tables laid out in aligned columns, falling back to `Header: value` rows on narrow terminals.
+- Site menus (lists of links in `<nav>`, footers, or marked as menus) are drawn on one line,
+  `Home · News · Sport`, with submenus on labelled lines (`News: UK · Asia`).
 - Inline code no longer breaks paragraphs; code blocks keep their lines.
 - Correct spacing around inline tags; `&nbsp;` preserved.
 - Plain-text files (`.txt`, JSON, source code) shown as text, with clickable URLs.

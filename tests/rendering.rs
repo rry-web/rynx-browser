@@ -279,3 +279,71 @@ fn adjacent_links_are_kept_apart() {
         ["Home new, past"]
     );
 }
+
+#[test]
+fn site_menus_are_drawn_on_one_line() {
+    let html = "<nav><ul><li><a href='/'>Home</a></li><li><a href='/news'>News</a></li><li><a href='/sport'>Sport</a></li></ul></nav><p>Story</p>";
+    let r = render_full(html, 80);
+    let lines: Vec<String> = r.lines.iter().map(|l| l.to_string()).filter(|l| !l.is_empty()).collect();
+    assert_eq!(lines, ["Home · News · Sport", "Story"]);
+    // Each entry is still a separate, clickable link
+    let urls: Vec<&str> = r.links.iter().map(|l| l.url.as_str()).collect();
+    assert_eq!(urls, ["/", "/news", "/sport"]);
+}
+
+#[test]
+fn submenus_get_a_labelled_line() {
+    let html = "<nav><ul><li><a href='/news'>News</a><ul><li><a href='/uk'>UK</a></li><li><a href='/asia'>Asia</a></li></ul></li>\
+                <li><a href='/sport'>Sport</a></li></ul></nav>";
+    assert_eq!(text_lines(html, 80), ["News · Sport", "News: UK · Asia"]);
+    // Some sites put the submenu beside its item instead of inside it
+    let html = "<nav><ul><li><a href='/news'>News</a></li><ul><li><a href='/uk'>UK</a></li></ul><li><a href='/sport'>Sport</a></li><ul></ul></ul></nav>";
+    assert_eq!(text_lines(html, 80), ["News · Sport", "News: UK"]);
+}
+
+#[test]
+fn menus_are_recognised_by_class_names() {
+    for class in ["hlist", "site-nav", "MainNavigationList", "vector-menu-content-list", "breadcrumb"] {
+        let html = format!("<div class='{class}'><ul><li><a href='/a'>A</a></li><li><a href='/b'>B</a></li></ul></div>");
+        assert_eq!(text_lines(&html, 80), ["A · B"], "class {class}");
+    }
+    // "canvas" contains "nav" but isn't the word
+    let html = "<div class='canvas'><ul><li><a href='/a'>A</a></li><li><a href='/b'>B</a></li></ul></div>";
+    assert_eq!(text_lines(html, 80), ["  • A", "  • B"]);
+}
+
+#[test]
+fn content_lists_stay_lists() {
+    // Ordinary lists, even of links, outside navigation
+    let links = "<ul><li><a href='/a'>Alpha</a></li><li><a href='/b'>Beta</a></li></ul>";
+    assert_eq!(text_lines(links, 80), ["  • Alpha", "  • Beta"]);
+    // In navigation, items with more than a short link are content
+    let long = format!("<nav><ul><li><a href='/a'>A</a> {}</li><li><a href='/b'>B</a></li></ul></nav>", "words ".repeat(15));
+    assert!(text_lines(&long, 80)[0].starts_with("  • A"));
+    let two_links = "<nav><ul><li><a href='/a'>A</a> and <a href='/c'>C</a></li><li><a href='/b'>B</a></li></ul></nav>";
+    assert!(text_lines(two_links, 80)[0].starts_with("  • A"));
+    // Numbered lists outside navigation keep their numbers
+    let ol = "<div class='menu'><ol><li><a href='/a'>A</a></li><li><a href='/b'>B</a></li></ol></div>";
+    assert_eq!(text_lines(ol, 80), ["  1. A", "  2. B"]);
+}
+
+#[test]
+fn menu_separators_never_start_a_line() {
+    let items: String = (0..30).map(|i| format!("<li><a href='/{i}'>item{i}</a></li>")).collect();
+    let lines = text_lines(&format!("<nav><ul>{items}</ul></nav>"), 30);
+    assert!(lines.len() > 1);
+    assert!(lines.iter().all(|l| !l.starts_with('·') && l.chars().count() <= 30), "{lines:?}");
+}
+
+#[test]
+fn deeply_nested_menus_do_not_overflow_the_stack() {
+    let html = format!(
+        "<nav>{}deepest{}</nav>",
+        // 600 levels is past the nesting limit; deeper only makes the HTML parser slower
+        "<ul><li><a href='/x'>x</a></li><li><a href='/y'>y</a><ul><li><a href='/z'>z</a></li><li>".repeat(600),
+        "</li></ul></li></ul>".repeat(600)
+    );
+    let started = std::time::Instant::now();
+    assert!(text_lines(&html, 80).concat().contains("deepest"));
+    assert!(started.elapsed() < std::time::Duration::from_secs(20), "took {:?}", started.elapsed());
+}

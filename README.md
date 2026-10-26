@@ -4,7 +4,8 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
 **zero JavaScript**.
 
 - **Readable pages:** headings, numbered and nested lists, blockquotes, aligned table columns, and
-  preformatted code, laid out for the terminal. Plain-text files (`.txt`, JSON, source code) are
+  preformatted code, laid out for the terminal. Site menus are shown compactly on one line
+  (`Home · News · Sport`) instead of a long column of links. Plain-text files (`.txt`, JSON, source code) are
   shown as text with clickable URLs; images, PDFs and other files are offered for download.
 - **Forms:** search boxes and other forms work: text fields, checkboxes, choices and buttons, sent
   with GET or POST.

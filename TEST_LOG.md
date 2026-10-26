@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 94 (17 priority).
+Total checks: 95 (17 priority).
 
 
 ## Automated checks
@@ -41,6 +41,7 @@ Total checks: 94 (17 priority).
 | RENDER-06 | Plain-text files |  |  |  |  |
 | RENDER-07 | JSON |  |  |  |  |
 | RENDER-08 | Non-text files |  |  |  |  |
+| RENDER-11 | Site menus |  |  |  |  |
 | RENDER-09 | Full width |  |  |  |  |
 | RENDER-10 | No-JavaScript notices |  |  |  |  |
 
