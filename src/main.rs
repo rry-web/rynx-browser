@@ -1,5 +1,5 @@
 use rynx_browser::app::App;
-use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, handle_network_event};
+use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, process_network_events};
 use rynx_browser::ui::ui;
 
 use std::{error::Error, io, time::Duration};
@@ -65,9 +65,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
         terminal.draw(|f| ui(f, &app))?;
 
         // Handle network events
-        if let Ok(response) = app.rx.try_recv() {
-            handle_network_event::<B>(&mut app, response, size.width)?;
-        }
+        process_network_events::<B>(&mut app, size.width)?;
 
         // Handle input events
         if event::poll(Duration::from_millis(

@@ -54,10 +54,11 @@ fn handle_normal_mode<B: Backend>(
 
         // --- DOWNLOAD ---
         KeyCode::Char('d') => {
+            let download_dir = app.download_dir.clone();
             let tab = app.current_tab();
             if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
                 let url = crate::network::resolve_url(&tab.url_input, &region.url);
-                tab.initiate_download_request(url);
+                tab.initiate_download_request(url, &download_dir);
             }
         }
 
@@ -433,6 +434,7 @@ pub fn handle_mouse_event<B: Backend>(
     terminal_width: u16,
     terminal_height: u16,
 ) -> Result<()> {
+    let download_dir = app.download_dir.clone();
     let tab = app.current_tab();
     match mouse.kind {
         MouseEventKind::ScrollDown => {
@@ -491,7 +493,7 @@ pub fn handle_mouse_event<B: Backend>(
                         app.open_link_in_new_tab(full_url);
                     } else if is_downloadable_file(&full_url) {
                         // download for file types
-                        tab.initiate_download_request(full_url);
+                        tab.initiate_download_request(full_url, &download_dir);
                     } else {
                         // Normal navigation for HTML pages
                         if !tab.url_input.is_empty() {
@@ -505,6 +507,14 @@ pub fn handle_mouse_event<B: Backend>(
         }
         // Optional: can handle clicks here too!
         _ => {}
+    }
+    Ok(())
+}
+
+/// Handle every network message that is waiting, so bursts don't queue up behind the frame rate
+pub fn process_network_events<B: Backend>(app: &mut App, terminal_width: u16) -> Result<()> {
+    while let Ok(response) = app.rx.try_recv() {
+        handle_network_event::<B>(app, response, terminal_width)?;
     }
     Ok(())
 }
@@ -543,11 +553,16 @@ pub fn handle_network_event<B: Backend>(
             }
             NetworkResponse::DownloadFinished(_, filename) => {
                 let tab = &mut app.tabs[index];
-                //tab.download_state = None; // Clear progress state
-                if let Some(ref mut d) = tab.download_state {
-                    d.status = crate::models::DownloadStatus::Completed;
-                    d.filename = filename.clone();
-                }
+                // Small files can finish before a throttled progress update creates the state
+                let d = tab.download_state.get_or_insert_with(|| crate::models::Download {
+                    _id: target_id,
+                    filename: String::new(),
+                    bytes_downloaded: 0,
+                    total_size: None,
+                    status: DownloadStatus::Active,
+                });
+                d.status = DownloadStatus::Completed;
+                d.filename = filename.clone();
                 tab.status_message = format!("Download complete: {}", filename);
             }
             NetworkResponse::Success(_, title, html_source) => {

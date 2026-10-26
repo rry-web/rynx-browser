@@ -5,6 +5,7 @@ pub const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap
 pub const I2P_PROXY_URL: &str = "http://127.0.0.1:4444";
 pub const BROWSING_TIMEOUT_SECS: u64 = 100;
 pub const DOWNLOAD_TIMEOUT_SECS: u64 = 3000;
+pub const DOWNLOAD_PROGRESS_INTERVAL_MS: u64 = 100;
 
 // Channel capacity
 pub const CHANNEL_CAPACITY: usize = 10;

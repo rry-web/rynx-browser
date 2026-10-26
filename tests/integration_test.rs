@@ -403,3 +403,55 @@ async fn test_page_error_does_not_fail_active_download() {
         Some(DownloadStatus::Active)
     ));
 }
+
+#[tokio::test]
+async fn test_process_network_events_drains_queue() {
+    use rynx_browser::event_handler::process_network_events;
+
+    let mut app = test_app();
+    let id = app.current_tab().id;
+    for i in 0..5 {
+        app.tx.send(NetworkResponse::Info(id, format!("msg {i}"))).await.unwrap();
+    }
+
+    process_network_events::<TestBackend>(&mut app, 80).unwrap();
+
+    assert!(app.rx.try_recv().is_err(), "messages left in the queue");
+    assert_eq!(app.current_tab().status_message, "msg 4");
+}
+
+#[tokio::test]
+async fn test_download_progress_is_throttled() {
+    use rynx_browser::models::DownloadStatus;
+
+    let mock_server = MockServer::start().await;
+    let body = vec![b'x'; 4 * 1024 * 1024];
+    Mock::given(method("GET"))
+        .and(path("/big.bin"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(body.clone()))
+        .mount(&mock_server)
+        .await;
+
+    let download_dir = std::env::temp_dir().join(format!("rynx-test-dl-{}", std::process::id()));
+    let mut app = test_app();
+    app.download_dir = download_dir.clone();
+
+    app.trigger_download(format!("{}/big.bin", mock_server.uri()));
+    let (resp, progress_messages) = finish_download(&mut app).await;
+    let saved_path = match &resp {
+        NetworkResponse::DownloadFinished(_, path) => std::path::PathBuf::from(path),
+        _ => panic!("download did not finish"),
+    };
+    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+
+    let saved_len = std::fs::metadata(&saved_path).unwrap().len();
+    let _ = std::fs::remove_dir_all(&download_dir);
+
+    assert_eq!(saved_len, body.len() as u64);
+    // Unthrottled, this was one message per network chunk (hundreds for 4MB)
+    assert!(progress_messages <= 5, "got {progress_messages} progress messages");
+    assert!(matches!(
+        app.current_tab().download_state.as_ref().map(|d| &d.status),
+        Some(DownloadStatus::Completed)
+    ));
+}

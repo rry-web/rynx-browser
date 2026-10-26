@@ -1,6 +1,6 @@
 use crate::constants::{
     DEFAULT_TAB_INDEX, INITIAL_ID_COUNTER, INITIAL_TAB_ID, MARGINALIA_SEARCH_URL,
-    MAX_PAGE_SIZE_BYTES,
+    DOWNLOAD_PROGRESS_INTERVAL_MS, MAX_PAGE_SIZE_BYTES,
 };
 use crate::models::{InputMode, LinkRegion, SearchState, Selection};
 use crate::network::{NetworkManager, NetworkResponse, attempt_jump, parse_html_metadata};
@@ -9,9 +9,10 @@ use crate::renderer::DomRenderer;
 use ratatui::text::Line;
 use reqwest::StatusCode;
 use scraper::Html;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::time::{Duration, Instant};
 use url::Url;
 
 use directories::UserDirs;
@@ -184,14 +185,9 @@ impl BrowserTab {
         self.status_message = String::from("Ready");
     }
 
-    pub fn initiate_download_request(&mut self, url: String) {
+    pub fn initiate_download_request(&mut self, url: String, download_dir: &Path) {
         let raw_filename = url.split('/').last().unwrap_or("download.dat");
         let sanitized_name = crate::app::App::sanitize_filename(raw_filename);
-
-        // Resolve target directory using the directories crate
-        let download_dir = UserDirs::new()
-            .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
-            .unwrap_or_default();
 
         let target_path = download_dir.join(&sanitized_name);
         let file_exists = target_path.exists();
@@ -214,6 +210,7 @@ pub struct App {
     pub i2p_mode: bool,
     pub clipboard: arboard::Clipboard,
     pub network_manager: Arc<NetworkManager>,
+    pub download_dir: PathBuf,
 }
 
 impl App {
@@ -233,6 +230,10 @@ impl App {
             i2p_mode: false,
             clipboard: arboard::Clipboard::new().expect("Failed to initialize clipboard"),
             network_manager,
+            // Resolve target directory using the directories crate
+            download_dir: UserDirs::new()
+                .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
+                .unwrap_or_default(),
         })
     }
 
@@ -426,6 +427,7 @@ impl App {
         let tx = self.tx.clone();
         let use_i2p = self.i2p_mode;
         let nm = Arc::clone(&self.network_manager);
+        let download_dir = self.download_dir.clone();
 
         tokio::spawn(async move {
             let client = nm.get_download_client(use_i2p);
@@ -443,6 +445,9 @@ impl App {
             let mut stream = res.bytes_stream();
             let mut downloaded: u64 = 0;
             let mut file_handle: Option<(tokio::fs::File, String)> = None;
+            // Throttle progress updates so the UI channel never limits download speed
+            let progress_interval = Duration::from_millis(DOWNLOAD_PROGRESS_INTERVAL_MS);
+            let mut last_progress: Option<Instant> = None;
 
             while let Some(item) = stream.next().await {
                 let chunk = match item {
@@ -453,11 +458,7 @@ impl App {
                     }
                 };
                 if file_handle.is_none() {
-                    // 2. Resolve and Create Downloads Directory
-                    let download_dir = UserDirs::new()
-                        .and_then(|d| d.download_dir().map(|p| p.to_path_buf()))
-                        .unwrap_or_default();
-
+                    // 2. Create Downloads Directory
                     if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
                         let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Folder error: {}", e))).await;
                         return;
@@ -492,11 +493,19 @@ impl App {
                         return;
                     }
                     downloaded += chunk.len() as u64;
-                    let _ = tx.send(NetworkResponse::DownloadProgress(tab_id, downloaded, total)).await;
+                    if last_progress.is_none_or(|t| t.elapsed() >= progress_interval) {
+                        last_progress = Some(Instant::now());
+                        let _ = tx.send(NetworkResponse::DownloadProgress(tab_id, downloaded, total)).await;
+                    }
                 }
             }
 
-            if let Some((_, path)) = file_handle {
+            if let Some((mut file, path)) = file_handle {
+                // tokio completes writes in the background; flush so the file is whole before reporting done
+                if let Err(e) = file.flush().await {
+                    let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Write failed: {}", e))).await;
+                    return;
+                }
                 let _ = tx.send(NetworkResponse::DownloadFinished(tab_id, path)).await;
             } else {
                 let _ = tx.send(NetworkResponse::DownloadError(tab_id, "Download stream was empty".to_string())).await;
