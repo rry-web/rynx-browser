@@ -401,3 +401,41 @@ async fn a_clearweb_lock_disables_i2p_and_i2p_lock_starts_there() {
     press(&mut app, KeyCode::Char('p'));
     assert!(app.i2p_mode);
 }
+
+#[tokio::test]
+async fn a_opens_the_archived_copy() {
+    let mut app = test_app(Settings::default());
+    // On the start page there's nothing to look up
+    press(&mut app, KeyCode::Char('A'));
+    assert!(app.current_tab().status_message.contains("Only web pages"));
+
+    let id = app.current_tab().id;
+    let url = "https://user:pw@gone.example/story?id=3";
+    app.current_tab().url_input = url.into();
+    let resp = NetworkResponse::Error(id, "Couldn't connect".into());
+    handle_network_event(&mut app, resp, 80).unwrap();
+    press(&mut app, KeyCode::Char('A'));
+    // Even for a page that failed to load, and never with the password
+    assert_eq!(app.current_tab().url_input, "https://web.archive.org/web/https://gone.example/story?id=3");
+
+    app.current_tab().url_input = "http://site.i2p/".into();
+    app.current_tab().page_url = Some("http://site.i2p/".into());
+    press(&mut app, KeyCode::Char('A'));
+    assert!(app.current_tab().status_message.contains(".i2p"));
+}
+
+#[tokio::test]
+async fn new_tabs_show_the_start_page_address_and_back_returns_to_it() {
+    let mut app = test_app(Settings::default());
+    assert_eq!(app.current_tab().url_input, "about:help");
+    let id = app.current_tab().id;
+    app.follow_link("https://example.com/".into());
+    let resp =
+        NetworkResponse::Success(id, "t".into(), "<p>hi</p>".into(), "https://example.com/".into(), PageKind::Html);
+    handle_network_event(&mut app, resp, 80).unwrap();
+    press(&mut app, KeyCode::Backspace);
+    assert_eq!(app.current_tab().url_input, "about:help", "back goes to the start page, not some website");
+    assert!(text(&mut app).contains("Moving around"));
+    press(&mut app, KeyCode::Char('n'));
+    assert_eq!(app.current_tab().url_input, "about:help");
+}

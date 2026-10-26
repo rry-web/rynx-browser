@@ -31,6 +31,26 @@ impl App {
         true
     }
 
+    /// A: open the Internet Archive's latest copy of this page, for pages that are gone, blocked
+    /// by a CAPTCHA, or need JavaScript. Works on pages that failed to load, too.
+    pub fn open_archived_copy(&mut self) {
+        let tab = &self.tabs[self.active_tab_index];
+        let address = tab.page_url.clone().unwrap_or_else(|| tab.url_input.clone());
+        let page = Url::parse(&address).ok().filter(|u| matches!(u.scheme(), "http" | "https"));
+        let message = match page {
+            None => "Only web pages have archived copies",
+            Some(url) if url.host_str() == Some("web.archive.org") => "This is already an archived copy",
+            Some(url) if url.host_str().is_some_and(|h| h.ends_with(".i2p")) => {
+                "The Internet Archive has no copies of .i2p sites"
+            }
+            Some(url) => {
+                let original = crate::network::without_credentials(url.as_str());
+                return self.follow_link(format!("https://web.archive.org/web/{}", original));
+            }
+        };
+        self.current_tab().status_message = message.to_string();
+    }
+
     /// Show a page the browser made in tab `index`, at `address`
     pub fn show_generated_page(&mut self, index: usize, address: &str, title: &str, html: String) {
         let width = self.terminal_width;

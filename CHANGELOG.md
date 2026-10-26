@@ -10,6 +10,13 @@
 - `network = switchable | clearweb | i2p`: lock rynx to the clearweb or to I2P. Locked to I2P it
   starts in I2P mode and `p` can't leave it.
 - Turning history saving on keeps the session's history so far.
+- `A` opens the Internet Archive's latest copy of the page, including pages that failed to load
+  (a dead site, a CAPTCHA wall); never for .i2p sites, and never with a password in the address.
+
+### Fixed
+- New tabs and the first tab had `https://www.rust-lang.org` as their address while showing the
+  start page, so Back from the first page visited loaded rust-lang.org. They now show
+  `about:help`, and Back returns to the start page.
 
 ### Changed
 - `settings.conf` is written from one description of every setting, so the first-run file and one

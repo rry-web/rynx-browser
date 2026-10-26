@@ -120,6 +120,10 @@ objects are typed as JSON) and the `readOnlyHint` / `destructiveHint` annotation
 Results can contain text, links and text resources. Sign-in (OAuth), server requests to the
 user, and the older HTTP+SSE transport aren't supported yet.
 
+Press **`A`** to open the [Internet Archive](https://web.archive.org)'s latest copy of a page:
+handy when a site is down, gone, or behind a CAPTCHA or a JavaScript wall. It works on a page that
+failed to load, too. The Archive learns which address you looked up.
+
 Downloads (**`d`** on a link) are saved to your Downloads folder after you confirm.
 
 Press **`b`** to bookmark a page (again to remove it) and **`B`** to see your bookmarks. Press
@@ -221,6 +225,7 @@ The same list is on the start page.
 | **`/`** | Find on the page (live highlighting) |
 | **`>`** / **`<`** | Next / previous match |
 | **`v`** | Copy mode: select text with `h` `j` `k` `l` or the arrow keys, **`y`** copies it, **`Esc`** cancels |
+| **`A`** | Open the Internet Archive's latest copy of the page (also for pages that failed to load) |
 | **`R`** | Reader mode: only the page's main text (stays on as you follow links; `R` again for the whole page) |
 | **`Shift+V`** | Show the page source |
 | **`p`** | Switch I2P mode on or off (through the proxy at `127.0.0.1:4444`), unless settings lock it |

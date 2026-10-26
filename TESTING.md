@@ -271,6 +271,9 @@ Worth repeating after any dependency upgrade.
       `p`, restart rynx, and press `p` again.
       *Expected:* I2P mode turns on at once; `p` says it's locked; after restarting, rynx starts
       in I2P mode. "Always the clearweb" makes `p` do nothing the other way.
+- [ ] **SET-16 Archived copy.** Open an address that doesn't exist any more (or a site behind a
+      CAPTCHA) and press `A`.
+      *Expected:* the Internet Archive's latest copy opens (or the Archive says it has none).
 - [ ] **SET-07 Session history.** With no `history` setting, visit a few pages and press `s`.
       *Expected:* the history page lists them newest first, under a date heading, with their
       titles; selecting one opens it. Restart and press `s`: it's empty, and no `history.txt`

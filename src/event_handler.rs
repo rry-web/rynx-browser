@@ -308,6 +308,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
         }
         KeyCode::Char('p') => app.toggle_i2p_mode(),
         KeyCode::Char('S') => app.follow_link(crate::app::SETTINGS_PAGE.to_string()),
+        KeyCode::Char('A') => app.open_archived_copy(),
         _ => {}
     }
     Ok(false)

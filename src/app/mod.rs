@@ -89,7 +89,7 @@ impl App {
         rx: mpsc::Receiver<NetworkResponse>,
         settings: Settings,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let initial_tab = BrowserTab::new(INITIAL_TAB_ID, String::from("https://www.rust-lang.org"));
+        let initial_tab = BrowserTab::new(INITIAL_TAB_ID, HELP_PAGE.to_string());
         let network_manager = Arc::new(NetworkManager::with_settings(&settings.i2p_proxy, &settings.user_agent)?);
         let download_dir = settings.download_dir.clone().unwrap_or_else(Self::default_download_dir);
         Ok(Self {
@@ -221,7 +221,7 @@ impl App {
     }
 
     pub fn add_tab(&mut self, url: Option<String>) {
-        let start_url = url.unwrap_or_else(|| String::from("https://www.rust-lang.org"));
+        let start_url = url.unwrap_or_else(|| HELP_PAGE.to_string());
         let new_tab = BrowserTab::new(self.id_counter, start_url);
         self.tabs.push(new_tab);
         self.active_tab_index = self.tabs.len() - 1;
