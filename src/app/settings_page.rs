@@ -140,7 +140,7 @@ impl App {
             match (control.name.as_str(), value) {
                 ("history", ControlValue::Checked(on)) => history = *on,
                 ("anubis", ControlValue::Checked(on)) => anubis = *on,
-                (key, ControlValue::Selected(i)) if key == "search_engine" => {
+                ("search_engine", ControlValue::Selected(i)) => {
                     if let ControlKind::Select { options } = &control.kind {
                         engine = options.get(*i).map(|o| o.value.clone());
                     }
