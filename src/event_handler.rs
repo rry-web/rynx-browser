@@ -44,7 +44,64 @@ pub fn handle_key_event<B: Backend>(
         InputMode::Editing => handle_editing_mode(app, key),
         InputMode::Visual => handle_visual_mode(app, key, terminal_height),
         InputMode::Search => handle_search_mode(app, key),
+        InputMode::FormEdit => handle_form_edit_mode::<B>(app, key, terminal_width, terminal_height),
     }
+}
+
+/// Typing into a form field
+fn handle_form_edit_mode<B: Backend>(
+    app: &mut App,
+    key: KeyEvent,
+    terminal_width: u16,
+    terminal_height: u16,
+) -> Result<bool> {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let tab = app.current_tab();
+    let Some(control) = tab.editing_control.and_then(|i| tab.controls.get(i)).cloned() else {
+        tab.stop_editing();
+        return Ok(false);
+    };
+    let multiline = control.kind == crate::forms::ControlKind::TextArea;
+    match key.code {
+        KeyCode::Esc => {
+            tab.stop_editing();
+            tab.status_message = String::from("Ready");
+        }
+        KeyCode::Enter if multiline => tab.edit_field(|text| text.push('\n')),
+        // Enter in a text field submits its form, pressed with its first button
+        KeyCode::Enter => match control.form {
+            Some(form) => {
+                let submitter = crate::forms::default_submitter(&tab.controls, form);
+                app.submit_form(form, submitter);
+            }
+            None => {
+                tab.stop_editing();
+                tab.status_message = String::from("This field isn't part of a form");
+            }
+        },
+        KeyCode::Backspace => tab.edit_field(|text| {
+            text.pop();
+        }),
+        KeyCode::Char('u') if ctrl => tab.edit_field(String::clear),
+        KeyCode::Char('v') if ctrl => {
+            if let Ok(pasted) = app.paste_from_clipboard() {
+                let pasted: String = if multiline {
+                    pasted.chars().filter(|c| *c == '\n' || !c.is_control()).collect()
+                } else {
+                    pasted.chars().filter(|c| !c.is_control()).collect()
+                };
+                app.current_tab().edit_field(|text| text.push_str(&pasted));
+            }
+        }
+        KeyCode::Char(c) if !ctrl && !c.is_control() => tab.edit_field(|text| text.push(c)),
+        // Tab leaves the field and moves on, as in normal mode
+        KeyCode::Tab | KeyCode::BackTab => {
+            tab.stop_editing();
+            return handle_normal_mode::<B>(app, key, terminal_width, terminal_height);
+        }
+        _ => {}
+    }
+    Ok(false)
 }
 
 fn handle_normal_mode<B: Backend>(
@@ -78,7 +135,7 @@ fn handle_normal_mode<B: Backend>(
         KeyCode::Char('d') => {
             let download_dir = app.download_dir.clone();
             let tab = app.current_tab();
-            if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
+            if let Some(region) = tab.link_regions.get(tab.selected_link_index).filter(|r| r.control.is_none()) {
                 let url = crate::network::resolve_url(tab.link_base(), &region.url);
                 tab.initiate_download_request(url, &download_dir);
             }
@@ -113,7 +170,7 @@ fn handle_normal_mode<B: Backend>(
         KeyCode::Char('n') => app.add_tab(None),
         KeyCode::Char('t') => {
             let tab = app.current_tab();
-            if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
+            if let Some(region) = tab.link_regions.get(tab.selected_link_index).filter(|r| r.control.is_none()) {
                 let full_url = crate::network::resolve_url(tab.link_base(), &region.url);
                 app.open_link_in_new_tab(full_url);
             }
@@ -238,9 +295,13 @@ fn handle_normal_mode<B: Backend>(
             let tab = app.current_tab();
 
             if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
-                // Resolve URL (Handle relative paths), then load it or jump within the page
-                let new_url = crate::network::resolve_url(tab.link_base(), &region.url);
-                app.follow_link(new_url);
+                if let Some(control) = region.control {
+                    app.activate_control(control);
+                } else {
+                    // Resolve URL (Handle relative paths), then load it or jump within the page
+                    let new_url = crate::network::resolve_url(tab.link_base(), &region.url);
+                    app.follow_link(new_url);
+                }
             }
         }
         KeyCode::Char('p') => {
@@ -458,13 +519,17 @@ pub fn handle_mouse_event<B: Backend>(
 
                 // 2. Search the Link Regions for a match
                 // We filter for links on this specific line
-                let found_link = tab.link_regions.iter().find(|link| {
+                let found = tab.link_regions.iter().position(|link| {
                     link.line_index == real_line_idx
                         && click_x >= link.x_start
                         && click_x < link.x_end
                 });
 
-                if let Some(region) = found_link {
+                if let Some(control) = found.and_then(|i| tab.link_regions[i].control) {
+                    // Clicking a form control selects and uses it
+                    tab.selected_link_index = found.unwrap_or(0);
+                    app.activate_control(control);
+                } else if let Some(region) = found.map(|i| &tab.link_regions[i]) {
                     // 3. Determine if this should be a download or navigation
                     let full_url = crate::network::resolve_url(tab.link_base(), &region.url);
 

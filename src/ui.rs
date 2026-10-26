@@ -39,6 +39,7 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
         InputMode::Editing => Style::default().fg(Color::Yellow),
         InputMode::Visual => Style::default().fg(Color::Blue),
         InputMode::Search => Style::default().fg(Color::Magenta),
+        InputMode::FormEdit => Style::default().fg(Color::Green),
     };
 
     let mode_text = if app.i2p_mode {
@@ -81,6 +82,10 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
                 ),
             )
         }
+        InputMode::FormEdit => (
+            active_tab.url_input.as_str(),
+            format!("TYPING INTO FORM - {}", mode_text),
+        ),
         _ => (
             active_tab.url_input.as_str(),
             format!("URL - {}", mode_text),
@@ -265,6 +270,62 @@ fn apply_cursor_highlight(
     }
 }
 
+/// Draw each visible form control's current value (what the user typed, a checkbox's mark, the
+/// chosen option) inside the box the renderer reserved for it
+fn overlay_form_controls(lines: &mut [Line], tab: &crate::app::BrowserTab, start_index: usize) {
+    let mut drawn = std::collections::HashSet::new();
+    for region in &tab.link_regions {
+        let Some(index) = region.control else {
+            continue;
+        };
+        // A control split across lines (very narrow screens) is drawn once
+        if !drawn.insert(index) || region.line_index < start_index || region.x_end < region.x_start + 2 {
+            continue;
+        }
+        let (Some(control), Some(value)) = (tab.controls.get(index), tab.control_values.get(index)) else {
+            continue;
+        };
+        let Some(line) = lines.get_mut(region.line_index - start_index) else {
+            continue;
+        };
+        let editing = tab.input_mode == InputMode::FormEdit && tab.editing_control == Some(index);
+        let text = sanitize_for_terminal(&control.display(value, editing)).into_owned();
+        replace_columns(line, region.x_start + 1, region.x_end - 1, &text);
+    }
+}
+
+/// Replace the characters in columns `from..to` of a line split into characters with `text`,
+/// keeping the style of the first replaced character
+fn replace_columns(line: &mut Line, from: usize, to: usize, text: &str) {
+    let mut column = 0;
+    let mut first = None;
+    let mut last = None;
+    for (i, span) in line.spans.iter().enumerate() {
+        let width = span.width();
+        if column >= from && column + width <= to {
+            first.get_or_insert(i);
+            last = Some(i);
+        }
+        column += width;
+    }
+    let (Some(first), Some(last)) = (first, last) else {
+        return;
+    };
+    let style = line.spans[first].style;
+    let mut available = to - from;
+    let replacement: Vec<Span> = text
+        .chars()
+        .take_while(|ch| {
+            let width = unicode_width::UnicodeWidthChar::width(*ch).unwrap_or(0);
+            let fits = width <= available;
+            available = available.saturating_sub(width);
+            fits
+        })
+        .map(|ch| Span::styled(ch.to_string(), style))
+        .collect();
+    line.spans.splice(first..=last, replacement);
+}
+
 fn split_into_characters<'a>(line: &'a Line<'a>) -> Line<'a> {
     let spans: Vec<Span<'a>> = line
         .spans
@@ -280,6 +341,25 @@ fn split_into_characters<'a>(line: &'a Line<'a>) -> Line<'a> {
 
 /// Where the selected link really goes, so link text can't disguise its destination
 fn link_preview(tab: &crate::app::BrowserTab) -> Line<'static> {
+    let link_style = Style::default().fg(Color::Cyan);
+    if let Some(index) = tab.link_regions.get(tab.selected_link_index).and_then(|r| r.control) {
+        // For a form control, say what it is and where its form sends what you enter
+        let Some(control) = tab.controls.get(index) else {
+            return Line::from("");
+        };
+        let mut spans = vec![Span::raw(format!(" {}", sanitize_for_terminal(&control.describe())))];
+        if let Some(form) = control.form.and_then(|f| tab.forms.get(f)) {
+            let method = match form.method {
+                crate::forms::FormMethod::Get => "",
+                crate::forms::FormMethod::Post => " (POST)",
+            };
+            let target = crate::forms::form_target(form, tab.link_base());
+            spans.push(Span::raw(format!(" → sends to{} ", method)));
+            spans.push(Span::styled(sanitize_for_terminal(&target).into_owned(), link_style));
+        }
+        spans.push(Span::raw(" "));
+        return Line::from(spans);
+    }
     match tab.link_regions.get(tab.selected_link_index) {
         Some(link) => {
             let target = crate::network::resolve_url(tab.link_base(), &link.url);
@@ -314,6 +394,7 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
     } else {
         Vec::new()
     };
+    overlay_form_controls(&mut viewport_content, active_tab, start_index);
 
     // Apply visual mode highlighting
     if let (InputMode::Visual, Some(sel)) = (active_tab.input_mode, &active_tab.selection) {

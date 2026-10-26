@@ -44,7 +44,8 @@ const TAGS: &[&str] = &[
     "footer", "aside", "main", "script", "style", "head", "title", "blockquote", "unknown", "dl",
     "dt", "dd", "q", "sup", "sub", "del", "mark", "kbd", "details", "summary", "noscript", "iframe",
     "video", "source", "menu", "figure", "figcaption", "h4", "h5", "h6", "svg", "thead", "tbody",
-    "tfoot", "caption", "table", "tr", "td",
+    "tfoot", "caption", "table", "tr", "td", "form", "input", "textarea", "select", "option",
+    "optgroup", "button", "label",
 ];
 
 const TEXT: &[&str] = &[
@@ -96,9 +97,16 @@ fn random_html_into(rng: &mut Rng, depth: usize, html: &mut String) {
                         4 => html.push_str(&format!(" src=\"{}\"", rng.pick(HREFS))),
                         5 => html.push_str(&format!(" start=\"{}\"", rng.pick(NUMBERS))),
                         6 => html.push_str(&format!(" value=\"{}\"", rng.pick(NUMBERS))),
-                        7 => html.push_str(&format!(" type=\"{}\"", rng.pick(&["a", "A", "i", "I", "1", "x"]))),
+                        7 => html.push_str(&format!(
+                            " type=\"{}\"",
+                            rng.pick(&["a", "A", "i", "I", "1", "x", "text", "submit", "checkbox", "radio", "password", "hidden", "file", "image", "button"])
+                        )),
                         8 => html.push_str(&format!(" colspan=\"{}\"", rng.pick(NUMBERS))),
-                        _ => html.push_str(rng.pick(&[" hidden", " reversed", " style=\"display:none\""])),
+                        _ => html.push_str(rng.pick(&[
+                            " hidden", " reversed", " style=\"display:none\"", " name=\"q\"", " size=\"0\"",
+                            " size=\"99999\"", " checked", " selected", " disabled", " method=\"post\"",
+                            " action=\"javascript:x\"", " form=\"f\"", " id=\"f\"", " maxlength=\"2\"",
+                        ])),
                     }
                 }
                 html.push('>');

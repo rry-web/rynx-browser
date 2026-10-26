@@ -326,6 +326,17 @@ pub async fn get_following_redirects(
     url: &str,
     i2p_mode: bool,
 ) -> Result<reqwest::Response, String> {
+    send_following_redirects(client, url, i2p_mode, None).await
+}
+
+/// GET a URL, or POST a form body to it, following redirects like get_following_redirects. A
+/// redirect turns a POST into a GET (as browsers do), except 307/308, which repeat the POST.
+pub async fn send_following_redirects(
+    client: &Client,
+    url: &str,
+    i2p_mode: bool,
+    mut form_body: Option<String>,
+) -> Result<reqwest::Response, String> {
     let mut current =
         Url::parse(&enforce_https(url, i2p_mode)).map_err(|e| format!("Invalid URL: {}", e))?;
     for _ in 0..=MAX_REDIRECTS {
@@ -334,11 +345,14 @@ pub async fn get_following_redirects(
         if !i2p_mode && is_i2p_host(&current) {
             return Err("Enable I2P mode (press p) to visit .i2p sites".to_string());
         }
-        let response = client
-            .get(current.clone())
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
+        let request = match &form_body {
+            Some(body) => client
+                .post(current.clone())
+                .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(body.clone()),
+            None => client.get(current.clone()),
+        };
+        let response = request.send().await.map_err(|e| e.to_string())?;
         // A 3xx without Location (e.g. 304) is returned as-is
         let location = match response.headers().get(reqwest::header::LOCATION) {
             Some(location) if response.status().is_redirection() => location,
@@ -353,6 +367,9 @@ pub async fn get_following_redirects(
         let next = Url::parse(&enforce_https(next.as_str(), i2p_mode))
             .map_err(|e| format!("Invalid redirect location: {}", e))?;
         check_redirect(&current, &next)?;
+        if !matches!(response.status().as_u16(), 307 | 308) {
+            form_body = None;
+        }
         current = next;
     }
     Err("Too many redirects".to_string())

@@ -10,7 +10,10 @@ pub struct HistoryEntry {
 
 #[derive(Clone)]
 pub struct LinkRegion {
+    /// Where the link goes; empty for a form control
     pub url: String,
+    /// The form control drawn here (index into the tab's controls), instead of a link
+    pub control: Option<usize>,
     pub line_index: usize,
     pub x_start: usize,
     pub x_end: usize,
@@ -22,6 +25,8 @@ pub enum InputMode {
     Editing,
     Visual,
     Search,
+    /// Typing into a form field
+    FormEdit,
 }
 
 pub struct Selection {

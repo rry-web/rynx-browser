@@ -1,4 +1,5 @@
 use crate::constants::UI_BORDER_WIDTH;
+use crate::forms::{ControlKind, Form, FormControl, FormMethod, SelectOption};
 use crate::models::LinkRegion;
 use crate::network::PageKind;
 use ratatui::style::{Color, Modifier, Style};
@@ -63,6 +64,8 @@ pub struct RenderedPage {
     pub anchors: HashMap<String, usize>,
     /// The document's <title>, for HTML pages that have one
     pub title: Option<String>,
+    pub forms: Vec<Form>,
+    pub controls: Vec<FormControl>,
 }
 
 /// Parse and lay out a page. Pure and thread-safe: the UI runs it on a background thread, so a
@@ -74,7 +77,14 @@ pub fn render_page(job: &RenderJob) -> RenderedPage {
             .lines()
             .map(|l| Line::from(sanitize_for_terminal(l).into_owned()))
             .collect();
-        return RenderedPage { lines, links: Vec::new(), anchors: HashMap::new(), title: None };
+        return RenderedPage {
+            lines,
+            links: Vec::new(),
+            anchors: HashMap::new(),
+            title: None,
+            forms: Vec::new(),
+            controls: Vec::new(),
+        };
     }
     let mut renderer = DomRenderer::new(job.width as usize);
     let title = match job.kind {
@@ -88,7 +98,14 @@ pub fn render_page(job: &RenderJob) -> RenderedPage {
             None
         }
     };
-    RenderedPage { lines: renderer.lines, links: renderer.links, anchors: renderer.anchors, title }
+    RenderedPage {
+        lines: renderer.lines,
+        links: renderer.links,
+        anchors: renderer.anchors,
+        title,
+        forms: renderer.forms,
+        controls: renderer.controls,
+    }
 }
 
 /// The text of the document's <title>, whitespace collapsed
@@ -208,6 +225,12 @@ fn cell_words(cell: ElementRef) -> Vec<(String, usize)> {
                     if matches!(elem.name(), "td" | "th") && follows_cell {
                         // A nested table's column separator
                         words.push(("│".to_string(), indent));
+                    } else if let Some(width) = control_width(elem) {
+                        words.push(("_".repeat(width), indent));
+                        if matches!(elem.name(), "select" | "textarea") {
+                            // Their text is drawn inside the box, not as words
+                            skip_depth += 1;
+                        }
                     } else if elem.name() == "img" {
                         // Mirrors how walk_element labels images
                         match elem.attr("alt").map(str::trim) {
@@ -238,6 +261,24 @@ fn cell_words(cell: ElementRef) -> Vec<(String, usize)> {
         }
     }
     words
+}
+
+/// Columns a form control's box takes, for measuring table cells
+fn control_width(elem: &scraper::node::Element) -> Option<usize> {
+    let size = |attr: &str, default: usize| {
+        elem.attr(attr).and_then(|n| n.trim().parse::<usize>().ok()).unwrap_or(default).clamp(4, 40) + 2
+    };
+    match elem.name() {
+        "input" => match elem.attr("type").unwrap_or("text").trim().to_ascii_lowercase().as_str() {
+            "hidden" => None,
+            "checkbox" | "radio" => Some(3),
+            "submit" | "image" => Some(elem.attr("value").map_or(6, |v| v.chars().count()) + 4),
+            _ => Some(size("size", 20)),
+        },
+        "textarea" => Some(size("cols", 30)),
+        "select" => Some(12),
+        _ => None,
+    }
 }
 
 /// (natural, minimum) width of a cell: all its words on one line, and its widest word (capped)
@@ -435,6 +476,14 @@ pub struct DomRenderer {
     list_stack: Vec<ListKind>,
     /// How many elements deep the walk currently is
     depth: usize,
+    pub forms: Vec<Form>,
+    pub controls: Vec<FormControl>,
+    /// The <form> being rendered, which new controls belong to
+    current_form: Option<usize>,
+    /// Forms by id, for controls that name their form with form="id"
+    form_ids: HashMap<String, usize>,
+    /// The control (e.g. a <button>) whose content is being drawn
+    active_control: Option<usize>,
 }
 
 impl DomRenderer {
@@ -463,6 +512,11 @@ impl DomRenderer {
             prefix_stack: Vec::new(),
             list_stack: Vec::new(),
             depth: 0,
+            forms: Vec::new(),
+            controls: Vec::new(),
+            current_form: None,
+            form_ids: HashMap::new(),
+            active_control: None,
         }
     }
 
@@ -660,6 +714,12 @@ impl DomRenderer {
 
     /// Append text to the current line, tracking link regions
     fn emit(&mut self, text: &str, style: Style, link: Option<&str>) {
+        self.emit_to(text, style, link, None);
+    }
+
+    /// Append text that is a link or form control (or neither), tracking its clickable region
+    fn emit_to(&mut self, text: &str, style: Style, link: Option<&str>, control: Option<usize>) {
+        let target = link.or(control.map(|_| ""));
         for ch in text.chars() {
             let width = char_width(ch);
             let start_x = self.current_line_width;
@@ -673,11 +733,15 @@ impl DomRenderer {
             }
             self.current_line_width += width;
 
-            if let Some(url) = link {
+            if let Some(url) = target {
                 let line_index = self.lines.len();
                 // Merge with the previous region if it's the same link and contiguous
                 if let Some(last) = self.links.last_mut() {
-                    if last.line_index == line_index && last.url == url && last.x_end == start_x {
+                    if last.line_index == line_index
+                        && last.url == url
+                        && last.control == control
+                        && last.x_end == start_x
+                    {
                         last.x_end = end_x;
                         continue;
                     }
@@ -689,6 +753,7 @@ impl DomRenderer {
                 }
                 self.links.push(LinkRegion {
                     url: url.to_string(),
+                    control,
                     line_index,
                     x_start: start_x,
                     x_end: end_x,
@@ -699,8 +764,10 @@ impl DomRenderer {
 
     /// Append content in the current style and link
     fn emit_text(&mut self, text: &str) {
-        let link = self.active_link_url.clone();
-        self.emit(text, self.current_style(), link.as_deref());
+        // Inside a form control, the control is what gets activated, not a surrounding link
+        let control = self.active_control;
+        let link = if control.is_some() { None } else { self.active_link_url.clone() };
+        self.emit_to(text, self.current_style(), link.as_deref(), control);
         self.line_has_text = true;
         self.marker_pending = false;
     }
@@ -900,6 +967,9 @@ impl DomRenderer {
                 return;
             }
             "noscript" => return self.walk_noscript(element),
+            "input" => return self.render_input(elem),
+            "textarea" => return self.render_textarea(element),
+            "select" => return self.render_select(element),
             "table" => return self.render_table(element),
             _ => {}
         }
@@ -909,6 +979,8 @@ impl DomRenderer {
         let saved_styles = self.style_stack.len();
         let saved_prefixes = self.prefix_stack.len();
         let saved_lists = self.list_stack.len();
+        let saved_form = self.current_form;
+        let saved_control = self.active_control;
 
         self.open_element(element);
 
@@ -946,6 +1018,8 @@ impl DomRenderer {
         self.list_stack.truncate(saved_lists);
         self.active_link_url = saved_link;
         self.preserve_whitespace = saved_preserve;
+        self.current_form = saved_form;
+        self.active_control = saved_control;
 
         if after == AfterElement::BlockSpace {
             self.add_vertical_space();
@@ -980,8 +1054,51 @@ impl DomRenderer {
                 self.add_vertical_space();
                 self.add_style(|s| s.add_modifier(Modifier::BOLD));
             }
-            "p" | "main" | "article" | "section" | "aside" | "figure" | "fieldset" | "form"
-            | "details" | "center" | "hgroup" | "dl" => self.add_vertical_space(),
+            "form" => {
+                self.add_vertical_space();
+                let index = self.forms.len();
+                let method = match elem.attr("method") {
+                    Some(m) if m.trim().eq_ignore_ascii_case("post") => FormMethod::Post,
+                    _ => FormMethod::Get,
+                };
+                self.forms.push(Form { action: elem.attr("action").map(str::to_string), method });
+                if let Some(id) = elem.attr("id") {
+                    self.form_ids.entry(id.to_string()).or_insert(index);
+                }
+                self.current_form = Some(index);
+            }
+            "button" => {
+                // Only submit buttons do anything without JavaScript
+                let kind = elem.attr("type").unwrap_or("submit").trim().to_ascii_lowercase();
+                if kind == "submit" {
+                    let label: String = element.text().collect::<String>().split_ascii_whitespace().collect::<Vec<_>>().join(" ");
+                    let control = self.add_control(
+                        elem,
+                        FormControl {
+                            form: None,
+                            kind: ControlKind::Submit,
+                            name: elem.attr("name").unwrap_or("").to_string(),
+                            value: elem.attr("value").unwrap_or("").to_string(),
+                            checked: false,
+                            selected: 0,
+                            width: 0,
+                            label: sanitize_for_terminal(&label).into_owned(),
+                            max_length: None,
+                        },
+                    );
+                    self.active_control = control;
+                    if control.is_some() {
+                        self.add_style(|s| s.fg(Color::Yellow));
+                        self.push_word("[");
+                    } else {
+                        self.add_style(|s| s.add_modifier(Modifier::DIM));
+                    }
+                } else {
+                    self.add_style(|s| s.add_modifier(Modifier::DIM));
+                }
+            }
+            "p" | "main" | "article" | "section" | "aside" | "figure" | "fieldset" | "details"
+            | "center" | "hgroup" | "dl" => self.add_vertical_space(),
             "address" => {
                 self.add_vertical_space();
                 self.add_style(|s| s.add_modifier(Modifier::ITALIC));
@@ -1039,8 +1156,15 @@ impl DomRenderer {
                 self.push_word("”");
                 AfterElement::Nothing
             }
+            "button" => {
+                if self.active_control.is_some() {
+                    self.push_word("]");
+                }
+                AfterElement::Nothing
+            }
+            "form" => AfterElement::BlockSpace,
             "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p" | "main" | "article" | "section"
-            | "aside" | "figure" | "fieldset" | "form" | "details" | "center" | "hgroup"
+            | "aside" | "figure" | "fieldset" | "details" | "center" | "hgroup"
             | "address" | "pre" | "blockquote" | "dl" => AfterElement::BlockSpace,
             // Only the outermost list is separated from the text around it
             "ul" | "ol" | "menu" if self.list_stack.len() <= 1 => AfterElement::BlockSpace,
@@ -1114,6 +1238,146 @@ impl DomRenderer {
         self.marker_pending = true;
         // Wrapped lines of the item line up with its text, after the marker
         self.prefix_stack.push(LinePrefix::Indent(text_width(&marker)));
+    }
+
+    // --- Forms ---
+
+    /// Register a form control. None if it's disabled, or outside any form, where only scripts
+    /// could use it: such controls are drawn greyed out and can't be selected or sent.
+    fn add_control(&mut self, elem: &scraper::node::Element, mut control: FormControl) -> Option<usize> {
+        if elem.attr("disabled").is_some() {
+            return None;
+        }
+        // form="id" attaches a control to a form elsewhere on the page
+        control.form = match elem.attr("form") {
+            Some(id) => self.form_ids.get(id).copied(),
+            None => self.current_form,
+        };
+        control.form?;
+        self.controls.push(control);
+        Some(self.controls.len() - 1)
+    }
+
+    /// Draw a control's box, e.g. "[text____]", as one unit that is clickable as the control
+    fn push_control_box(&mut self, control: Option<usize>, text: &str) {
+        let saved = self.active_control;
+        self.active_control = control;
+        let style = if control.is_some() {
+            |s: Style| s.fg(Color::Yellow)
+        } else {
+            |s: Style| s.add_modifier(Modifier::DIM)
+        };
+        self.add_style(style);
+        self.push_word(text);
+        self.style_stack.pop();
+        self.active_control = saved;
+    }
+
+    /// Draw a control with its initial contents, reserving `width` columns inside the brackets
+    fn push_new_control(&mut self, elem: &scraper::node::Element, control: FormControl, open: &str, close: &str) {
+        let inner = control.display(&control.initial_value(), false);
+        let index = self.add_control(elem, control);
+        self.push_control_box(index, &format!("{}{}{}", open, sanitize_for_terminal(&inner), close));
+    }
+
+    /// Room for a text field: its size attribute (default 20), within reason, and narrow enough
+    /// to fit on a line with its brackets
+    fn field_width(&self, requested: Option<&str>, default: usize) -> usize {
+        let wanted = requested.and_then(|n| n.trim().parse::<usize>().ok()).unwrap_or(default);
+        wanted.clamp(4, 40).min(self.max_width.saturating_sub(2).max(4))
+    }
+
+    fn render_input(&mut self, elem: &scraper::node::Element) {
+        let kind = elem.attr("type").unwrap_or("text").trim().to_ascii_lowercase();
+        let control = |kind: ControlKind, width: usize, label: &str| FormControl {
+            form: None,
+            kind,
+            name: elem.attr("name").unwrap_or("").to_string(),
+            value: elem.attr("value").unwrap_or("").to_string(),
+            checked: elem.attr("checked").is_some(),
+            selected: 0,
+            width,
+            label: sanitize_for_terminal(label).into_owned(),
+            max_length: elem.attr("maxlength").and_then(|n| n.trim().parse().ok()),
+        };
+        match kind.as_str() {
+            "hidden" => {
+                self.add_control(elem, control(ControlKind::Hidden, 0, ""));
+            }
+            "submit" | "image" => {
+                let label = elem
+                    .attr("value")
+                    .or_else(|| elem.attr("alt"))
+                    .filter(|l| !l.trim().is_empty())
+                    .unwrap_or("Submit")
+                    .trim();
+                let width = label.chars().map(char_width).sum::<usize>() + 2;
+                self.push_new_control(elem, control(ControlKind::Submit, width, &format!(" {} ", label)), "[", "]");
+            }
+            // Without JavaScript these do nothing
+            "button" | "reset" => {
+                let label = elem.attr("value").unwrap_or(if kind == "reset" { "Reset" } else { "" }).trim();
+                if !label.is_empty() {
+                    self.push_control_box(None, &format!("[ {} ]", sanitize_for_terminal(label)));
+                }
+            }
+            "checkbox" => self.push_new_control(elem, control(ControlKind::Checkbox, 1, ""), "[", "]"),
+            "radio" => self.push_new_control(elem, control(ControlKind::Radio, 1, ""), "(", ")"),
+            "file" => self.push_control_box(None, "[file upload not supported]"),
+            other => {
+                let width = self.field_width(elem.attr("size"), 20);
+                let kind = ControlKind::Text { password: other == "password" };
+                self.push_new_control(elem, control(kind, width, elem.attr("placeholder").unwrap_or("")), "[", "]");
+            }
+        }
+    }
+
+    fn render_textarea(&mut self, element: ElementRef) {
+        let elem = element.value();
+        let width = self.field_width(elem.attr("cols"), 30);
+        let control = FormControl {
+            form: None,
+            kind: ControlKind::TextArea,
+            name: elem.attr("name").unwrap_or("").to_string(),
+            value: element.text().collect(),
+            checked: false,
+            selected: 0,
+            width,
+            label: sanitize_for_terminal(elem.attr("placeholder").unwrap_or("")).into_owned(),
+            max_length: elem.attr("maxlength").and_then(|n| n.trim().parse().ok()),
+        };
+        self.push_new_control(elem, control, "[", "]");
+    }
+
+    fn render_select(&mut self, element: ElementRef) {
+        let elem = element.value();
+        let mut options = Vec::new();
+        let mut selected = 0;
+        for option in element.descendants().filter_map(ElementRef::wrap) {
+            if option.value().name() != "option" || option.value().attr("disabled").is_some() {
+                continue;
+            }
+            let label: String = option.text().collect::<String>().split_ascii_whitespace().collect::<Vec<_>>().join(" ");
+            let value = option.value().attr("value").map(str::to_string).unwrap_or_else(|| label.clone());
+            if option.value().attr("selected").is_some() {
+                selected = options.len();
+            }
+            options.push(SelectOption { value, label: sanitize_for_terminal(&label).into_owned() });
+        }
+        let widest = options.iter().map(|o| o.label.chars().map(char_width).sum::<usize>()).max().unwrap_or(0);
+        let width = (widest + 2).clamp(4, 40).min(self.max_width.saturating_sub(2).max(4));
+        let control = FormControl {
+            form: None,
+            kind: ControlKind::Select { options },
+            name: elem.attr("name").unwrap_or("").to_string(),
+            value: String::new(),
+            checked: false,
+            selected,
+            width,
+            label: String::new(),
+            max_length: None,
+        };
+        self.push_new_control(elem, control, "[", "]");
     }
 
     // --- Tables ---
@@ -1217,6 +1481,7 @@ impl DomRenderer {
                         for link in cell.links.iter().filter(|l| l.line_index == k) {
                             self.links.push(LinkRegion {
                                 url: link.url.clone(),
+                                control: link.control,
                                 line_index,
                                 x_start: x + link.x_start,
                                 x_end: x + link.x_end,
@@ -1253,8 +1518,12 @@ impl DomRenderer {
     }
 
     /// Render one cell with its own renderer at the column's width
-    fn render_cell(&self, cell: &TableCell, column: usize, width: usize) -> RenderedCell {
+    fn render_cell(&mut self, cell: &TableCell, column: usize, width: usize) -> RenderedCell {
         let mut renderer = DomRenderer::with_content_width(width);
+        renderer.forms = std::mem::take(&mut self.forms);
+        renderer.controls = std::mem::take(&mut self.controls);
+        renderer.form_ids = std::mem::take(&mut self.form_ids);
+        renderer.current_form = self.current_form;
         renderer.depth = self.depth + 1;
         let mut style = self.current_style();
         if cell.header {
@@ -1267,6 +1536,9 @@ impl DomRenderer {
         }
         renderer.marker_pending = false;
         renderer.flush_line();
+        self.forms = std::mem::take(&mut renderer.forms);
+        self.controls = std::mem::take(&mut renderer.controls);
+        self.form_ids = std::mem::take(&mut renderer.form_ids);
 
         // Blank lines at the edges of a cell (from <p> margins) would only pad the row
         let is_blank = |line: &Line| line.spans.iter().all(|s| s.content.trim().is_empty());

@@ -7,6 +7,7 @@ use crate::network::{
     ContentClass, NetworkManager, NetworkResponse, PageKind, attempt_jump, classify_content_type,
     fragment_of, should_attempt_jump,
 };
+use crate::forms::{ControlKind, ControlValue, Form, FormControl, FormMethod};
 use crate::renderer::{RenderJob, RenderedPage, render_page};
 use crate::renderer::DomRenderer;
 
@@ -71,6 +72,14 @@ pub struct BrowserTab {
     pending_restore: Option<(usize, usize)>,
     /// That position, once the page has arrived and is waiting to be laid out
     restore_after_render: Option<(usize, usize)>,
+    /// The page's forms and controls, and what the user has entered into them
+    pub forms: Vec<Form>,
+    pub controls: Vec<FormControl>,
+    pub control_values: Vec<ControlValue>,
+    /// The field being typed into (in FormEdit mode)
+    pub editing_control: Option<usize>,
+    /// Form data to POST with the next request
+    pending_post: Option<String>,
 }
 
 impl BrowserTab {
@@ -94,9 +103,10 @@ impl BrowserTab {
         self.selection = None;
         self.search_state = None;
         // Leave Edit mode alone so a page finishing in the background doesn't eat typing
-        if self.input_mode == InputMode::Visual || self.input_mode == InputMode::Search {
+        if matches!(self.input_mode, InputMode::Visual | InputMode::Search | InputMode::FormEdit) {
             self.input_mode = InputMode::Normal;
         }
+        self.editing_control = None;
     }
 
     /// Scroll the minimum amount needed to bring `line` into a viewport of `viewport_height` rows
@@ -184,6 +194,35 @@ impl BrowserTab {
         self.rendered_content.clear();
         self.link_regions.clear();
         self.anchors.clear();
+        self.forms.clear();
+        self.controls.clear();
+        self.control_values.clear();
+        self.editing_control = None;
+        if self.input_mode == InputMode::FormEdit {
+            self.input_mode = InputMode::Normal;
+        }
+    }
+
+    /// Change the text of the field being edited
+    pub fn edit_field(&mut self, edit: impl FnOnce(&mut String)) {
+        let Some(index) = self.editing_control else {
+            return;
+        };
+        let max_chars = self.controls.get(index).map_or(0, |c| c.max_chars());
+        if let Some(ControlValue::Text(text)) = self.control_values.get_mut(index) {
+            edit(text);
+            if text.chars().count() > max_chars {
+                *text = text.chars().take(max_chars).collect();
+            }
+        }
+    }
+
+    /// Stop typing into a field, keeping what was typed
+    pub fn stop_editing(&mut self) {
+        self.editing_control = None;
+        if self.input_mode == InputMode::FormEdit {
+            self.input_mode = InputMode::Normal;
+        }
     }
 
     /// The current page as a history entry, at `url`
@@ -231,6 +270,13 @@ impl BrowserTab {
         self.rendered_content = page.lines;
         self.link_regions = page.links;
         self.anchors = page.anchors;
+        // A re-layout of the same page (e.g. a resize) keeps what was typed
+        if self.control_values.len() != page.controls.len() {
+            self.control_values = page.controls.iter().map(FormControl::initial_value).collect();
+            self.editing_control = None;
+        }
+        self.forms = page.forms;
+        self.controls = page.controls;
         if let Some(title) = page.title {
             self.page_title = title;
         }
@@ -297,6 +343,11 @@ impl BrowserTab {
             jump_after_render: None,
             pending_restore: None,
             restore_after_render: None,
+            forms: Vec::new(),
+            controls: Vec::new(),
+            control_values: Vec::new(),
+            editing_control: None,
+            pending_post: None,
         }
     }
 
@@ -607,6 +658,84 @@ impl App {
         self.load_url_input(true);
     }
 
+    /// Use form control `index`: start typing into a field, toggle a checkbox, pick a radio button,
+    /// move to a choice's next option, or press a button
+    pub fn activate_control(&mut self, index: usize) {
+        let tab = self.current_tab();
+        let Some(control) = tab.controls.get(index).cloned() else {
+            return;
+        };
+        match &control.kind {
+            ControlKind::Text { .. } | ControlKind::TextArea => {
+                tab.input_mode = InputMode::FormEdit;
+                tab.editing_control = Some(index);
+                tab.status_message = if control.kind == ControlKind::TextArea {
+                    String::from("Typing: Enter adds a line, Esc stops typing")
+                } else {
+                    String::from("Typing: Enter submits the form, Esc stops typing")
+                };
+            }
+            ControlKind::Checkbox => {
+                if let Some(ControlValue::Checked(on)) = tab.control_values.get_mut(index) {
+                    *on = !*on;
+                }
+            }
+            ControlKind::Radio => {
+                // Picking one option clears the others in its group
+                for (i, other) in tab.controls.iter().enumerate() {
+                    let same_group = other.kind == ControlKind::Radio
+                        && other.form == control.form
+                        && other.name == control.name
+                        && !control.name.is_empty();
+                    if i == index || same_group {
+                        tab.control_values[i] = ControlValue::Checked(i == index);
+                    }
+                }
+            }
+            ControlKind::Select { options } => {
+                if let Some(ControlValue::Selected(selected)) = tab.control_values.get_mut(index) {
+                    *selected = (*selected + 1) % options.len().max(1);
+                }
+            }
+            ControlKind::Submit => match control.form {
+                Some(form) => self.submit_form(form, Some(index)),
+                None => tab.status_message = String::from("This button isn't part of a form"),
+            },
+            ControlKind::Hidden => {}
+        }
+    }
+
+    /// Send form `form`, pressed with button `submitter` if any
+    pub fn submit_form(&mut self, form: usize, submitter: Option<usize>) {
+        let tab = self.current_tab();
+        tab.stop_editing();
+        let base = tab.link_base().to_string();
+        let submission = crate::forms::build_submission(
+            &tab.forms,
+            &tab.controls,
+            &tab.control_values,
+            form,
+            submitter,
+            &base,
+        );
+        match submission {
+            Err(message) => tab.status_message = message,
+            Ok(submission) if submission.method == FormMethod::Get => self.follow_link(submission.url),
+            Ok(submission) => {
+                // A POST always goes to the server, even for the same address
+                let entry = tab.history_entry(tab.url_input.clone());
+                if !tab.url_input.is_empty() {
+                    tab.history.push(entry);
+                }
+                tab.forward_history.clear();
+                tab.pending_restore = None;
+                tab.url_input = submission.url;
+                tab.pending_post = submission.body;
+                self.submit_request();
+            }
+        }
+    }
+
     /// Fetch the current page again, keeping the scroll position
     pub fn reload(&mut self) {
         let tab = self.current_tab();
@@ -669,6 +798,7 @@ impl App {
         tab.url_input = target_url.clone();
         // The server never sees the #fragment, so remember it to jump to after loading
         tab.pending_fragment = fragment_of(&target_url);
+        let form_body = tab.pending_post.take();
         let id = tab.id;
         let tx_clone = self.tx.clone();
         let use_i2p = self.i2p_mode;
@@ -684,7 +814,7 @@ impl App {
 
             let client = network_manager.get_client(use_i2p);
             let mut resp_result =
-                crate::network::get_following_redirects(client, &target_url, use_i2p).await;
+                crate::network::send_following_redirects(client, &target_url, use_i2p, form_body).await;
 
             if let Ok(ref resp) = resp_result {
                 if should_attempt_jump(use_i2p, &domain_for_jump, resp.status()) {
