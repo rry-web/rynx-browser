@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 67 (10 priority).
+Total checks: 69 (10 priority).
 
 
 ## Automated checks
@@ -90,6 +90,8 @@ Total checks: 67 (10 priority).
 |----|-------|:--------:|--------|------|-------|
 | PERF-01 | Large pages |  |  |  |  |
 | PERF-02 | Memory use |  |  |  |  |
+| PERF-03 | Slow pages don't freeze the UI |  |  |  |  |
+| PERF-04 | Help page after resizing |  |  |  |  |
 
 ## Downloads
 

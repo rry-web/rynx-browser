@@ -45,6 +45,9 @@ python3 -c 'print("<ul>" * 60 + "<li>deep item" + "</ul>" * 60)' > nested.html
 # 20,000 nested elements: used to crash the browser with a stack overflow
 python3 -c 'print("<span>" * 20000 + "deep text" + "</span>" * 20000)' > deep.html
 
+# 50,000 nested <div>s: takes seconds to parse, and used to freeze the UI meanwhile
+python3 -c 'print("<div>" * 50000 + "slow page" + "</div>" * 50000)' > slow.html
+
 # A plain-text file with a URL, and a "binary" file
 printf '<b>not markup</b>\n\n    indented line\nSee https://example.com/docs.\n' > notes.txt
 cp /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericDocumentIcon.icns icon.icns 2>/dev/null || head -c 2048 /dev/urandom > icon.icns
@@ -214,6 +217,13 @@ Worth repeating after any dependency upgrade.
       Activity Monitor (or `top`).
       *Expected:* tens of MB, not hundreds. In testing, rendering it used about 19MB (93MB
       before the fix).
+- [ ] **PERF-03 Slow pages don't freeze the UI.** With the test servers running, open
+      `http://localhost:8000/slow.html` and, while the status reads "Rendering...", press
+      `Tab`, scroll, switch tabs, or press `q`.
+      *Expected:* everything responds immediately; "slow page" appears after a few seconds
+      (unless you quit, which exits at once).
+- [ ] **PERF-04 Help page after resizing.** In a new tab (`n`), resize the window.
+      *Expected:* the help text re-wraps to the new width instead of disappearing.
 
 ## Downloads
 
