@@ -623,3 +623,32 @@ async fn test_jump_tries_next_service_after_failure() {
         .expect("should fall through to the working service");
     assert_eq!(resp.text().await.unwrap(), "<p>found</p>");
 }
+
+#[tokio::test]
+async fn test_missing_clipboard_reports_instead_of_panicking() {
+    let mut app = test_app();
+    app.clipboard = None;
+    app.current_tab().url_input = "https://example.com".to_string();
+
+    let ctrl = |c| KeyEvent {
+        code: KeyCode::Char(c),
+        modifiers: KeyModifiers::CONTROL,
+        kind: KeyEventKind::Press,
+        state: KeyEventState::empty(),
+    };
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('e')), 80, 24).unwrap();
+
+    handle_key_event::<TestBackend>(&mut app, ctrl('y'), 80, 24).unwrap();
+    assert_eq!(app.current_tab().status_message, "Clipboard unavailable");
+
+    // Ctrl+K must not wipe the address when there is nothing to paste
+    handle_key_event::<TestBackend>(&mut app, ctrl('k'), 80, 24).unwrap();
+    assert_eq!(app.current_tab().url_input, "https://example.com");
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Esc), 80, 24).unwrap();
+    load_page(&mut app, "<p>some text</p>");
+    for code in [KeyCode::Char('v'), KeyCode::Char('l'), KeyCode::Char('l'), KeyCode::Char('y')] {
+        handle_key_event::<TestBackend>(&mut app, key(code), 80, 24).unwrap();
+    }
+    assert_eq!(app.current_tab().status_message, "Clipboard unavailable");
+}

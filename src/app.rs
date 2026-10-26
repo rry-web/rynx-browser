@@ -215,7 +215,8 @@ pub struct App {
     pub tx: mpsc::Sender<NetworkResponse>,
     pub rx: mpsc::Receiver<NetworkResponse>,
     pub i2p_mode: bool,
-    pub clipboard: arboard::Clipboard,
+    /// None when no system clipboard is available (e.g. SSH or a headless session)
+    pub clipboard: Option<arboard::Clipboard>,
     pub network_manager: Arc<NetworkManager>,
     pub download_dir: PathBuf,
 }
@@ -235,13 +236,23 @@ impl App {
             tx,
             rx,
             i2p_mode: false,
-            clipboard: arboard::Clipboard::new().expect("Failed to initialize clipboard"),
+            clipboard: arboard::Clipboard::new().ok(),
             network_manager,
             // Resolve target directory using the directories crate
             download_dir: UserDirs::new()
                 .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
                 .unwrap_or_default(),
         })
+    }
+
+    pub fn copy_to_clipboard(&mut self, text: String) -> Result<(), String> {
+        let clipboard = self.clipboard.as_mut().ok_or("Clipboard unavailable")?;
+        clipboard.set_text(text).map_err(|e| format!("Clipboard error: {}", e))
+    }
+
+    pub fn paste_from_clipboard(&mut self) -> Result<String, String> {
+        let clipboard = self.clipboard.as_mut().ok_or("Clipboard unavailable")?;
+        clipboard.get_text().map_err(|e| format!("Clipboard error: {}", e))
     }
 
     pub fn current_tab(&mut self) -> &mut BrowserTab {

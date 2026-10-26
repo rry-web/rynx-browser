@@ -302,9 +302,10 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
         // COPY LINE (from address bar to clipboard)
         KeyCode::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             let current_input = app.current_tab().url_input.clone();
-            if let Ok(_) = app.clipboard.set_text(current_input) {
-                app.current_tab().status_message = String::from("Address copied to clipboard!");
-            }
+            app.current_tab().status_message = match app.copy_to_clipboard(current_input) {
+                Ok(()) => String::from("Address copied to clipboard!"),
+                Err(e) => e,
+            };
         }
         // CLEAR LINE (Standard Terminal Shortcut)
         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -313,19 +314,26 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
 
         // PASTE (Standard Shortcut)
         KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            if let Ok(text) = app.clipboard.get_text() {
-                // Sanitize to remove newlines for the address bar
-                let sanitized = text.replace(|c: char| c == '\n' || c == '\r', "");
-                app.current_tab().url_input.push_str(&sanitized);
+            match app.paste_from_clipboard() {
+                Ok(text) => {
+                    // Sanitize to remove newlines for the address bar
+                    let sanitized = text.replace(|c: char| c == '\n' || c == '\r', "");
+                    app.current_tab().url_input.push_str(&sanitized);
+                }
+                Err(e) => app.current_tab().status_message = e,
             }
         }
 
         // COMBINED: CLEAR AND PASTE (Using Ctrl + K)
         KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.current_tab().url_input.clear();
-            if let Ok(text) = app.clipboard.get_text() {
-                let sanitized = text.replace(|c: char| c == '\n' || c == '\r', "");
-                app.current_tab().url_input.push_str(&sanitized);
+            match app.paste_from_clipboard() {
+                Ok(text) => {
+                    let sanitized = text.replace(|c: char| c == '\n' || c == '\r', "");
+                    app.current_tab().url_input.clear();
+                    app.current_tab().url_input.push_str(&sanitized);
+                }
+                // Keep the address rather than clearing it when there is nothing to paste
+                Err(e) => app.current_tab().status_message = e,
             }
         }
         KeyCode::Char(c) => {
@@ -403,11 +411,14 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
 
             if !text_to_copy.is_empty() {
                 // 2. Now we can safely borrow the clipboard
-                let _ = app.clipboard.set_text(text_to_copy);
+                let result = app.copy_to_clipboard(text_to_copy);
 
                 // 3. Re-borrow the tab to update status and reset mode
                 let tab = app.current_tab();
-                tab.status_message = String::from("Text yanked to clipboard!");
+                tab.status_message = match result {
+                    Ok(()) => String::from("Text yanked to clipboard!"),
+                    Err(e) => e,
+                };
                 tab.input_mode = InputMode::Normal;
                 tab.selection = None;
             } else {
