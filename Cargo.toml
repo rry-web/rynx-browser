@@ -1,6 +1,6 @@
 [package]
 name = "rynx"
-version = "0.2.0-beta.3"
+version = "0.2.0-beta.4"
 edition = "2024"
 # let-chains (stable in 1.88 for edition 2024)
 rust-version = "1.88"

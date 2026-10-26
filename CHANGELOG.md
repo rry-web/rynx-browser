@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0-beta.4]
+
+Reader mode, and a filesystem sandbox on macOS.
 
 ### Added
 - Reader mode (`R`): only an article's text, without menus, sidebars, share buttons, newsletter
