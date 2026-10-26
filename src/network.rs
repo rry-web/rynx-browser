@@ -72,7 +72,6 @@ impl NetworkManager {
         user_agent: &str,
         timeout: Duration,
         use_proxy: bool,
-        include_headers: bool,
     ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
         let mut builder = Client::builder().user_agent(user_agent).timeout(timeout);
 
@@ -84,12 +83,6 @@ impl NetworkManager {
                 .min_tls_version(reqwest::tls::Version::TLS_1_2);
         } else {
             builder = builder.use_preconfigured_tls(Self::platform_tls_config()?);
-        }
-
-        if include_headers {
-            let mut headers = reqwest::header::HeaderMap::new();
-            headers.insert("Referer", reqwest::header::HeaderValue::from_static(""));
-            builder = builder.default_headers(headers);
         }
 
         if use_proxy {
@@ -124,25 +117,21 @@ impl NetworkManager {
             USER_AGENT,
             Duration::from_secs(BROWSING_TIMEOUT_SECS),
             false,
-            true,
         )?;
         let i2p_client = Self::build_client(
             USER_AGENT,
             Duration::from_secs(BROWSING_TIMEOUT_SECS),
-            true,
             true,
         )?;
         let download_client = Self::build_client(
             USER_AGENT,
             Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
             false,
-            false,
         )?;
         let i2p_download_client = Self::build_client(
             USER_AGENT,
             Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
             true,
-            false,
         )?;
 
         Ok(Self {

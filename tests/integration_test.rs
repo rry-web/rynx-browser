@@ -1312,3 +1312,22 @@ fn test_link_regions_match_drawn_width_for_joined_emoji() {
     let link = &renderer.links[0];
     assert!(link.x_end <= rynx_browser::renderer::display_width(&renderer.lines[link.line_index]));
 }
+
+#[tokio::test]
+async fn test_requests_send_no_referer_header() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/page"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw("<p>ok</p>", "text/html"))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let resp = load_url(&mut app, &format!("{}/page", mock_server.uri())).await;
+    assert!(matches!(resp, NetworkResponse::Success(..)));
+    let requests = mock_server.received_requests().await.unwrap();
+    assert!(
+        requests.iter().all(|r| !r.headers.contains_key("referer")),
+        "a Referer header was sent"
+    );
+}
