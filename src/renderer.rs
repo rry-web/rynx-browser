@@ -1,10 +1,11 @@
 use crate::constants::UI_BORDER_WIDTH;
+use crate::models::LinkRegion;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use scraper::{Html, Node};
+use scraper::{ElementRef, Html, Node};
 use std::borrow::Cow;
 use std::collections::HashMap;
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthChar;
 
 /// Make untrusted text safe to draw. Control characters are dropped because a terminal acts on
 /// them (escape sequences can set the title, clear the screen or write the clipboard) instead of
@@ -31,54 +32,157 @@ pub fn display_width(line: &Line) -> usize {
     line.spans
         .iter()
         .flat_map(|span| span.content.chars())
-        .map(|ch| UnicodeWidthChar::width(ch).unwrap_or(0))
+        .map(char_width)
         .sum()
+}
+
+fn char_width(ch: char) -> usize {
+    UnicodeWidthChar::width(ch).unwrap_or(0)
+}
+
+fn text_width(text: &str) -> usize {
+    text.chars().map(char_width).sum()
+}
+
+/// Elements whose content is never shown
+const SKIPPED_TAGS: &[&str] = &[
+    "script", "style", "head", "meta", "link", "title", "template", "svg", "object", "embed",
+    "param", "source", "track",
+];
+
+const BULLETS: &[&str] = &["•", "◦", "▪"];
+
+/// Drawn at the start of every line inside a block: list indentation, quote bars
+#[derive(Clone, Copy)]
+enum LinePrefix {
+    Indent(usize),
+    QuoteBar,
+}
+
+#[derive(Clone, Copy)]
+enum Numbering {
+    Decimal,
+    LowerAlpha,
+    UpperAlpha,
+    LowerRoman,
+    UpperRoman,
+}
+
+enum ListKind {
+    Unordered,
+    Ordered {
+        next: i64,
+        step: i64,
+        numbering: Numbering,
+        /// Widest marker in the list, so numbers line up ("  9." above " 10.")
+        marker_width: usize,
+    },
+}
+
+fn format_number(n: i64, numbering: Numbering) -> String {
+    fn alpha(mut n: i64, base: u8) -> String {
+        // Bijective base 26: 1 = a, 26 = z, 27 = aa
+        let mut letters = Vec::new();
+        while n > 0 {
+            n -= 1;
+            letters.push((base + (n % 26) as u8) as char);
+            n /= 26;
+        }
+        letters.iter().rev().collect()
+    }
+    fn roman(mut n: i64) -> String {
+        const NUMERALS: &[(i64, &str)] = &[
+            (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
+            (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
+        ];
+        let mut out = String::new();
+        for &(value, numeral) in NUMERALS {
+            while n >= value {
+                out.push_str(numeral);
+                n -= value;
+            }
+        }
+        out
+    }
+    match numbering {
+        Numbering::LowerAlpha if n > 0 => alpha(n, b'a'),
+        Numbering::UpperAlpha if n > 0 => alpha(n, b'A'),
+        Numbering::LowerRoman if (1..4000).contains(&n) => roman(n),
+        Numbering::UpperRoman if (1..4000).contains(&n) => roman(n).to_uppercase(),
+        // Letters and numerals can't express everything; fall back to digits like browsers do
+        _ => n.to_string(),
+    }
+}
+
+/// Hidden with the hidden attribute, aria-hidden or an inline display:none / visibility:hidden
+fn is_hidden(elem: &scraper::node::Element) -> bool {
+    if elem.attr("hidden").is_some() || elem.attr("aria-hidden") == Some("true") {
+        return true;
+    }
+    elem.attr("style").is_some_and(|style| {
+        let style: String = style.chars().filter(|c| !c.is_whitespace()).collect();
+        let style = style.to_ascii_lowercase();
+        style.contains("display:none") || style.contains("visibility:hidden")
+    })
+}
+
+/// What to do once an element's children have been rendered
+#[derive(PartialEq)]
+enum AfterElement {
+    Nothing,
+    EndLine,
+    BlockSpace,
 }
 
 pub struct DomRenderer {
     pub lines: Vec<Line<'static>>,
     current_line: Vec<Span<'static>>,
     style_stack: Vec<Style>,
-    pub links: Vec<crate::models::LinkRegion>,
+    pub links: Vec<LinkRegion>,
     /// Line index for each in-page link target (`id`, or `name` on `<a>`)
     pub anchors: HashMap<String, usize>,
     max_width: usize,
     current_line_width: usize,
+    /// Width of the prefix (indentation, quote bars) at the start of the current line
+    line_prefix_width: usize,
+    /// Whether the current line has content beyond its prefix
+    line_has_text: bool,
+    last_line_blank: bool,
+    /// Whitespace seen since the last word, drawn only if another word follows on the same line,
+    /// in the style and link it appeared in
+    pending_space: Option<(Style, Option<String>)>,
+    /// A list marker was just drawn; keep the item's first content on the same line
+    marker_pending: bool,
     active_link_url: Option<String>,
     preserve_whitespace: bool,
-    list_depth: usize,
+    prefix_stack: Vec<LinePrefix>,
+    list_stack: Vec<ListKind>,
 }
 
 impl DomRenderer {
-    /// Get the current style from the top of the stack
-    fn current_style(&self) -> Style {
-        *self.style_stack.last().unwrap_or(&Style::default())
-    }
-
-    /// Push a new style onto the stack
-    fn push_style(&mut self, style: Style) {
-        self.style_stack.push(style);
-    }
-
-    /// Pop the current style from the stack
-    fn pop_style(&mut self) {
-        if self.style_stack.len() > 1 {
-            self.style_stack.pop();
-        }
-    }
-
     pub fn new(width: usize) -> Self {
+        Self::with_content_width(width.saturating_sub(UI_BORDER_WIDTH))
+    }
+
+    /// A renderer whose lines are at most `max_width` columns (no allowance for UI borders)
+    fn with_content_width(max_width: usize) -> Self {
         Self {
             lines: Vec::new(),
             current_line: Vec::new(),
             style_stack: vec![Style::default()],
             links: Vec::new(),
             anchors: HashMap::new(),
-            max_width: width.saturating_sub(UI_BORDER_WIDTH),
+            max_width,
             current_line_width: 0,
+            line_prefix_width: 0,
+            line_has_text: false,
+            last_line_blank: true,
+            pending_space: None,
+            marker_pending: false,
             active_link_url: None,
             preserve_whitespace: false,
-            list_depth: 0,
+            prefix_stack: Vec::new(),
+            list_stack: Vec::new(),
         }
     }
 
@@ -86,36 +190,118 @@ impl DomRenderer {
         for node in document.tree.root().children() {
             self.walk(node);
         }
+        self.marker_pending = false;
         self.flush_line();
     }
 
-    fn flush_line(&mut self) {
-        if !self.current_line.is_empty() {
-            self.lines.push(Line::from(self.current_line.clone()));
-            self.current_line.clear();
-            self.current_line_width = 0;
-        }
+    fn current_style(&self) -> Style {
+        *self.style_stack.last().unwrap_or(&Style::default())
     }
 
-    fn add_vertical_space(&mut self) {
-        // Only flush the current line if it has content
-        if !self.current_line.is_empty() {
-            self.flush_line();
-        }
+    fn add_style(&mut self, change: impl FnOnce(Style) -> Style) {
+        let style = change(self.current_style());
+        self.style_stack.push(style);
+    }
 
-        // Add vertical space only if the last line has content
-        if let Some(last) = self.lines.last() {
-            if !last.spans.is_empty() {
-                self.lines.push(Line::from(""));
+    // --- Lines ---
+
+    fn flush_line(&mut self) {
+        if self.marker_pending {
+            return;
+        }
+        if self.line_has_text {
+            self.lines.push(Line::from(std::mem::take(&mut self.current_line)));
+            self.last_line_blank = false;
+        }
+        // A line holding only its prefix is discarded
+        self.current_line.clear();
+        self.current_line_width = 0;
+        self.line_prefix_width = 0;
+        self.line_has_text = false;
+        self.pending_space = None;
+    }
+
+    /// A blank line, keeping quote bars so a quotation reads as one block
+    fn push_blank_line(&mut self) {
+        let mut spans = self.prefix_spans();
+        // Drop the prefix's trailing spaces: "│ " becomes "│"
+        while let Some(last) = spans.last_mut() {
+            let trimmed = last.content.trim_end().to_string();
+            if trimmed.is_empty() {
+                spans.pop();
+            } else {
+                last.content = Cow::Owned(trimmed);
+                break;
             }
         }
+        self.lines.push(Line::from(spans));
+        self.last_line_blank = true;
     }
 
-    /// Internal helper to push text to the current line and track its link region
-    fn push_span_to_line(&mut self, content: String) {
-        let style = self.current_style();
-        for ch in content.chars() {
-            let width = UnicodeWidthChar::width(ch).unwrap_or(0);
+    /// Separate blocks (paragraphs, headings, lists) with a single blank line
+    fn add_vertical_space(&mut self) {
+        if self.marker_pending {
+            return;
+        }
+        self.flush_line();
+        if !self.last_line_blank && !self.lines.is_empty() {
+            self.push_blank_line();
+        }
+    }
+
+    /// An explicit line break (<br>, a newline in <pre>); breaking an empty line leaves it blank
+    fn line_break(&mut self) {
+        if self.marker_pending {
+            return;
+        }
+        let had_text = self.line_has_text;
+        self.flush_line();
+        // Runs of <br> used as spacers collapse to one blank line; in <pre> every line counts
+        if !had_text && (self.preserve_whitespace || !self.last_line_blank) {
+            self.push_blank_line();
+        }
+    }
+
+    fn prefix_spans(&self) -> Vec<Span<'static>> {
+        // Capped at half the width so deep nesting still leaves room for text
+        let cap = self.max_width / 2;
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        let mut width = 0;
+        for prefix in &self.prefix_stack {
+            let (text, style) = match prefix {
+                LinePrefix::Indent(n) => (" ".repeat(*n), Style::default()),
+                LinePrefix::QuoteBar => ("│ ".to_string(), Style::default().fg(Color::DarkGray)),
+            };
+            for ch in text.chars() {
+                if width >= cap {
+                    return spans;
+                }
+                match spans.last_mut() {
+                    Some(last) if last.style == style => last.content.to_mut().push(ch),
+                    _ => spans.push(Span::styled(ch.to_string(), style)),
+                }
+                width += 1;
+            }
+        }
+        spans
+    }
+
+    /// Start a fresh line with the current block prefix
+    fn apply_prefix(&mut self) {
+        if !self.current_line.is_empty() {
+            return;
+        }
+        self.current_line = self.prefix_spans();
+        self.current_line_width = self.current_line.iter().map(|s| text_width(&s.content)).sum();
+        self.line_prefix_width = self.current_line_width;
+    }
+
+    // --- Text ---
+
+    /// Append text to the current line, tracking link regions
+    fn emit(&mut self, text: &str, style: Style, link: Option<&str>) {
+        for ch in text.chars() {
+            let width = char_width(ch);
             let start_x = self.current_line_width;
             let end_x = start_x + width;
 
@@ -127,28 +313,23 @@ impl DomRenderer {
             }
             self.current_line_width += width;
 
-            // Track link regions - merge contiguous characters with same link
-            if let Some(url) = &self.active_link_url {
-                let line_idx = self.lines.len();
-
-                // Try to merge with the previous link region if it's on the same line and contiguous
+            if let Some(url) = link {
+                let line_index = self.lines.len();
+                // Merge with the previous region if it's the same link and contiguous
                 if let Some(last) = self.links.last_mut() {
-                    if last.line_index == line_idx && last.url == *url && last.x_end == start_x {
+                    if last.line_index == line_index && last.url == url && last.x_end == start_x {
                         last.x_end = end_x;
-                        continue; // Continue to next character instead of creating new region
+                        continue;
                     }
                 }
-
                 // A zero-width character (combining mark, zero-width space) can't start a
                 // clickable region on its own
                 if width == 0 {
                     continue;
                 }
-
-                // Create a new link region for this character
-                self.links.push(crate::models::LinkRegion {
-                    url: url.clone(),
-                    line_index: line_idx,
+                self.links.push(LinkRegion {
+                    url: url.to_string(),
+                    line_index,
                     x_start: start_x,
                     x_end: end_x,
                 });
@@ -156,232 +337,428 @@ impl DomRenderer {
         }
     }
 
-    /// Ensures indentation is applied at the start of a wrapped line
-    /// Indentation for a list nesting depth, capped at half the width so deeply nested lists
-    /// still leave room for their text
-    fn indent_for_depth(&self, depth: usize) -> String {
-        " ".repeat((2 * depth).min(self.max_width / 2))
+    /// Append content in the current style and link
+    fn emit_text(&mut self, text: &str) {
+        let link = self.active_link_url.clone();
+        self.emit(text, self.current_style(), link.as_deref());
+        self.line_has_text = true;
+        self.marker_pending = false;
     }
 
-    fn apply_indentation(&mut self) {
-        if self.current_line_width == 0 && self.list_depth > 0 {
-            let indent = self.indent_for_depth(self.list_depth);
-            self.push_span_to_line(indent);
+    fn note_space(&mut self) {
+        if self.pending_space.is_none() {
+            self.pending_space = Some((self.current_style(), self.active_link_url.clone()));
         }
     }
 
+    /// Place a word of flowing text, wrapping to a new line when it doesn't fit
     fn push_word(&mut self, word: &str) {
-        // Skip leading spaces on wrapped lines to keep the left margin clean
-        if word == " " && self.current_line_width == 0 && !self.preserve_whitespace {
+        if word.is_empty() {
             return;
         }
+        self.apply_prefix();
+        let width = text_width(word);
+        let space = self.pending_space.take().filter(|_| self.line_has_text);
+        let space_width = usize::from(space.is_some());
 
-        // Ensure indentation is applied at the start of any word on a new line
-        self.apply_indentation();
-
-        let word_width = UnicodeWidthStr::width(word);
-
-        // Case 1: Word fits on the current line
-        if self.current_line_width + word_width <= self.max_width {
-            self.push_span_to_line(word.to_string());
-        }
-        // Case 2: Word fits on a new line (Standard Wrap)
-        else if word_width <= self.max_width {
-            self.flush_line();
-            self.apply_indentation(); // Apply indent to the new line
-            self.push_span_to_line(word.to_string());
-        }
-        // Case 3: Word is huge (Hard Wrap - e.g., a very long URL)
-        else {
-            if self.current_line_width > 0 {
-                self.flush_line();
+        if self.current_line_width + space_width + width <= self.max_width {
+            if let Some((style, link)) = space {
+                self.emit(" ", style, link.as_deref());
             }
+            self.emit_text(word);
+        } else if self.line_has_text && self.line_prefix_width + width <= self.max_width {
+            self.flush_line();
+            self.apply_prefix();
+            self.emit_text(word);
+        } else {
+            self.hard_wrap(word);
+        }
+    }
 
-            let mut remaining = word;
-            while !remaining.is_empty() {
-                self.apply_indentation();
-
-                // Place at least one character per line, so the loop always makes progress even
-                // when indentation fills the line or the content area is 0 columns wide
-                let available_space = self
-                    .max_width
-                    .saturating_sub(self.current_line_width)
-                    .max(1);
-
-                let mut current_width = 0;
-                let mut split_idx = 0;
-                for (idx, ch) in remaining.char_indices() {
-                    let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
-                    if current_width + char_width > available_space {
-                        break;
-                    }
-                    current_width += char_width;
-                    split_idx = idx + ch.len_utf8();
+    /// Split text that is too wide for any line (e.g. a long URL) across lines
+    fn hard_wrap(&mut self, text: &str) {
+        if self.line_has_text && !self.marker_pending {
+            self.flush_line();
+        }
+        let mut remaining = text;
+        while !remaining.is_empty() {
+            self.apply_prefix();
+            // Place at least one character per line, so this always makes progress even when
+            // the prefix fills the line or the content area is 0 columns wide
+            let available = self.max_width.saturating_sub(self.current_line_width).max(1);
+            let mut used = 0;
+            let mut split = 0;
+            for (i, ch) in remaining.char_indices() {
+                if used + char_width(ch) > available && split > 0 {
+                    break;
                 }
-
-                if split_idx == 0 && !remaining.is_empty() {
-                    if let Some((idx, ch)) = remaining.char_indices().next() {
-                        split_idx = idx + ch.len_utf8();
-                    }
-                }
-
-                let (chunk, rest) = remaining.split_at(split_idx);
-                self.push_span_to_line(chunk.to_string());
-                remaining = rest;
-
-                if !remaining.is_empty() {
-                    self.flush_line();
-                }
+                used += char_width(ch);
+                split = i + ch.len_utf8();
+            }
+            let (chunk, rest) = remaining.split_at(split);
+            self.emit_text(chunk);
+            remaining = rest;
+            if !remaining.is_empty() {
+                self.flush_line();
             }
         }
     }
 
-    fn walk(&mut self, node: ego_tree::NodeRef<scraper::node::Node>) {
-        match node.value() {
-            Node::Text(text) => {
-                if self.preserve_whitespace {
-                    for line in text.text.lines() {
-                        self.push_word(&sanitize_for_terminal(line));
-                        self.flush_line();
-                    }
-                } else {
-                    for word in text.text.split_whitespace() {
-                        let word = sanitize_for_terminal(word);
-                        if word.is_empty() {
-                            continue;
-                        }
-                        if self.current_line_width > 0 && !self.current_line.is_empty() {
-                            // Add a space between words if we aren't at the start of a line
-                            self.push_word(" ");
-                        }
-                        self.push_word(&word);
-                    }
+    /// Preformatted text: spaces are kept, and long lines wrap at the edge of the screen
+    fn push_preformatted(&mut self, text: &str) {
+        for ch in text.chars() {
+            self.apply_prefix();
+            if self.line_has_text && self.current_line_width + char_width(ch) > self.max_width {
+                self.flush_line();
+                self.apply_prefix();
+            }
+            let mut buf = [0u8; 4];
+            self.emit_text(ch.encode_utf8(&mut buf));
+        }
+    }
+
+    fn push_text(&mut self, text: &str) {
+        if self.preserve_whitespace {
+            for (i, segment) in text.split('\n').enumerate() {
+                if i > 0 {
+                    self.line_break();
+                }
+                let segment = sanitize_for_terminal(segment);
+                if !segment.is_empty() {
+                    self.push_preformatted(&segment);
                 }
             }
-            Node::Element(elem) => {
-                let tag = elem.name();
+            return;
+        }
+        // HTML collapses ASCII whitespace only, so &nbsp; stays part of the word
+        if text.starts_with(|c: char| c.is_ascii_whitespace()) {
+            self.note_space();
+        }
+        for (i, word) in text.split_ascii_whitespace().enumerate() {
+            if i > 0 {
+                self.note_space();
+            }
+            self.push_word(&sanitize_for_terminal(word));
+        }
+        if text.ends_with(|c: char| c.is_ascii_whitespace()) {
+            self.note_space();
+        }
+    }
 
-                // 1. Skip Data and Hidden Tags
-                if tag == "script"
-                    || tag == "style"
-                    || tag == "head"
-                    || tag == "meta"
-                    || tag == "link"
-                {
-                    return;
-                }
-                if elem.attr("hidden").is_some() || elem.attr("aria-hidden") == Some("true") {
-                    return;
-                }
+    /// Text drawn as a link to `href`, e.g. for embedded frames and media
+    fn push_link_text(&mut self, text: &str, href: &str) {
+        let saved_link = self.active_link_url.replace(href.to_string());
+        self.add_style(|s| s.fg(Color::Cyan).add_modifier(Modifier::UNDERLINED));
+        self.push_text(text);
+        self.style_stack.pop();
+        self.active_link_url = saved_link;
+    }
 
-                let old_link = self.active_link_url.clone();
-                let old_preserve = self.preserve_whitespace;
+    // --- Elements ---
 
-                match tag {
-                    "b" | "strong" => {
-                        let new_style = self.current_style().add_modifier(Modifier::BOLD);
-                        self.push_style(new_style);
-                    }
-                    "i" | "em" => {
-                        let new_style = self.current_style().add_modifier(Modifier::ITALIC);
-                        self.push_style(new_style);
-                    }
-                    "a" => {
-                        let new_style = self
-                            .current_style()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::UNDERLINED);
-                        self.push_style(new_style);
-                        if let Some(href) = elem.attr("href") {
-                            self.active_link_url = Some(href.to_string());
-                        }
-                    }
-                    "h1" | "h2" | "h3" => {
-                        self.add_vertical_space();
-                        let new_style = self
-                            .current_style()
-                            .fg(Color::White)
-                            .add_modifier(Modifier::BOLD);
-                        self.push_style(new_style);
-                    }
-                    "pre" | "code" => {
-                        self.flush_line();
-                        self.preserve_whitespace = true;
-                        let new_style = self.current_style().fg(Color::Magenta); // Distinct color for code
-                        self.push_style(new_style);
-                    }
-                    "ul" | "ol" => {
-                        self.flush_line();
-                        self.list_depth += 1;
-                    }
-                    "li" => {
-                        self.flush_line();
-                        // The bullet's padding comes on top of the list indent; keep the two
-                        // together within the same half-width cap
-                        let indent = self.indent_for_depth(self.list_depth).len();
-                        let padding = (2 * self.list_depth.saturating_sub(1))
-                            .min((self.max_width / 2).saturating_sub(indent));
-                        let bullet = format!("{}• ", " ".repeat(padding));
-                        self.push_word(&bullet);
-                    }
-                    "img" => {
-                        let alt = elem.attr("alt").unwrap_or("IMAGE");
-                        let new_style = self.current_style().fg(Color::DarkGray);
-                        self.push_style(new_style);
-                        self.push_word(&format!("[{}] ", sanitize_for_terminal(alt)));
-                        self.pop_style();
-                    }
-                    "br" => self.flush_line(),
-                    "p" | "main" | "article" | "section" | "table" | "aside" => {
-                        self.add_vertical_space()
-                    }
-                    "div" | "header" | "footer" | "nav" | "tr" => self.flush_line(),
-                    "td" | "th" => self.push_word("  "),
-                    "hr" => {
-                        self.add_vertical_space();
-                        self.push_word(&"-".repeat(self.max_width));
-                        self.add_vertical_space();
-                    }
-                    _ => {}
-                }
-
-                // Record link targets after any block spacing, so jumps land on the content
-                let anchor = elem
-                    .attr("id")
-                    .or_else(|| if tag == "a" { elem.attr("name") } else { None });
-                if let Some(name) = anchor {
-                    // First occurrence wins, as in browsers
-                    self.anchors.entry(name.to_string()).or_insert(self.lines.len());
-                }
-
-                for child in node.children() {
-                    self.walk(child);
-                }
-
-                // Pop style from stack for tags that push styles
-                match tag {
-                    "b" | "strong" | "i" | "em" | "a" | "h1" | "h2" | "h3" | "pre" | "code" => {
-                        self.pop_style();
-                    }
-                    _ => {}
-                }
-
-                // Restore other state
-                self.active_link_url = old_link;
-                self.preserve_whitespace = old_preserve;
-
-                match tag {
-                    "ul" | "ol" => {
-                        self.list_depth = self.list_depth.saturating_sub(1);
-                        self.flush_line();
-                    }
-                    "h1" | "h2" | "h3" | "p" | "main" | "article" | "section" | "table"
-                    | "aside" | "pre" => self.add_vertical_space(),
-                    "div" | "li" | "header" | "footer" | "nav" | "tr" => self.flush_line(),
-                    _ => {}
+    fn walk(&mut self, node: ego_tree::NodeRef<Node>) {
+        match node.value() {
+            Node::Text(text) => self.push_text(&text.text),
+            Node::Element(_) => {
+                if let Some(element) = ElementRef::wrap(node) {
+                    self.walk_element(element);
                 }
             }
             _ => {}
+        }
+    }
+
+    fn walk_element(&mut self, element: ElementRef) {
+        let elem = element.value();
+        let tag = elem.name();
+        if SKIPPED_TAGS.contains(&tag) || is_hidden(elem) {
+            return;
+        }
+
+        // Elements drawn without walking their children
+        match tag {
+            "br" => return self.line_break(),
+            "hr" => {
+                self.add_vertical_space();
+                self.apply_prefix();
+                let rule = "─".repeat(self.max_width.saturating_sub(self.current_line_width));
+                self.emit_text(&rule);
+                return self.add_vertical_space();
+            }
+            "img" => {
+                // alt="" marks a decorative image; an image without alt is only worth showing
+                // when it's a link, so the link stays visible
+                let label = match elem.attr("alt").map(str::trim) {
+                    Some("") => return,
+                    Some(alt) => alt.to_string(),
+                    None if self.active_link_url.is_some() => "image".to_string(),
+                    None => return,
+                };
+                self.add_style(|s| s.fg(Color::DarkGray));
+                self.push_word(&format!("[{}]", sanitize_for_terminal(&label)));
+                self.style_stack.pop();
+                return;
+            }
+            "iframe" => {
+                if let Some(src) = elem.attr("src") {
+                    let label = elem.attr("title").unwrap_or("embedded page");
+                    self.flush_line();
+                    self.push_link_text(&format!("[Embedded: {}]", label), src);
+                    self.flush_line();
+                }
+                return;
+            }
+            "video" | "audio" => {
+                let src = elem.attr("src").or_else(|| {
+                    element
+                        .children()
+                        .filter_map(ElementRef::wrap)
+                        .find(|child| child.value().name() == "source")
+                        .and_then(|source| source.value().attr("src"))
+                });
+                if let Some(src) = src {
+                    let label = if tag == "video" { "[Video]" } else { "[Audio]" };
+                    self.flush_line();
+                    self.push_link_text(label, src);
+                    self.flush_line();
+                }
+                return;
+            }
+            "noscript" => return self.walk_noscript(element),
+            _ => {}
+        }
+
+        let saved_link = self.active_link_url.clone();
+        let saved_preserve = self.preserve_whitespace;
+        let saved_styles = self.style_stack.len();
+        let saved_prefixes = self.prefix_stack.len();
+        let saved_lists = self.list_stack.len();
+
+        self.open_element(element);
+
+        // Record link targets after any block spacing, so jumps land on the content
+        let anchor = elem
+            .attr("id")
+            .or_else(|| if tag == "a" { elem.attr("name") } else { None });
+        if let Some(name) = anchor {
+            // First occurrence wins, as in browsers
+            self.anchors.entry(name.to_string()).or_insert(self.lines.len());
+        }
+
+        for child in element.children() {
+            self.walk(child);
+        }
+
+        let after = self.close_element(tag);
+        if after != AfterElement::Nothing {
+            self.flush_line();
+        }
+
+        // A blank line left by the element's last child belongs outside it: redraw it without
+        // the element's prefix, so a quotation doesn't end with a stray "│"
+        let prefix_shrinks = self.prefix_stack.len() > saved_prefixes;
+
+        // Undo everything the element pushed, even if its children were unbalanced
+        self.style_stack.truncate(saved_styles);
+        self.prefix_stack.truncate(saved_prefixes);
+        if prefix_shrinks && self.last_line_blank && !self.line_has_text && !self.lines.is_empty() {
+            self.lines.pop();
+            self.push_blank_line();
+        }
+        self.list_stack.truncate(saved_lists);
+        self.active_link_url = saved_link;
+        self.preserve_whitespace = saved_preserve;
+
+        if after == AfterElement::BlockSpace {
+            self.add_vertical_space();
+        }
+    }
+
+    fn open_element(&mut self, element: ElementRef) {
+        let elem = element.value();
+        match elem.name() {
+            "b" | "strong" => self.add_style(|s| s.add_modifier(Modifier::BOLD)),
+            "i" | "em" | "cite" | "dfn" | "var" => self.add_style(|s| s.add_modifier(Modifier::ITALIC)),
+            "u" | "ins" => self.add_style(|s| s.add_modifier(Modifier::UNDERLINED)),
+            "s" | "strike" | "del" => self.add_style(|s| s.add_modifier(Modifier::CROSSED_OUT)),
+            "small" => self.add_style(|s| s.add_modifier(Modifier::DIM)),
+            "mark" => self.add_style(|s| s.bg(Color::DarkGray).fg(Color::White)),
+            "code" | "kbd" | "samp" | "tt" => self.add_style(|s| s.fg(Color::Magenta)),
+            "a" => {
+                // Only real links are styled; <a id=...> is just a jump target
+                if let Some(href) = elem.attr("href") {
+                    self.add_style(|s| s.fg(Color::Cyan).add_modifier(Modifier::UNDERLINED));
+                    self.active_link_url = Some(href.to_string());
+                }
+            }
+            "q" => self.push_word("“"),
+            "sup" => self.push_word("^"),
+            "sub" => self.push_word("_"),
+            "h1" | "h2" | "h3" => {
+                self.add_vertical_space();
+                self.add_style(|s| s.fg(Color::White).add_modifier(Modifier::BOLD));
+            }
+            "h4" | "h5" | "h6" => {
+                self.add_vertical_space();
+                self.add_style(|s| s.add_modifier(Modifier::BOLD));
+            }
+            "p" | "main" | "article" | "section" | "aside" | "figure" | "fieldset" | "form"
+            | "details" | "center" | "hgroup" | "dl" | "table" => self.add_vertical_space(),
+            "address" => {
+                self.add_vertical_space();
+                self.add_style(|s| s.add_modifier(Modifier::ITALIC));
+            }
+            "div" | "header" | "footer" | "nav" | "legend" | "search" | "tr" => self.flush_line(),
+            "figcaption" => {
+                self.flush_line();
+                self.add_style(|s| s.add_modifier(Modifier::ITALIC | Modifier::DIM));
+            }
+            "summary" => {
+                self.flush_line();
+                self.add_style(|s| s.add_modifier(Modifier::BOLD));
+                self.push_word("▸");
+                self.note_space();
+            }
+            "pre" => {
+                self.add_vertical_space();
+                self.preserve_whitespace = true;
+                self.add_style(|s| s.fg(Color::Magenta));
+            }
+            "blockquote" => {
+                self.add_vertical_space();
+                self.prefix_stack.push(LinePrefix::QuoteBar);
+            }
+            "ul" | "ol" | "menu" => {
+                if self.list_stack.is_empty() {
+                    self.add_vertical_space();
+                } else {
+                    self.flush_line();
+                }
+                let kind = if elem.name() == "ol" {
+                    Self::ordered_list(element)
+                } else {
+                    ListKind::Unordered
+                };
+                self.list_stack.push(kind);
+                self.prefix_stack.push(LinePrefix::Indent(2));
+            }
+            "li" => self.start_list_item(elem),
+            "dt" => {
+                self.flush_line();
+                self.add_style(|s| s.add_modifier(Modifier::BOLD));
+            }
+            "dd" => {
+                self.flush_line();
+                self.prefix_stack.push(LinePrefix::Indent(4));
+            }
+            "td" | "th" => {
+                if self.line_has_text {
+                    self.emit_text("  ");
+                }
+                if elem.name() == "th" {
+                    self.add_style(|s| s.add_modifier(Modifier::BOLD));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn close_element(&mut self, tag: &str) -> AfterElement {
+        match tag {
+            "q" => {
+                self.push_word("”");
+                AfterElement::Nothing
+            }
+            "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p" | "main" | "article" | "section"
+            | "aside" | "figure" | "fieldset" | "form" | "details" | "center" | "hgroup"
+            | "address" | "pre" | "blockquote" | "dl" | "table" => AfterElement::BlockSpace,
+            // Only the outermost list is separated from the text around it
+            "ul" | "ol" | "menu" if self.list_stack.len() <= 1 => AfterElement::BlockSpace,
+            "li" => {
+                self.marker_pending = false;
+                AfterElement::EndLine
+            }
+            "ul" | "ol" | "menu" | "div" | "header" | "footer" | "nav" | "legend" | "search"
+            | "figcaption" | "summary" | "dt" | "dd" | "tr" => AfterElement::EndLine,
+            _ => AfterElement::Nothing,
+        }
+    }
+
+    fn ordered_list(element: ElementRef) -> ListKind {
+        let elem = element.value();
+        let items: Vec<ElementRef> = element
+            .children()
+            .filter_map(ElementRef::wrap)
+            .filter(|child| child.value().name() == "li")
+            .collect();
+        let count = items.len().max(1) as i64;
+        let reversed = elem.attr("reversed").is_some();
+        let step: i64 = if reversed { -1 } else { 1 };
+        let start = elem
+            .attr("start")
+            .and_then(|s| s.trim().parse::<i64>().ok())
+            .unwrap_or(if reversed { count } else { 1 });
+        let numbering = match elem.attr("type") {
+            Some("a") => Numbering::LowerAlpha,
+            Some("A") => Numbering::UpperAlpha,
+            Some("i") => Numbering::LowerRoman,
+            Some("I") => Numbering::UpperRoman,
+            _ => Numbering::Decimal,
+        };
+        // Number the items as start_list_item will, including value= jumps, to find the widest
+        let mut next = start;
+        let mut marker_width = 2;
+        for item in &items {
+            if let Some(value) = item.value().attr("value").and_then(|v| v.trim().parse::<i64>().ok()) {
+                next = value;
+            }
+            marker_width = marker_width.max(format_number(next, numbering).len() + 1);
+            next = next.saturating_add(step);
+        }
+        ListKind::Ordered { next: start, step, numbering, marker_width }
+    }
+
+    fn start_list_item(&mut self, elem: &scraper::node::Element) {
+        self.marker_pending = false;
+        self.flush_line();
+        let unordered_depth = self
+            .list_stack
+            .iter()
+            .filter(|kind| matches!(kind, ListKind::Unordered))
+            .count();
+        let marker = match self.list_stack.last_mut() {
+            Some(ListKind::Ordered { next, step, numbering, marker_width }) => {
+                if let Some(value) = elem.attr("value").and_then(|v| v.trim().parse::<i64>().ok()) {
+                    *next = value;
+                }
+                let label = format!("{}.", format_number(*next, *numbering));
+                *next = next.saturating_add(*step);
+                format!("{:>width$} ", label, width = *marker_width)
+            }
+            _ => format!("{} ", BULLETS[unordered_depth.saturating_sub(1) % BULLETS.len()]),
+        };
+        self.apply_prefix();
+        let style = self.current_style();
+        self.emit(&marker, style, None);
+        self.line_has_text = true;
+        self.marker_pending = true;
+        // Wrapped lines of the item line up with its text, after the marker
+        self.prefix_stack.push(LinePrefix::Indent(text_width(&marker)));
+    }
+
+    /// With no JavaScript, <noscript> content is what the page wants shown. The parser treats it
+    /// as raw text (as a scripting browser would), so parse that text as HTML.
+    fn walk_noscript(&mut self, element: ElementRef) {
+        if element.children().any(|child| child.value().is_element()) {
+            for child in element.children() {
+                self.walk(child);
+            }
+            return;
+        }
+        let markup: String = element.text().collect();
+        let fragment = Html::parse_fragment(&markup);
+        for child in fragment.root_element().children() {
+            self.walk(child);
         }
     }
 }

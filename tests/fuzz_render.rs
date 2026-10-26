@@ -41,7 +41,9 @@ impl Rng {
 const TAGS: &[&str] = &[
     "p", "div", "a", "b", "strong", "i", "em", "pre", "code", "ul", "ol", "li", "h1", "h2", "h3",
     "table", "tr", "td", "th", "img", "br", "hr", "span", "section", "article", "nav", "header",
-    "footer", "aside", "main", "script", "style", "head", "title", "blockquote", "unknown",
+    "footer", "aside", "main", "script", "style", "head", "title", "blockquote", "unknown", "dl",
+    "dt", "dd", "q", "sup", "sub", "del", "mark", "kbd", "details", "summary", "noscript", "iframe",
+    "video", "source", "menu", "figure", "figcaption", "h4", "h5", "h6", "svg",
 ];
 
 const TEXT: &[&str] = &[
@@ -49,6 +51,11 @@ const TEXT: &[&str] = &[
     "漢字テキスト", "中文", "🦀", "👨‍👩‍👧", "e\u{301}", "\u{200b}", "\u{202e}rtl", "\u{1b}[31m",
     "\u{1b}]52;c;cHduZWQ=\u{7}", "\u{9b}2J", "\r", "\u{0}", "&amp;", "&lt;b&gt;", "&#x1F980;", "&nbsp;",
     "x\u{fe0f}", "\u{fffd}",
+];
+
+const NUMBERS: &[&str] = &[
+    "0", "1", "-3", "26", "27", "3999", "4000", "9223372036854775807", "-9223372036854775808",
+    "99999999999999999999", "x", "",
 ];
 
 const HREFS: &[&str] = &[
@@ -79,12 +86,16 @@ fn random_html_into(rng: &mut Rng, depth: usize, html: &mut String) {
                 html.push('<');
                 html.push_str(tag);
                 for _ in 0..rng.below(3) {
-                    match rng.below(5) {
+                    match rng.below(9) {
                         0 => html.push_str(&format!(" href=\"{}\"", rng.pick(HREFS))),
                         1 => html.push_str(&format!(" id=\"ch{}\"", rng.below(4))),
                         2 => html.push_str(&format!(" name=\"{}\"", rng.pick(TEXT))),
                         3 => html.push_str(&format!(" alt=\"{}\"", rng.pick(TEXT))),
-                        _ => html.push_str(" hidden"),
+                        4 => html.push_str(&format!(" src=\"{}\"", rng.pick(HREFS))),
+                        5 => html.push_str(&format!(" start=\"{}\"", rng.pick(NUMBERS))),
+                        6 => html.push_str(&format!(" value=\"{}\"", rng.pick(NUMBERS))),
+                        7 => html.push_str(&format!(" type=\"{}\"", rng.pick(&["a", "A", "i", "I", "1", "x"]))),
+                        _ => html.push_str(rng.pick(&[" hidden", " reversed", " style=\"display:none\""])),
                     }
                 }
                 html.push('>');
