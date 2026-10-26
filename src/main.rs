@@ -2,10 +2,11 @@ use rynx_browser::app::App;
 use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, process_network_events};
 use rynx_browser::ui::ui;
 
-use std::{error::Error, io, time::Duration};
+use std::{error::Error, fmt, io, time::Duration};
 
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
+    Command,
+    event::{self, DisableMouseCapture, Event},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -14,6 +15,30 @@ use ratatui::{
     Terminal,
     backend::{Backend, CrosstermBackend},
 };
+
+/// Like crossterm's EnableMouseCapture, but without motion reporting (?1003), which the browser
+/// never uses and which floods the input queue with an event for every pointer movement.
+struct EnableClickAndWheelCapture;
+
+impl Command for EnableClickAndWheelCapture {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        // ?1000: button presses, releases and wheel; ?1006: SGR encoding for large terminals
+        f.write_str("\x1B[?1000h\x1B[?1006h")
+    }
+
+    #[cfg(windows)]
+    fn execute_winapi(&self) -> io::Result<()> {
+        crossterm::event::EnableMouseCapture.execute_winapi()
+    }
+}
+
+/// Discard input still queued at exit so stray mouse reports don't land in the shell
+fn drain_pending_input() -> io::Result<()> {
+    while event::poll(Duration::from_millis(rynx_browser::constants::EXIT_DRAIN_TIMEOUT_MS))? {
+        let _ = event::read()?;
+    }
+    Ok(())
+}
 
 // MAIN LOOP (ASYNC)
 #[tokio::main] // This macro turns main() into an async runtime
@@ -28,7 +53,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Setup Terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen, EnableClickAndWheelCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -42,13 +67,11 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // Run App
     let res = run_app(&mut terminal, app).await;
 
-    // Teardown
+    // Teardown: stop mouse reporting and drain input while still in raw mode
+    execute!(terminal.backend_mut(), DisableMouseCapture)?;
+    drain_pending_input()?;
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
 
     if let Err(err) = res {

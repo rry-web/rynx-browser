@@ -35,6 +35,8 @@ pub const JUMP_SERVICES: &[&str] = &[
 
 // Event polling
 pub const EVENT_POLL_TIMEOUT_MS: u64 = 10;
+// How long to wait for in-flight input after mouse capture is disabled on exit
+pub const EXIT_DRAIN_TIMEOUT_MS: u64 = 20;
 
 // Redirect policy
 pub const MAX_REDIRECTS: usize = 10;
