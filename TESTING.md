@@ -8,6 +8,17 @@ Tip: `cargo run --release` renders large pages about 6× faster than a debug bui
 
 Items marked **(priority)** could not be checked at all during development, or only partly.
 
+## Automated security checks
+
+These run in CI (`.github/workflows/ci.yml`) on every push and weekly, but can be run locally:
+
+- [ ] `cargo audit`: no known vulnerabilities in dependencies. (Three warnings, `lru` and
+      `paste`, come from ratatui 0.29 and go away with a ratatui upgrade.)
+- [ ] `cargo test --test live_tls -- --ignored`: certificate and TLS version checks against
+      badssl.com (needs internet).
+- [ ] `FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render`: randomised renderer
+      and UI cases (about 4 minutes). Reproduce a failure with `FUZZ_SEED=<seed>`.
+
 ## Local test servers
 
 Some security checks need a deliberately hostile page. These serve one from your own machine.
