@@ -292,10 +292,8 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
         KeyCode::Enter => {
             let tab = app.current_tab();
             // Save the page we're leaving, not the address that was just typed
-            if let Some(previous_url) = tab.url_before_edit.take() {
-                if !previous_url.is_empty() {
-                    tab.history.push(previous_url);
-                }
+            if let Some(previous_url) = tab.url_before_edit.take().filter(|u| !u.is_empty()) {
+                tab.history.push(previous_url);
             }
 
             app.submit_request();
