@@ -382,10 +382,7 @@ impl App {
             i2p_mode: false,
             clipboard: arboard::Clipboard::new().ok(),
             network_manager,
-            // Resolve target directory using the directories crate
-            download_dir: UserDirs::new()
-                .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
-                .unwrap_or_default(),
+            download_dir: Self::default_download_dir(),
             render_in_background: true,
         })
     }
@@ -398,6 +395,16 @@ impl App {
     pub fn paste_from_clipboard(&mut self) -> Result<String, String> {
         let clipboard = self.clipboard.as_mut().ok_or("Clipboard unavailable")?;
         clipboard.get_text().map_err(|e| format!("Clipboard error: {}", e))
+    }
+
+    /// The user's Downloads folder. Minimal Linux systems without XDG user dirs don't define
+    /// one; ~/Downloads is used there, as other browsers do.
+    pub fn default_download_dir() -> PathBuf {
+        let dirs = UserDirs::new();
+        dirs.as_ref()
+            .and_then(|d| d.download_dir().map(|p| p.to_path_buf()))
+            .or_else(|| dirs.as_ref().map(|d| d.home_dir().join("Downloads")))
+            .unwrap_or_default()
     }
 
     pub fn current_tab(&mut self) -> &mut BrowserTab {

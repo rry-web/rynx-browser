@@ -28,6 +28,10 @@ directories = "6.0.0"
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
 xattr = "1.6.1"
 
+# Filesystem sandbox
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4.7"
+
 [dev-dependencies]
 wiremock = "0.6.5"
 flate2 = "1.1.10"

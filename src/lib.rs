@@ -6,4 +6,5 @@ pub mod event_handler;
 pub mod models;
 pub mod network;
 pub mod renderer;
+pub mod sandbox;
 pub mod ui;

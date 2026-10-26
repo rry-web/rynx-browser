@@ -1,4 +1,5 @@
 use rynx_browser::app::App;
+use rynx_browser::sandbox::SandboxStatus;
 use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, process_network_events};
 use rynx_browser::ui::ui;
 
@@ -40,9 +41,62 @@ fn drain_pending_input() -> io::Result<()> {
     Ok(())
 }
 
-// MAIN LOOP (ASYNC)
-#[tokio::main] // This macro turns main() into an async runtime
-async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+const USAGE: &str = "\
+Usage: rynx_browser [OPTIONS]
+
+A terminal web browser with no JavaScript.
+
+Options:
+      --no-sandbox  Don't restrict filesystem access (Linux). Use only to troubleshoot, e.g. if
+                    downloads fail because your Downloads folder is somewhere unusual.
+  -V, --version     Print the version and exit
+  -h, --help        Print this help and exit
+
+Key bindings are listed on the start page and in the README.";
+
+fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+    let mut sandbox_enabled = true;
+    for arg in std::env::args().skip(1) {
+        match arg.as_str() {
+            "--no-sandbox" => sandbox_enabled = false,
+            "-V" | "--version" => {
+                println!("rynx_browser {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
+            "-h" | "--help" => {
+                println!("{}", USAGE);
+                return Ok(());
+            }
+            other => {
+                eprintln!("rynx_browser: unknown option '{}'\n\n{}", other, USAGE);
+                std::process::exit(2);
+            }
+        }
+    }
+
+    // Sandbox while this is still the only thread: every thread started afterwards (the async
+    // runtime, clipboard, background rendering) inherits the restrictions. Downloads must exist
+    // first, since nothing outside it can be created later.
+    let download_dir = App::default_download_dir();
+    let sandbox = if sandbox_enabled {
+        if !download_dir.as_os_str().is_empty() {
+            let _ = std::fs::create_dir_all(&download_dir);
+        }
+        rynx_browser::sandbox::restrict_filesystem(&download_dir)
+    } else {
+        SandboxStatus::Disabled
+    };
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(run(download_dir, sandbox))
+}
+
+async fn run(
+    download_dir: std::path::PathBuf,
+    sandbox: SandboxStatus,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     // This hook catches panics and restores the terminal before printing the error
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
@@ -59,7 +113,12 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     // Setup Channel
     let (tx, rx) = tokio::sync::mpsc::channel(rynx_browser::constants::CHANNEL_CAPACITY);
-    let app = App::new(tx, rx)?;
+    let mut app = App::new(tx, rx)?;
+    app.download_dir = download_dir;
+    let sandbox_note = sandbox.describe();
+    if !sandbox_note.is_empty() {
+        app.current_tab().status_message = format!("Ready ({})", sandbox_note);
+    }
 
     // Initialize MCP
     //app.init_mcp().await;
