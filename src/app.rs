@@ -738,20 +738,84 @@ impl App {
         std::fs::symlink_metadata(path).is_ok()
     }
 
-    /// Tag a download as coming from the internet, as Safari and Chrome do, so macOS Gatekeeper
-    /// checks it before it is first opened. Value format: flags;hex timestamp;agent;event id.
+    /// The download URL as recorded on the saved file: no credentials or #fragment
+    fn origin_url(url: &str) -> String {
+        match Url::parse(url) {
+            Ok(mut parsed) => {
+                let _ = parsed.set_username("");
+                let _ = parsed.set_password(None);
+                parsed.set_fragment(None);
+                parsed.to_string()
+            }
+            Err(_) => url.to_string(),
+        }
+    }
+
+    /// Tag a download as coming from the internet, as other browsers do, so the OS treats it with
+    /// suspicion. macOS: the quarantine attribute, so Gatekeeper checks it before it's first
+    /// opened (format: flags;hex timestamp;agent;event id).
+    /// The origin is also recorded where Finder's "Where from" and the Gatekeeper dialog read it.
     #[cfg(target_os = "macos")]
-    fn mark_quarantined(path: &Path) -> std::io::Result<()> {
+    fn mark_downloaded(path: &Path, url: &str) -> std::io::Result<()> {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
         let value = format!("0081;{:08x};rynx_browser;", timestamp);
-        xattr::set(path, "com.apple.quarantine", value.as_bytes())
+        xattr::set(path, "com.apple.quarantine", value.as_bytes())?;
+        let where_from = Self::binary_plist_string_array(&Self::origin_url(url));
+        xattr::set(path, "com.apple.metadata:kMDItemWhereFroms", &where_from)
     }
 
-    #[cfg(not(target_os = "macos"))]
-    fn mark_quarantined(_path: &Path) -> std::io::Result<()> {
+    /// A binary property list holding a one-element array of an ASCII string (URLs serialise as
+    /// ASCII), the format of kMDItemWhereFroms
+    #[cfg(target_os = "macos")]
+    fn binary_plist_string_array(text: &str) -> Vec<u8> {
+        let mut plist = b"bplist00".to_vec();
+        let array_offset = plist.len();
+        plist.extend([0xA1, 0x01]); // array of 1 element: object 1
+        let string_offset = plist.len();
+        let bytes = text.as_bytes();
+        if bytes.len() < 15 {
+            plist.push(0x50 | bytes.len() as u8);
+        } else {
+            // Length follows as an int object: 0x13 marks an 8-byte big-endian integer
+            plist.push(0x5F);
+            plist.push(0x13);
+            plist.extend((bytes.len() as u64).to_be_bytes());
+        }
+        plist.extend(bytes);
+        let offset_table = plist.len();
+        for offset in [array_offset, string_offset] {
+            plist.extend((offset as u64).to_be_bytes());
+        }
+        // Trailer: 6 unused bytes, offset size, object ref size, object count, top object,
+        // offset table position
+        plist.extend([0u8; 6]);
+        plist.extend([8, 1]);
+        plist.extend(2u64.to_be_bytes());
+        plist.extend(0u64.to_be_bytes());
+        plist.extend((offset_table as u64).to_be_bytes());
+        plist
+    }
+
+    /// Windows: the Mark of the Web, a Zone.Identifier stream saying the file came from the
+    /// Internet zone, which SmartScreen and Office Protected View check
+    #[cfg(windows)]
+    fn mark_downloaded(path: &Path, url: &str) -> std::io::Result<()> {
+        let stream = format!("{}:Zone.Identifier", path.display());
+        let content = format!("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl={}\r\n", Self::origin_url(url));
+        std::fs::write(stream, content)
+    }
+
+    /// Linux and other Unix: the freedesktop origin attribute, shown by file managers
+    #[cfg(all(unix, not(target_os = "macos")))]
+    fn mark_downloaded(path: &Path, url: &str) -> std::io::Result<()> {
+        xattr::set(path, "user.xdg.origin.url", Self::origin_url(url).as_bytes())
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    fn mark_downloaded(_path: &Path, _url: &str) -> std::io::Result<()> {
         Ok(())
     }
 
@@ -861,8 +925,8 @@ impl App {
                         }
                     };
                     // Tag before writing, so even a partial download is checked on first open.
-                    // Best effort: some filesystems (e.g. FAT USB drives) have no extended attributes.
-                    let _ = Self::mark_quarantined(&file_path);
+                    // Best effort: some filesystems (e.g. FAT USB drives) can't store the tag.
+                    let _ = Self::mark_downloaded(&file_path, &url);
                     file_handle = Some((file, file_path.display().to_string()));
                 }
 

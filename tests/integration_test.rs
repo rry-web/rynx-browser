@@ -1250,6 +1250,34 @@ async fn test_downloads_are_quarantined_for_gatekeeper() {
     assert!(value.starts_with("0081;") && value.contains(";rynx_browser;"), "{value}");
 }
 
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn test_downloads_record_where_they_came_from() {
+    let mut app = test_app();
+    let dir = app.download_dir.clone();
+    let (saved, origin) = download_sample(&mut app, "tool.zip").await;
+
+    // Decode the attribute with macOS's own plist parser
+    let raw = std::process::Command::new("/usr/bin/xattr")
+        .args(["-px", "com.apple.metadata:kMDItemWhereFroms", &saved])
+        .output()
+        .unwrap();
+    assert!(raw.status.success(), "no kMDItemWhereFroms attribute");
+    let hex: String = String::from_utf8_lossy(&raw.stdout).split_whitespace().collect();
+    let bytes: Vec<u8> = (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap()).collect();
+    let plist_file = dir.join("where-from.plist");
+    std::fs::write(&plist_file, &bytes).unwrap();
+    let parsed = std::process::Command::new("/usr/bin/plutil")
+        .args(["-convert", "json", "-o", "-"])
+        .arg(&plist_file)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(parsed.status.success(), "plutil rejected the plist: {}", String::from_utf8_lossy(&parsed.stderr));
+    let json = String::from_utf8_lossy(&parsed.stdout);
+    assert_eq!(json.trim(), format!("[\"{}\"]", origin.replace('/', "\\/")));
+}
+
 /// Render on another thread so a regression into an infinite loop fails instead of hanging
 fn render_within_time_limit(html: String, width: usize) -> Vec<String> {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -1497,4 +1525,50 @@ async fn test_downloads_never_write_through_symlinks() {
     assert_eq!(std::fs::read(&target).unwrap(), b"precious");
     let _ = std::fs::remove_dir_all(&dir);
     let _ = std::fs::remove_file(&target);
+}
+
+/// Download a small file and return where it was saved
+async fn download_sample(app: &mut App, name: &str) -> (String, String) {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/{name}")))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"PK\x03\x04zip".to_vec()))
+        .mount(&mock_server)
+        .await;
+    // Credentials and fragments must not be recorded on the file
+    let address = mock_server.address();
+    let url = format!("http://user:secret@{address}/{name}#frag");
+    start_download(app, &url);
+    let (resp, _) = finish_download(app).await;
+    let NetworkResponse::DownloadFinished(_, saved) = resp else { panic!("download failed") };
+    (saved, format!("http://{address}/{name}"))
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn test_downloads_get_the_mark_of_the_web() {
+    let mut app = test_app();
+    let (saved, origin) = download_sample(&mut app, "tool.zip").await;
+    let mark = std::fs::read_to_string(format!("{saved}:Zone.Identifier")).expect("no Zone.Identifier");
+    assert!(mark.contains("ZoneId=3"), "{mark}");
+    assert!(mark.contains(&format!("HostUrl={origin}")), "{mark}");
+    assert!(!mark.contains("secret"), "{mark}");
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[tokio::test]
+async fn test_downloads_record_their_origin() {
+    let mut app = test_app();
+    // Not every filesystem stores user extended attributes (e.g. some tmpfs); skip there
+    let probe = std::env::temp_dir().join(format!("rynx-xattr-probe-{}", std::process::id()));
+    std::fs::write(&probe, b"").unwrap();
+    let supported = xattr::set(&probe, "user.rynx.probe", b"1").is_ok();
+    let _ = std::fs::remove_file(&probe);
+    if !supported {
+        eprintln!("skipping: user extended attributes unsupported on the temp filesystem");
+        return;
+    }
+    let (saved, origin) = download_sample(&mut app, "tool.zip").await;
+    let recorded = xattr::get(&saved, "user.xdg.origin.url").unwrap().expect("no origin attribute");
+    assert_eq!(String::from_utf8(recorded).unwrap(), origin);
 }
