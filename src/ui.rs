@@ -31,77 +31,82 @@ fn render_tabs(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(tabs, area);
 }
 
-/// Render the URL input bar with mode styling
+/// A mode's label in the address bar: bold black on `color`
+fn badge(text: &str, color: Color) -> Span<'static> {
+    Span::styled(format!(" {} ", text), Style::default().fg(Color::Black).bg(color).add_modifier(Modifier::BOLD))
+}
+
+/// Render the address bar: the address (or what the current mode needs), with the mode as a
+/// label on the left of its title and the network on the right
 fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
     let active_tab = &app.tabs[app.active_tab_index];
-    let input_style = match active_tab.input_mode {
-        InputMode::Normal => Style::default(),
-        InputMode::Editing => Style::default().fg(Color::Yellow),
-        InputMode::Visual => Style::default().fg(Color::Blue),
-        InputMode::Search => Style::default().fg(Color::Magenta),
-        InputMode::FormEdit => Style::default().fg(Color::Green),
-    };
+    let key = |text: &'static str| Span::styled(text, Style::default().add_modifier(Modifier::BOLD));
 
-    let mode_text = if app.i2p_mode {
-        " [I2P MODE ON] "
-    } else {
-        " [Clearweb] "
-    };
-
-    // In Search mode, show the search query instead of the URL
-    let (display_text, title) = match active_tab.input_mode {
+    let (label, body): (Line, Line) = match active_tab.input_mode {
         InputMode::Search => {
-            let query = active_tab
+            let (query, count, current) = active_tab
                 .search_state
                 .as_ref()
-                .map(|s| s.query.as_str())
-                .unwrap_or("");
-            let match_count = active_tab
-                .search_state
-                .as_ref()
-                .map(|s| s.matches.len())
-                .unwrap_or(0);
-            let current_index = if match_count == 0 {
-                0
-            } else {
-                active_tab
-                    .search_state
-                    .as_ref()
-                    .map(|s| s.current_match_index + 1)
-                    .unwrap_or(0)
-            };
-
+                .map(|s| (s.query.as_str(), s.matches.len(), if s.matches.is_empty() { 0 } else { s.current_match_index + 1 }))
+                .unwrap_or(("", 0, 0));
             (
-                query,
-                format!(
-                    "SEARCH - {} [{}/{}] {}",
-                    mode_text.trim(),
-                    current_index,
-                    match_count,
-                    mode_text
-                ),
+                Line::from(vec![
+                    badge("FIND", Color::Magenta),
+                    Span::raw(if count == 0 { String::from(" no matches ") } else { format!(" match {} of {} ", current, count) }),
+                ]),
+                Line::from(sanitize_for_terminal(query).into_owned()),
             )
         }
-        InputMode::FormEdit => (
-            active_tab.url_input.as_str(),
-            format!("TYPING INTO FORM - {}", mode_text),
-        ),
-        _ => (
-            active_tab.url_input.as_str(),
-            format!("URL - {}", mode_text),
-        ),
+        InputMode::Visual => {
+            let selected = active_tab.extract_text_from_selection().chars().count();
+            (
+                Line::from(vec![badge("COPY MODE", Color::Cyan), Span::raw(format!(" {} characters selected ", selected))]),
+                Line::from(vec![
+                    Span::raw("Move with "),
+                    key("h j k l"),
+                    Span::raw(" or arrows to select · "),
+                    key("y"),
+                    Span::raw(" copies · "),
+                    key("Esc"),
+                    Span::raw(" cancels"),
+                ]),
+            )
+        }
+        mode => {
+            // A password typed into the address is hidden except while editing it
+            let address = if mode == InputMode::Editing {
+                active_tab.url_input.clone()
+            } else {
+                crate::network::mask_password(&active_tab.url_input)
+            };
+            let label = match mode {
+                InputMode::Editing => Line::from(vec![badge("EDITING ADDRESS", Color::Yellow), Span::raw(" Enter goes, Esc cancels ")]),
+                InputMode::FormEdit => Line::from(vec![badge("TYPING INTO FORM", Color::Green), Span::raw(" Enter sends, Esc stops ")]),
+                _ => Line::from(" Address "),
+            };
+            let style = if mode == InputMode::Editing { Style::default().fg(Color::Yellow) } else { Style::default() };
+            (label, Line::styled(sanitize_for_terminal(&address).into_owned(), style))
+        }
     };
 
-    // A password typed into the address is hidden except while editing it
-    let display_text = if active_tab.input_mode == InputMode::Editing {
-        display_text.to_string()
+    let network = if app.i2p_mode {
+        Line::from(Span::styled(" I2P mode ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)))
     } else {
-        crate::network::mask_password(display_text)
+        Line::from(" Clearweb ")
     };
-    let input = Paragraph::new(sanitize_for_terminal(&display_text).into_owned())
-        .style(input_style)
-        .block(Block::default().borders(Borders::ALL).title(title));
-    f.render_widget(input, area);
+    let border = match active_tab.input_mode {
+        InputMode::Visual => Style::default().fg(Color::Cyan),
+        InputMode::Editing => Style::default().fg(Color::Yellow),
+        InputMode::Search => Style::default().fg(Color::Magenta),
+        InputMode::FormEdit => Style::default().fg(Color::Green),
+        InputMode::Normal => Style::default(),
+    };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border)
+        .title(label)
+        .title(network.right_aligned());
+    f.render_widget(Paragraph::new(body).block(block), area);
 }
 
 /// Apply visual mode selection highlighting to content lines
@@ -154,7 +159,9 @@ fn apply_visual_highlights(
             };
 
             if is_selected {
-                span.style = span.style.bg(Color::Blue).fg(Color::White);
+                // Black on cyan reads well on dark and light terminals, and differs from the
+                // yellow of the selected link and the find highlights
+                span.style = span.style.bg(Color::Cyan).fg(Color::Black);
             }
             current_x = span_end;
         }

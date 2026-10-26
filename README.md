@@ -68,6 +68,10 @@ searched with [Marginalia](https://marginalia-search.com), a search engine for t
 non-commercial web. Marginalia sometimes shows a "wait a moment" page to slow down bots; select its
 "proceed manually" link to continue, or set a different search engine in [settings](#settings).
 
+The address bar's title shows what mode you're in: **COPY MODE** (after `v`, with how many
+characters are selected), **FIND**, **EDITING ADDRESS** or **TYPING INTO FORM**, with the keys
+that matter, and on the right whether you're on the clearweb or in I2P mode.
+
 Press **`Tab`** to step through the links and form fields on a page. The bottom border always shows
 where the selected link goes, or what a form field is and where its form sends what you type.
 
@@ -190,7 +194,7 @@ The same list is on the start page.
 | :--- | :--- |
 | **`/`** | Find on the page (live highlighting) |
 | **`>`** / **`<`** | Next / previous match |
-| **`v`**, then **`y`** | Select text with the cursor keys, then copy it |
+| **`v`** | Copy mode: select text with `h` `j` `k` `l` or the arrow keys, **`y`** copies it, **`Esc`** cancels |
 | **`Shift+V`** | Show the page source |
 | **`p`** | Toggle I2P mode (through the proxy at `127.0.0.1:4444`) |
 | **`q`** | Quit |

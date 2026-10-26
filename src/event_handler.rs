@@ -409,7 +409,15 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
 }
 
 fn handle_visual_mode(app: &mut App, key: KeyEvent, terminal_height: u16) -> Result<bool> {
-    match key.code {
+    // The arrow keys move the selection like h j k l
+    let code = match key.code {
+        KeyCode::Left => KeyCode::Char('h'),
+        KeyCode::Down => KeyCode::Char('j'),
+        KeyCode::Up => KeyCode::Char('k'),
+        KeyCode::Right => KeyCode::Char('l'),
+        other => other,
+    };
+    match code {
         KeyCode::Char('h') => {
             let tab = app.current_tab();
             tab.cursor_char = tab.cursor_char.saturating_sub(1);
@@ -464,13 +472,14 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent, terminal_height: u16) -> Res
             let text_to_copy = app.current_tab().extract_text_from_selection();
 
             if !text_to_copy.is_empty() {
+                let count = text_to_copy.chars().count();
                 // 2. Now we can safely borrow the clipboard
                 let result = app.copy_to_clipboard(text_to_copy);
 
                 // 3. Re-borrow the tab to update status and reset mode
                 let tab = app.current_tab();
                 tab.status_message = match result {
-                    Ok(()) => String::from("Text yanked to clipboard!"),
+                    Ok(()) => format!("Copied {} characters to the clipboard", count),
                     Err(e) => e,
                 };
                 tab.input_mode = InputMode::Normal;
@@ -479,12 +488,13 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent, terminal_height: u16) -> Res
                 let tab = app.current_tab();
                 tab.input_mode = InputMode::Normal;
                 tab.selection = None;
+                tab.status_message = String::from("Nothing was selected, so nothing was copied");
             }
         }
         KeyCode::Esc => {
             app.current_tab().input_mode = InputMode::Normal;
             app.current_tab().selection = None;
-            app.current_tab().status_message = String::from("Ready");
+            app.current_tab().status_message = String::from("Left copy mode");
         }
         _ => {}
     }

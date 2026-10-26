@@ -366,7 +366,7 @@ async fn test_search_survives_query_with_no_matches() {
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
     terminal.draw(|f| ui(f, &app)).unwrap();
     let screen: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
-    assert!(screen.contains("[0/0]"));
+    assert!(screen.contains("FIND") && screen.contains("no matches"), "{screen}");
 
     handle_key_event::<TestBackend>(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
     type_text(&mut app, "o");
@@ -1726,4 +1726,67 @@ async fn test_find_highlights_line_up_after_wide_characters() {
         .map(|cell| cell.symbol())
         .collect();
     assert_eq!(highlighted, "target");
+}
+
+#[tokio::test]
+async fn copy_mode_is_clearly_labelled() {
+    let mut app = test_app();
+    load_page(&mut app, "<p>hello world</p>");
+    let draw = |app: &App| {
+        let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+        terminal.draw(|f| ui(f, app)).unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        let screen: String = buffer.content().iter().map(|c| c.symbol()).collect();
+        (screen, buffer)
+    };
+    let (screen, _) = draw(&app);
+    assert!(screen.contains("Address") && screen.contains("Clearweb") && !screen.contains("COPY MODE"));
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('v')), 100, 24).unwrap();
+    // The arrow keys select as well as h j k l
+    for _ in 0..5 {
+        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Right), 100, 24).unwrap();
+    }
+    let (screen, buffer) = draw(&app);
+    assert!(screen.contains("COPY MODE"), "{screen}");
+    assert!(screen.contains("5 characters selected"), "{screen}");
+    assert!(screen.contains("y copies") && screen.contains("Esc cancels"), "{screen}");
+    // The label and the selection are black on cyan, not blue
+    let label = buffer.content().iter().find(|c| c.symbol() == "C" && c.bg == ratatui::style::Color::Cyan);
+    assert!(label.is_some_and(|c| c.fg == ratatui::style::Color::Black));
+    assert!(!buffer.content().iter().any(|c| c.bg == ratatui::style::Color::Blue));
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Esc), 100, 24).unwrap();
+    let (screen, _) = draw(&app);
+    assert!(!screen.contains("COPY MODE") && screen.contains("127.0.0.1"), "the address is back");
+}
+
+#[tokio::test]
+#[ignore = "prints the address bar in each mode, for looking at"]
+async fn show_address_bar() {
+    let mut app = test_app();
+    load_page(&mut app, "<p>hello world, some text to select</p>");
+    let show = |app: &App, name: &str| {
+        let mut terminal = Terminal::new(TestBackend::new(80, 8)).unwrap();
+        terminal.draw(|f| ui(f, app)).unwrap();
+        let buffer = terminal.backend().buffer();
+        println!("--- {name}");
+        for y in 3..6 {
+            println!("{}", (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>());
+        }
+    };
+    show(&app, "normal");
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('v')), 80, 8).unwrap();
+    for _ in 0..5 {
+        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Right), 80, 8).unwrap();
+    }
+    show(&app, "copy");
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Esc), 80, 8).unwrap();
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('/')), 80, 8).unwrap();
+    type_text(&mut app, "text");
+    show(&app, "find");
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Esc), 80, 8).unwrap();
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('e')), 80, 8).unwrap();
+    app.i2p_mode = true;
+    show(&app, "editing, I2P");
 }

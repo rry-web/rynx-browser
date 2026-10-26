@@ -26,6 +26,10 @@
   `anubis = off` turns it off.
 
 ### Changed
+- The address bar shows the current mode as a clear label (COPY MODE, FIND, EDITING ADDRESS,
+  TYPING INTO FORM) with the keys that matter, and Clearweb / I2P mode on the right. Copy mode
+  used to show only a dark blue address that was hard to read; it now explains itself and counts
+  the characters selected, selected text is black on cyan, and the arrow keys select too.
 - rynx now introduces itself honestly as `rynx/<version> (+<project page>)` instead of
   pretending to be Safari. Bot walls like Anubis challenge "Mozilla" browsers with JavaScript
   but let text browsers through: git.kernel.org, for one, now opens directly instead of showing

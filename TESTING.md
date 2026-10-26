@@ -258,6 +258,10 @@ Worth repeating after any dependency upgrade.
       moment, then the real page (not "Making sure you're not a bot"). Later pages on the site
       load straight away. With `anubis = off`, the check's page shows and the status line says
       passing is turned off. This has only been tested against a simulated Anubis.
+- [ ] **SET-13 Copy mode.** On any page press `v`, then the arrow keys, then `y`.
+      *Expected:* the address bar's title reads COPY MODE (black on cyan) with the number of
+      characters selected, the bar explains the keys, and the selection is black on cyan and easy
+      to read. `y` reports "Copied N characters to the clipboard"; the address comes back.
 - [ ] **SET-07 Session history.** With no `history` setting, visit a few pages and press `s`.
       *Expected:* the history page lists them newest first, under a date heading, with their
       titles; selecting one opens it. Restart and press `s`: it's empty, and no `history.txt`

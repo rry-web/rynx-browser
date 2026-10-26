@@ -91,7 +91,7 @@ pub struct BrowserTab {
 impl BrowserTab {
     pub fn enter_visual_mode(&mut self) {
         self.input_mode = InputMode::Visual;
-        self.status_message = String::from("VISUAL MODE - Move cursor to select, 'y' to copy");
+        self.status_message = String::from("Copy mode: select text, then press y to copy it");
         // Anchor the selection to current cursor position
         self.selection = Some(Selection {
             start_line: self.cursor_line,
