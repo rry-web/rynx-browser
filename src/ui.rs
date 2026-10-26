@@ -460,6 +460,7 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(content, area);
     render_download_overlay(f, app, area);
     render_download_prompt(f, app);
+    render_tool_prompt(f, app);
 }
 
 pub fn ui(f: &mut Frame, app: &App) {
@@ -557,6 +558,62 @@ fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
             }
         }
     }
+}
+
+/// The box asking to confirm a tool call, showing exactly what will be sent
+fn render_tool_prompt(f: &mut Frame, app: &App) {
+    let Some(prompt) = &app.tabs[app.active_tab_index].tool_prompt else {
+        return;
+    };
+    let area = f.area();
+    let width = (area.width.saturating_mul(4) / 5).max(20).min(area.width);
+    let host = url::Url::parse(&prompt.server).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+    let inner = width.saturating_sub(4) as usize;
+
+    let mut text = vec![
+        Line::from(Span::styled(
+            format!("Run \"{}\" on {}?", sanitize_for_terminal(&prompt.title), sanitize_for_terminal(&host)),
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+    ];
+    if let Some(warning) = prompt.warning {
+        text.push(Line::from(Span::styled(warning, Style::default().fg(Color::Red))));
+    }
+    text.push(Line::from(""));
+    text.push(Line::from("It will send:"));
+    let sent = serde_json::to_string_pretty(&prompt.arguments).unwrap_or_default();
+    // Leave room for the frame, the lines above and the buttons
+    let room = (area.height as usize).saturating_sub(text.len() + 6).max(1);
+    let lines: Vec<&str> = sent.lines().collect();
+    for (i, line) in lines.iter().enumerate() {
+        if i + 1 == room && lines.len() > room {
+            text.push(Line::from(format!("  … and {} more lines", lines.len() - i)));
+            break;
+        }
+        let line = sanitize_for_terminal(line);
+        let shown: String = if line.chars().count() > inner.saturating_sub(2) {
+            line.chars().take(inner.saturating_sub(3)).chain(std::iter::once('…')).collect()
+        } else {
+            line.into_owned()
+        };
+        text.push(Line::from(format!("  {}", shown)));
+    }
+    text.push(Line::from(""));
+    text.push(Line::from(" [Y] Run   /   [N] Cancel "));
+
+    let height = (text.len() as u16 + 2).min(area.height);
+    let popup_area = Rect {
+        x: (area.width - width) / 2,
+        y: (area.height - height) / 2,
+        width,
+        height,
+    };
+    f.render_widget(Clear, popup_area);
+    let block = Block::default()
+        .title(" Run a tool ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+    f.render_widget(Paragraph::new(text).block(block), popup_area);
 }
 
 fn render_download_prompt(f: &mut Frame, app: &App) {

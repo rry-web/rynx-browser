@@ -704,12 +704,27 @@ impl DomRenderer {
     }
 
     pub fn render(&mut self, document: &Html) {
+        self.render_tools_link(document);
         self.render_feed_links(document);
         for node in document.tree.root().children() {
             self.walk(node);
         }
         self.marker_pending = false;
         self.flush_line();
+    }
+
+    /// An MCP server the page announces with <link rel="mcp">, as a link to its tools page
+    fn render_tools_link(&mut self, document: &Html) {
+        static TOOLS: OnceLock<Selector> = OnceLock::new();
+        let selector = TOOLS.get_or_init(|| Selector::parse(r#"link[rel~="mcp"][href]"#).expect("valid selector"));
+        let Some(href) = document.select(selector).find_map(|link| link.value().attr("href")) else {
+            return;
+        };
+        // The address is checked against the page when the link is followed
+        self.push_text("Tools: ");
+        self.push_link_text("Open this site's tools", &crate::mcp::tools_address(href.trim()));
+        self.flush_line();
+        self.push_blank_line();
     }
 
     /// RSS and Atom feeds the page announces in its <head>, as links above the page

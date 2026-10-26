@@ -2510,6 +2510,7 @@ dependencies = [
  "rustls",
  "rustls-platform-verifier",
  "scraper",
+ "serde_json",
  "tokio",
  "tokio-rustls",
  "unicode-width",

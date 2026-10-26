@@ -37,6 +37,32 @@ pub fn handle_key_event<B: Backend>(
     terminal_width: u16,
     terminal_height: u16,
 ) -> Result<bool> {
+    // Confirmation boxes take every key until they're answered
+    if app.current_tab().tool_prompt.is_some() {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => app.run_tool(),
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                let tab = app.current_tab();
+                tab.tool_prompt = None;
+                tab.status_message = String::from("Cancelled: nothing was sent");
+            }
+            _ => {}
+        }
+        return Ok(false);
+    }
+    if app.current_tab().download_prompt.is_some() {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                if let Some(prompt) = app.current_tab().download_prompt.take() {
+                    app.trigger_download(prompt);
+                }
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => app.current_tab().download_prompt = None,
+            _ => {}
+        }
+        return Ok(false);
+    }
+
     let active_mode = app.current_tab().input_mode;
 
     match active_mode {
@@ -147,16 +173,6 @@ fn handle_normal_mode<B: Backend>(
                 let url = crate::network::resolve_url(tab.link_base(), &region.url);
                 tab.initiate_download_request(url, &download_dir);
             }
-        }
-
-        KeyCode::Char('y') | KeyCode::Char('Y') if app.current_tab().download_prompt.is_some() => {
-            if let Some(prompt) = app.current_tab().download_prompt.take() {
-                app.trigger_download(prompt);
-            }
-        }
-
-        KeyCode::Char('n') | KeyCode::Char('N') if app.current_tab().download_prompt.is_some() => {
-            app.current_tab().download_prompt = None;
         }
 
         KeyCode::Esc => {
@@ -481,6 +497,10 @@ pub fn handle_mouse_event<B: Backend>(
     terminal_width: u16,
     terminal_height: u16,
 ) -> Result<()> {
+    // The tool confirmation box is answered with the keyboard only, so a stray click can't run a tool
+    if app.current_tab().tool_prompt.is_some() {
+        return Ok(());
+    }
     let download_dir = app.download_dir.clone();
     let tab = app.current_tab();
     match mouse.kind {
@@ -581,6 +601,8 @@ pub fn handle_network_event<B: Backend>(
         NetworkResponse::DownloadFinished(id, ..) => *id,
         NetworkResponse::DownloadError(id, ..) => *id,
         NetworkResponse::Rendered(id, ..) => *id,
+        NetworkResponse::ToolsListed(id, ..) => *id,
+        NetworkResponse::ToolFinished(id, ..) => *id,
     };
 
     if let Some(index) = app.tabs.iter().position(|t| t.id == target_id) {
@@ -648,6 +670,12 @@ pub fn handle_network_event<B: Backend>(
             }
             NetworkResponse::Rendered(_, version, page) => {
                 app.finish_render(index, version, *page);
+            }
+            NetworkResponse::ToolsListed(_, address, server, result) => {
+                app.finish_listing_tools(index, address, server, result);
+            }
+            NetworkResponse::ToolFinished(_, server, title, result) => {
+                app.finish_tool(index, server, title, result);
             }
             NetworkResponse::DownloadError(_, msg) => {
                 let tab = &mut app.tabs[index];

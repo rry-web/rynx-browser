@@ -25,6 +25,8 @@ These run in CI (`.github/workflows/ci.yml`) on every push and weekly, but can b
 - [ ] **AUTO-07 Live Gemini, Gopher and feeds.** `cargo test --test smallweb --test feeds -- --ignored`
       (needs internet): geminiprotocol.net, gopher.floodgap.com and the Rust blog's feed load and
       convert.
+- [ ] **AUTO-08 Live MCP server.** `cargo test --test mcp -- --ignored` (needs internet): lists
+      DeepWiki's public MCP tools and runs one.
 - [ ] **AUTO-04 Extended fuzzing.** `FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render`: randomised
       renderer and UI cases (about 4 minutes). Reproduce a failure with `FUZZ_SEED=<seed>`.
 - [ ] **AUTO-05 (priority) CI runs on GitHub.** After pushing to GitHub, open the repository's **Actions** tab.
@@ -439,6 +441,26 @@ Worth repeating after any dependency upgrade.
       Open `https://blog.rust-lang.org/`: the first line reads `Feeds:` with a link to the feed.
 - [ ] **SMALL-07 Bookmarks and history.** Bookmark a Gemini page (`b`), then check `B` and `s`.
       *Expected:* both list the page by its first heading, and selecting it opens it again.
+
+## Site tools (MCP)
+
+- [ ] **MCP-01 Listing tools.** Press `e` and type
+      `about:tools?server=https://mcp.deepwiki.com/mcp`.
+      *Expected:* "Tools from mcp.deepwiki.com" with three tools, each with a description, its
+      fields marked "(required)" where needed, and a Run button.
+- [ ] **MCP-02 (priority) Confirming a call.** In "read_wiki_structure", type `rust-lang/rust`
+      into repoName and press Enter.
+      *Expected:* a "Run a tool" box shows `"repoName": "rust-lang/rust"` and a warning that the
+      tool may change things (DeepWiki doesn't mark it read-only). Clicking and other keys do
+      nothing; `n` cancels with "nothing was sent". Enter again, then `y`: the list of wiki pages
+      appears, with nested items indented.
+- [ ] **MCP-03 Back and forward.** From the result press Backspace, then Right.
+      *Expected:* Back shows the tools again; Forward shows the same result without running the
+      tool again.
+- [ ] **MCP-04 Validation.** Run a tool with a required field empty.
+      *Expected:* the status line says to fill it in, and no box appears.
+- [ ] **MCP-05 Download prompt.** Press `d` on a link, then press `q` and `j`.
+      *Expected:* the download box stays open and nothing else happens; `n` closes it.
 
 ## I2P (needs a local I2P router on 127.0.0.1:4444)
 

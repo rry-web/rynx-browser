@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 110 (19 priority).
+Total checks: 116 (20 priority).
 
 
 ## Automated checks
@@ -18,6 +18,7 @@ Total checks: 110 (19 priority).
 | AUTO-03 | Live TLS checks |  |  |  |  |
 | AUTO-06 | I2P TLS settings |  |  |  |  |
 | AUTO-07 | Live Gemini, Gopher and feeds |  |  |  |  |
+| AUTO-08 | Live MCP server |  |  |  |  |
 | AUTO-04 | Extended fuzzing |  |  |  |  |
 | AUTO-05 | CI runs on GitHub | Yes |  |  |  |
 
@@ -194,6 +195,16 @@ Total checks: 110 (19 priority).
 | SMALL-05 | Not in I2P mode |  |  |  |  |
 | SMALL-06 | Feeds |  |  |  |  |
 | SMALL-07 | Bookmarks and history |  |  |  |  |
+
+## Site tools (MCP)
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| MCP-01 | Listing tools |  |  |  |  |
+| MCP-02 | Confirming a call | Yes |  |  |  |
+| MCP-03 | Back and forward |  |  |  |  |
+| MCP-04 | Validation |  |  |  |  |
+| MCP-05 | Download prompt |  |  |  |  |
 
 ## I2P (needs a local I2P router on 127.0.0.1:4444)
 

@@ -18,6 +18,10 @@ pub enum NetworkResponse {
     DownloadError(usize, String),    // tab_id, message; leaves the page untouched
     /// A page laid out by a background render: tab_id, content version it was made from
     Rendered(usize, u64, Box<crate::renderer::RenderedPage>),
+    /// A server's tools: tab_id, the tools page address, server, tools
+    ToolsListed(usize, String, String, Result<Vec<crate::mcp::Tool>, String>),
+    /// A tool finished: tab_id, server, tool title, result
+    ToolFinished(usize, String, String, Result<serde_json::Value, String>),
 }
 
 /// A fetched page, ready to show

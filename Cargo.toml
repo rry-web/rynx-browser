@@ -27,6 +27,7 @@ directories = "6.0.0"
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
 ring = "0.17.14"
 quick-xml = "0.42.0"
+serde_json = "1.0.154"
 
 # Tagging downloads with their origin (macOS quarantine, Linux xdg origin)
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]

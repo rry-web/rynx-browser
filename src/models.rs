@@ -117,6 +117,15 @@ pub struct Download {
     pub status: DownloadStatus,
 }
 
+/// A tool call waiting for the user to confirm it
+pub struct ToolPrompt {
+    pub server: String,
+    pub tool: String,
+    pub title: String,
+    pub arguments: serde_json::Value,
+    pub warning: Option<&'static str>,
+}
+
 pub struct DownloadPrompt {
     pub url: String,
     pub filename: String,

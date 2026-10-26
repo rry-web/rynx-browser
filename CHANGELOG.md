@@ -13,8 +13,19 @@
   and searches.
 - RSS and Atom feeds open as a page listing each post with its date and content, and pages that
   announce a feed show a `Feeds:` link at the top.
+- Site tools (MCP): a page announcing an MCP server with `<link rel="mcp">` shows a `Tools:`
+  link, which lists the server's tools as forms. Running one shows exactly what will be sent and
+  needs `y` to confirm; the result opens as a page. Works with any MCP server using the
+  Streamable HTTP transport (JSON or event-stream answers), including `about:tools?server=...`
+  typed by hand.
+
+### Fixed
+- The download confirmation box now takes every key until answered: other keys (even `q`) used
+  to act on the page underneath while it was open.
 
 ### Security
+- Tool servers must be on the page's own site and use HTTPS, can't be on the local network, and
+  can't redirect; web pages can't submit forms to tools or open tool results.
 - Public pages can't link to Gopher or Gemini on the local network, and Gopher addresses with
   line breaks are refused, so a link can't send commands to local services like Redis.
 - IP addresses are recognised in every kind of address: `gopher://127.0.0.1/` (or disguises like

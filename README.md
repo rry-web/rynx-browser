@@ -21,6 +21,9 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
   sandbox. See [Security and privacy](#security-and-privacy).
 - **The small web:** [Gemini](https://geminiprotocol.net) and Gopher sites, and RSS/Atom feeds
   shown as readable pages.
+- **Site tools instead of JavaScript:** sites can offer interactive features as
+  [MCP](https://modelcontextprotocol.io) tools, which rynx shows as forms. Nothing runs on your
+  computer, and nothing is sent until you've seen exactly what it is and confirmed.
 - **I2P:** browse `.i2p` sites through a local I2P router.
 
 ## Installation
@@ -76,6 +79,21 @@ Type `gemini://` or `gopher://` addresses as you would a web address. Gemini inp
 Gopher searches appear as a form with one text field. Opening an RSS or Atom feed shows its posts
 as a page, and pages that announce a feed show a `Feeds:` link above the page. Gemini and Gopher
 aren't available in I2P mode, and downloading from them isn't supported yet.
+
+### Site tools (MCP)
+
+A page that offers tools shows a `Tools:` link at the top. It opens a page listing each tool with
+a form for its input. Fill it in and press Enter: a box shows exactly what will be sent, and
+**`y`** runs the tool while **`n`** cancels. The result opens as a page; Back returns to the tools.
+You can also open any MCP server's tools by typing `about:tools?server=<address>`, for example
+`about:tools?server=https://mcp.deepwiki.com/mcp`.
+
+For site authors: announce an MCP server (Streamable HTTP transport) in your page's `<head>`
+with `<link rel="mcp" href="/mcp">`. It must be on the same site as the page (or a subdomain).
+Tool titles, descriptions, input schemas (strings, numbers, booleans, choices; arrays and
+objects are typed as JSON) and the `readOnlyHint` / `destructiveHint` annotations are shown.
+Results can contain text, links and text resources. Sign-in (OAuth), server requests to the
+user, and the older HTTP+SSE transport aren't supported yet.
 
 Downloads (**`d`** on a link) are saved to your Downloads folder after you confirm.
 
@@ -192,6 +210,11 @@ that:
   or Gemini on your local network (where a crafted Gopher link could send commands to services
   like Redis), and Gopher addresses containing line breaks are refused. Feeds are read without
   expanding XML entities, so entity bombs can't exhaust memory.
+- **Site tools:** a page can only offer tools from its own site, over HTTPS, and never from
+  your local network. Every tool call shows what will be sent and needs **`y`** to go ahead (the
+  mouse can't confirm it), and web pages can't submit forms to tools or open results directly.
+  Tool servers can't redirect. No AI model is involved, so instructions hidden in tool
+  descriptions have nothing to act on; they're just text.
 - **I2P:** in I2P mode all traffic goes through the I2P proxy, and `.i2p` addresses are never looked
   up outside it.
 - **Maintained dependencies:** `cargo audit` runs in CI on every change and weekly.
@@ -201,7 +224,7 @@ that:
 ```sh
 cargo test                                   # unit, integration and randomised renderer tests
 cargo test --test live_tls -- --ignored      # TLS checks against public test servers
-cargo test --test smallweb --test feeds -- --ignored   # real Gemini, Gopher and feed sites
+cargo test --test smallweb --test feeds --test mcp -- --ignored   # real Gemini, Gopher, feed and MCP servers
 FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render
 ```
 
@@ -226,7 +249,9 @@ builds every platform and publishes the release. Tags containing `-` become pre-
 - [x] **Settings file** (home page, search engine, I2P proxy, downloads folder)
 - [x] **Persistent history** (opt-in)
 - [x] **Gopher, Gemini and RSS** support
-- [ ] **MCP support** as an alternative to JavaScript
+- [x] **MCP tools** offered by sites, as an alternative to JavaScript
+- [ ] **Your own MCP servers**: tools from servers you configure, usable on any page
+- [ ] **MCP sign-in** (OAuth) for tools that need an account
 
 If you want to contribute, open an issue or pull request on GitHub.
 

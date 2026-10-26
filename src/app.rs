@@ -51,6 +51,7 @@ pub struct BrowserTab {
     pub download_state: Option<crate::models::Download>,
     pub search_state: Option<SearchState>,
     pub download_prompt: Option<crate::models::DownloadPrompt>,
+    pub tool_prompt: Option<crate::models::ToolPrompt>,
     /// Address bar contents when Edit mode was entered, for history and cancelling
     pub url_before_edit: Option<String>,
     /// Line index of each in-page link target on the displayed page
@@ -338,6 +339,7 @@ impl BrowserTab {
             download_state: None,
             search_state: None,
             download_prompt: None,
+            tool_prompt: None,
             url_before_edit: None,
             anchors: renderer.anchors,
             page_url: None,
@@ -486,6 +488,13 @@ pub struct App {
     pub history: History,
     /// Certificates seen for Gemini hosts (trust on first use)
     pub gemini_hosts: Arc<std::sync::Mutex<crate::gemini::KnownHosts>>,
+    /// MCP sessions with the servers whose tools have been used
+    pub mcp: Arc<crate::mcp::Client>,
+    /// The tools each server listed, for turning a form into a tool call
+    pub mcp_tools: HashMap<String, Vec<crate::mcp::Tool>>,
+    /// Recent tool results, shown at about:tool-result?id=<n>: (n, title, page)
+    pub tool_results: std::collections::VecDeque<(u64, String, String)>,
+    next_result_id: u64,
     /// `x` was pressed once on the history page; a second press clears it
     pub confirm_clear_history: bool,
     /// Latest terminal width, for laying out pages the browser makes itself
@@ -528,6 +537,10 @@ impl App {
             history: History::default(),
             gemini_hosts: Arc::default(),
             confirm_clear_history: false,
+            mcp: Arc::default(),
+            mcp_tools: HashMap::new(),
+            tool_results: std::collections::VecDeque::new(),
+            next_result_id: 0,
             terminal_width: 100,
         })
     }
@@ -542,15 +555,33 @@ impl App {
 
     /// Show a page the browser makes itself (about:bookmarks, about:history, about:help)
     fn show_internal_page(&mut self, address: &str) -> bool {
+        if let Some(server) = crate::mcp::server_of(address) {
+            self.open_tools(&server);
+            return true;
+        }
+        if let Some(id) = address.strip_prefix(crate::mcp::RESULT_PAGE) {
+            let result = self.tool_results.iter().find(|(n, ..)| n.to_string() == id).cloned();
+            let (title, html) = result.map(|(_, title, html)| (title, html)).unwrap_or_else(|| {
+                let html = "<title>Result gone</title><h1>Result gone</h1><p>Only the last few tool results are kept.</p>";
+                (String::from("Result gone"), html.to_string())
+            });
+            self.show_generated_page(self.active_tab_index, address, &title, html);
+            return true;
+        }
         let (title, html) = match address {
             BOOKMARKS_PAGE => ("Bookmarks", self.bookmarks.page_html()),
             HISTORY_PAGE => ("History", self.history.page_html()),
             HELP_PAGE | "about:home" => ("Start", include_str!("../assets/help.html").to_string()),
             _ => return false,
         };
+        self.show_generated_page(self.active_tab_index, address, title, html);
+        true
+    }
+
+    /// Show a page the browser made in tab `index`, at `address`
+    pub fn show_generated_page(&mut self, index: usize, address: &str, title: &str, html: String) {
         let width = self.terminal_width;
-        let index = self.active_tab_index;
-        let tab = self.current_tab();
+        let tab = &mut self.tabs[index];
         tab.url_input = address.to_string();
         tab.page_title = title.to_string();
         tab.page_url = None;
@@ -559,7 +590,144 @@ impl App {
         tab.restore_position_after_render();
         tab.status_message = String::from("Ready");
         self.render_tab(index, width);
-        true
+    }
+
+    /// The address of a tools link followed from the current page, after checking the page may
+    /// offer that server's tools. None (with the reason in the status line) if it may not.
+    fn checked_tools_link(&mut self, url: &str) -> Option<String> {
+        let server = crate::mcp::server_of(url)?;
+        let page = self.tabs[self.active_tab_index].page_url.clone();
+        match crate::mcp::check_server(&server, page.as_deref(), self.i2p_mode) {
+            Ok(server) => Some(crate::mcp::tools_address(&server)),
+            Err(e) => {
+                self.current_tab().status_message = e;
+                None
+            }
+        }
+    }
+
+    /// Show the tools page for `server`, listing its tools in the background
+    fn open_tools(&mut self, server: &str) {
+        let index = self.active_tab_index;
+        let server = match crate::mcp::check_server(server, None, self.i2p_mode) {
+            Ok(server) => server,
+            Err(e) => {
+                let address = crate::mcp::tools_address(server);
+                self.show_generated_page(index, &address, "Tools unavailable", crate::mcp::error_page_html(server, &e));
+                return;
+            }
+        };
+        let address = crate::mcp::tools_address(&server);
+        let tab = self.current_tab();
+        tab.url_input = address.clone();
+        tab.page_title = String::from("Loading...");
+        tab.status_message = String::from("Getting the site's tools...");
+        let id = tab.id;
+        let tx = self.tx.clone();
+        let http = self.network_manager.get_client(self.i2p_mode).clone();
+        let mcp = Arc::clone(&self.mcp);
+        tokio::spawn(async move {
+            let result = mcp.list_tools(&http, &server).await;
+            let _ = tx.send(NetworkResponse::ToolsListed(id, address, server, result)).await;
+        });
+    }
+
+    /// Show the tools a server listed, if the tab is still waiting for them
+    pub fn finish_listing_tools(&mut self, index: usize, address: String, server: String, result: Result<Vec<crate::mcp::Tool>, String>) {
+        if self.tabs[index].url_input != address {
+            return;
+        }
+        match result {
+            Ok(tools) => {
+                let html = crate::mcp::tools_page_html(&server, &tools);
+                let host = Url::parse(&server).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+                self.mcp_tools.insert(server, tools);
+                self.show_generated_page(index, &address, &format!("Tools from {}", host), html);
+            }
+            Err(e) => {
+                self.show_generated_page(index, &address, "Tools unavailable", crate::mcp::error_page_html(&server, &e));
+                self.tabs[index].status_message = e;
+            }
+        }
+    }
+
+    /// Turn a form on the tools page into a tool call waiting for confirmation
+    fn prepare_tool_call(&mut self, form: usize, tool_name: &str) {
+        let tab = &self.tabs[self.active_tab_index];
+        let Some(server) = crate::mcp::server_of(&tab.url_input) else {
+            return;
+        };
+        let Some(tool) = self.mcp_tools.get(&server).and_then(|tools| tools.iter().find(|t| t.name == tool_name)).cloned() else {
+            self.current_tab().status_message = String::from("That tool is no longer listed; reload the page");
+            return;
+        };
+        let mut entered = HashMap::new();
+        for (control, value) in tab.controls.iter().zip(&tab.control_values) {
+            if control.form != Some(form) || control.name.is_empty() {
+                continue;
+            }
+            let field = match (&control.kind, value) {
+                (ControlKind::Checkbox, ControlValue::Checked(on)) => crate::mcp::FieldValue::Checked(*on),
+                (_, ControlValue::Text(text)) => crate::mcp::FieldValue::Text(text.clone()),
+                (ControlKind::Select { options }, ControlValue::Selected(i)) => {
+                    crate::mcp::FieldValue::Text(options.get(*i).map(|o| o.value.clone()).unwrap_or_default())
+                }
+                _ => continue,
+            };
+            entered.insert(control.name.clone(), field);
+        }
+        let tab = self.current_tab();
+        match crate::mcp::arguments(&tool, &entered) {
+            Ok(arguments) => {
+                tab.tool_prompt = Some(crate::models::ToolPrompt {
+                    server,
+                    warning: tool.warning(),
+                    tool: tool.name,
+                    title: tool.title,
+                    arguments,
+                });
+                tab.status_message = String::from("Check what will be sent: y runs the tool, n cancels");
+            }
+            Err(e) => tab.status_message = e,
+        }
+    }
+
+    /// Run the confirmed tool call
+    pub fn run_tool(&mut self) {
+        let tab = self.current_tab();
+        let Some(prompt) = tab.tool_prompt.take() else {
+            return;
+        };
+        tab.status_message = format!("Running {}...", prompt.title);
+        let id = tab.id;
+        let tx = self.tx.clone();
+        let http = self.network_manager.get_client(self.i2p_mode).clone();
+        let mcp = Arc::clone(&self.mcp);
+        tokio::spawn(async move {
+            let result = mcp.call_tool(&http, &prompt.server, &prompt.tool, prompt.arguments).await;
+            let _ = tx.send(NetworkResponse::ToolFinished(id, prompt.server, prompt.title, result)).await;
+        });
+    }
+
+    /// Keep a tool's result, and show it if the tab is still on that server's tools page
+    pub fn finish_tool(&mut self, index: usize, server: String, title: String, result: Result<serde_json::Value, String>) {
+        self.next_result_id += 1;
+        let id = self.next_result_id;
+        let html = crate::mcp::result_page_html(&server, &title, &result);
+        self.tool_results.push_back((id, title.clone(), html.clone()));
+        if self.tool_results.len() > 20 {
+            self.tool_results.pop_front();
+        }
+        let address = format!("{}{}", crate::mcp::RESULT_PAGE, id);
+        let tab = &mut self.tabs[index];
+        if tab.url_input != crate::mcp::tools_address(&server) {
+            tab.status_message = format!("{} finished; type {} to see the result", title, address);
+            return;
+        }
+        let entry = tab.history_entry(tab.url_input.clone());
+        tab.history.push(entry);
+        tab.forward_history.clear();
+        self.show_generated_page(index, &address, &title, html);
     }
 
     /// Bookmark the current page, or remove its bookmark
@@ -727,6 +895,14 @@ impl App {
     }
 
     pub fn open_link_in_new_tab(&mut self, url: String) {
+        if url.starts_with("about:tools?") {
+            let Some(address) = self.checked_tools_link(&url) else { return };
+            self.tabs.push(BrowserTab::new(self.id_counter, address));
+            self.active_tab_index = self.tabs.len() - 1;
+            self.id_counter += 1;
+            self.load_url_input(false);
+            return;
+        }
         if self.reject_unsupported_link(&url) {
             return;
         }
@@ -768,7 +944,16 @@ impl App {
 
     /// Follow a link in the current tab, recording the current page in history
     pub fn follow_link(&mut self, url: String) {
-        let internal = url == BOOKMARKS_PAGE || url == HISTORY_PAGE || url == HELP_PAGE;
+        // A tools link is checked against the page offering it, then opens the tools page
+        let url = if url.starts_with("about:tools?") {
+            match self.checked_tools_link(&url) {
+                Some(address) => address,
+                None => return,
+            }
+        } else {
+            url
+        };
+        let internal = url == BOOKMARKS_PAGE || url == HISTORY_PAGE || url == HELP_PAGE || url.starts_with(crate::mcp::TOOLS_PAGE);
         if !internal && self.reject_unsupported_link(&url) {
             return;
         }
@@ -862,6 +1047,14 @@ impl App {
         let tab = self.current_tab();
         tab.stop_editing();
         let base = tab.link_base().to_string();
+        // Forms on the browser's tools page run tools; a web page's forms can never reach them
+        if tab.page_url.is_none() && tab.url_input.starts_with(crate::mcp::TOOLS_PAGE) {
+            let tool = tab.forms.get(form).map(|f| crate::forms::form_target(f, &base)).and_then(|t| crate::mcp::tool_of_action(&t));
+            if let Some(tool) = tool {
+                self.prepare_tool_call(form, &tool);
+            }
+            return;
+        }
         let submission = crate::forms::build_submission(
             &tab.forms,
             &tab.controls,
