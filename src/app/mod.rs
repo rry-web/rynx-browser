@@ -156,6 +156,7 @@ impl App {
             source: Arc::clone(&tab.html_source),
             kind: tab.page_kind,
             source_view: tab.is_source_view,
+            reader: tab.reader_mode,
             width,
         };
         if !background {

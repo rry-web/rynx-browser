@@ -112,6 +112,7 @@ async fn rapid_resizes_are_coalesced() {
         source: app.current_tab().html_source.clone(),
         kind: PageKind::Html,
         source_view: false,
+        reader: false,
         width: 89,
     });
     assert!(app.current_tab().rendered_content == expected.lines, "layout isn't for the final width");

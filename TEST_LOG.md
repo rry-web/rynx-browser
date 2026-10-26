@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 119 (21 priority).
+Total checks: 122 (21 priority).
 
 
 ## Automated checks
@@ -198,6 +198,14 @@ Total checks: 119 (21 priority).
 | SMALL-05 | Not in I2P mode |  |  |  |  |
 | SMALL-06 | Feeds |  |  |  |  |
 | SMALL-07 | Bookmarks and history |  |  |  |  |
+
+## Reader mode
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| READ-01 | News article |  |  |  |  |
+| READ-02 | Wikipedia |  |  |  |  |
+| READ-03 | Stays on |  |  |  |  |
 
 ## Site tools (MCP)
 

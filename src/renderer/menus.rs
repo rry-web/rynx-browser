@@ -16,7 +16,7 @@ const MAX_MENU_DEPTH: usize = 8;
 
 /// The words in a class attribute, split at separators and camelCase humps:
 /// "NoJsNavigation-styles__List" gives no, js, navigation, styles, list
-fn class_words(classes: &str) -> Vec<String> {
+pub(super) fn class_words(classes: &str) -> Vec<String> {
     let mut words = Vec::new();
     for part in classes.split(|c: char| !c.is_ascii_alphanumeric()) {
         let mut word = String::new();

@@ -16,7 +16,13 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 const PAGE: &str = "https://example.com/dir/page.html";
 
 fn render(html: &str) -> rynx::renderer::RenderedPage {
-    render_page(&RenderJob { source: Arc::from(html), kind: PageKind::Html, source_view: false, width: 82 })
+    render_page(&RenderJob {
+        source: Arc::from(html),
+        kind: PageKind::Html,
+        source_view: false,
+        reader: false,
+        width: 82,
+    })
 }
 
 fn text(page: &rynx::renderer::RenderedPage) -> Vec<String> {

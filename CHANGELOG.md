@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Reader mode (`R`): only an article's text, without menus, sidebars, share buttons, newsletter
+  boxes and comments. The main text is the deepest element holding most of the page's prose, so it
+  copes with sites that wrap every paragraph in layers of `<div>`s; lines a site sends twice for
+  different screen sizes are shown once. It stays on while following links, and pages without an
+  article are shown whole with a note.
+
+### Fixed
+- An image sent twice in a row (one copy per screen size, as on Ars Technica) is shown once.
+
+### Changed
+- The renderer and the app are split into modules per concern, and page fetching is its own
+  pipeline (`app/fetch.rs`); no change in behaviour.
+- The README says plainly that rynx is in active beta and that the Linux sandbox is preliminary.
+
 ## [0.2.0-beta.3]
 
 rynx is now on crates.io: `cargo install rynx --version 0.2.0-beta.3`.

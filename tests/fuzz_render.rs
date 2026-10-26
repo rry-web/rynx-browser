@@ -255,8 +255,19 @@ fn random_html_into(rng: &mut Rng, depth: usize, html: &mut String) {
 
 fn check_render_invariants(seed: u64, html: &str, width: usize) {
     let document = Html::parse_document(html);
-    let mut renderer = DomRenderer::new(width);
-    renderer.render(&document);
+    // The whole page, and reader mode, which leaves parts out and renumbers lines
+    for reader in [false, true] {
+        let mut renderer = DomRenderer::new(width);
+        if reader {
+            renderer.render_reader(&document);
+        } else {
+            renderer.render(&document);
+        }
+        check_layout(seed, &renderer);
+    }
+}
+
+fn check_layout(seed: u64, renderer: &DomRenderer) {
     let lines = &renderer.lines;
 
     for line in lines {

@@ -237,6 +237,19 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
             app.render_tab(active_index, terminal_width);
         }
 
+        KeyCode::Char('R') => {
+            let active_index = app.active_tab_index;
+            let tab = app.current_tab();
+            tab.reader_mode = !tab.reader_mode;
+            tab.content_changed();
+            tab.status_message = if tab.reader_mode {
+                String::from("Reader mode: only the page's main text (R again for the whole page)")
+            } else {
+                String::from("Reader mode off: the whole page")
+            };
+            app.render_tab(active_index, terminal_width);
+        }
+
         // --- VISUAL NAV ---
         KeyCode::Char('h') => app.current_tab().cursor_char = app.current_tab().cursor_char.saturating_sub(1),
         KeyCode::Char('l') => {

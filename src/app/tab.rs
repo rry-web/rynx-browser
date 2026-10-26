@@ -17,6 +17,8 @@ pub struct BrowserTab {
     pub status_message: String,
     pub html_source: Arc<str>,
     pub is_source_view: bool,
+    /// Show only pages' main text; stays on while following links, until turned off
+    pub reader_mode: bool,
     pub cursor_line: usize,
     pub cursor_char: usize,
     pub selection: Option<Selection>,
@@ -259,6 +261,9 @@ impl BrowserTab {
         if let Some(title) = page.title {
             self.page_title = title;
         }
+        if page.reader_found == Some(false) {
+            self.status_message = String::from("Reader mode: no article found here, so the whole page is shown");
+        }
         self.clamp_positions();
         let fragment = self.jump_after_render.take();
         if let Some(position) = self.restore_after_render.take() {
@@ -303,6 +308,7 @@ impl BrowserTab {
             // Kept so the help page can be laid out again at other widths
             html_source: Arc::from(help_html),
             is_source_view: false,
+            reader_mode: false,
             cursor_line: 0,
             cursor_char: 0,
             selection: None,

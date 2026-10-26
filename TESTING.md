@@ -455,6 +455,20 @@ Worth repeating after any dependency upgrade.
 - [ ] **SMALL-07 Bookmarks and history.** Bookmark a Gemini page (`b`), then check `B` and `s`.
       *Expected:* both list the page by its first heading, and selecting it opens it again.
 
+## Reader mode
+
+- [ ] **READ-01 News article.** Open an article on a news site (BBC News, Ars Technica) and press
+      `R`.
+      *Expected:* the headline, byline and story only; no site menus, related stories, share
+      buttons or comments. The address bar shows READER. Each picture's description appears once.
+- [ ] **READ-02 Wikipedia.** Open a Wikipedia article and press `R`.
+      *Expected:* the article from its title to its references, without the side menus and the
+      table of contents tools.
+- [ ] **READ-03 Stays on.** With reader mode on, follow a link to another article, then open a
+      home page.
+      *Expected:* the second article opens in reader mode; the home page is shown whole, with
+      "Reader mode: no article found here" in the status line. `R` turns it off.
+
 ## Site tools (MCP)
 
 - [ ] **MCP-01 Listing tools.** Press `e` and type `https://mcp.deepwiki.com/mcp`.

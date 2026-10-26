@@ -16,6 +16,8 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
   download.
 - **Forms:** search boxes and other forms work: text fields, checkboxes, choices and buttons, sent
   with GET or POST.
+- **Reader mode:** press **`R`** to see only an article's text, without menus, sidebars, share
+  buttons and comments.
 - **Tabs, history and search:** Back and Forward return you to where you were on each page,
   in-page links jump without reloading, and `/` finds text on the page.
 - **Fast:** pages are laid out on a background thread, so even huge or slow pages never freeze the
@@ -81,8 +83,13 @@ searched with [Marginalia](https://marginalia-search.com), a search engine for t
 non-commercial web. Marginalia sometimes shows a "wait a moment" page to slow down bots; select its
 "proceed manually" link to continue, or set a different search engine in [settings](#settings).
 
+Press **`R`** for reader mode, which shows only an article's text: its headline, byline,
+paragraphs, pictures' descriptions and tables, without the site's menus, sidebars, share buttons,
+newsletter boxes and comments. It stays on as you follow links (handy for a series of chapters),
+and on pages with no article, such as a home page, the whole page is shown with a note saying so.
+
 The address bar's title shows what mode you're in: **COPY MODE** (after `v`, with how many
-characters are selected), **FIND**, **EDITING ADDRESS** or **TYPING INTO FORM**, with the keys
+characters are selected), **FIND**, **EDITING ADDRESS**, **TYPING INTO FORM** or **READER**, with the keys
 that matter, and on the right whether you're on the clearweb or in I2P mode.
 
 Press **`Tab`** to step through the links and form fields on a page. The bottom border always shows
@@ -208,6 +215,7 @@ The same list is on the start page.
 | **`/`** | Find on the page (live highlighting) |
 | **`>`** / **`<`** | Next / previous match |
 | **`v`** | Copy mode: select text with `h` `j` `k` `l` or the arrow keys, **`y`** copies it, **`Esc`** cancels |
+| **`R`** | Reader mode: only the page's main text (stays on as you follow links; `R` again for the whole page) |
 | **`Shift+V`** | Show the page source |
 | **`p`** | Toggle I2P mode (through the proxy at `127.0.0.1:4444`) |
 | **`q`** | Quit |

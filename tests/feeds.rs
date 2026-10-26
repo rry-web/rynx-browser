@@ -6,7 +6,7 @@ use rynx::renderer::{RenderJob, render_page};
 use std::sync::Arc;
 
 fn rendered(html: &str) -> (String, Vec<String>) {
-    let job = RenderJob { source: Arc::from(html), kind: PageKind::Html, source_view: false, width: 80 };
+    let job = RenderJob { source: Arc::from(html), kind: PageKind::Html, source_view: false, reader: false, width: 80 };
     let page = render_page(&job);
     let text = page.lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
     (text, page.links.into_iter().map(|l| l.url).collect())

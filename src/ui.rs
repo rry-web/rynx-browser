@@ -92,6 +92,9 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
                 InputMode::FormEdit => {
                     Line::from(vec![badge("TYPING INTO FORM", Color::Green), Span::raw(" Enter sends, Esc stops ")])
                 }
+                _ if active_tab.reader_mode => {
+                    Line::from(vec![badge("READER", Color::LightBlue), Span::raw(" R shows the whole page ")])
+                }
                 _ => Line::from(" Address "),
             };
             let style = if mode == InputMode::Editing { Style::default().fg(Color::Yellow) } else { Style::default() };

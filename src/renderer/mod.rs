@@ -15,6 +15,7 @@ mod forms;
 mod head;
 mod menus;
 mod plain;
+mod reader;
 mod tables;
 
 use menus::{looks_like_menu, menu_items};
@@ -57,6 +58,8 @@ pub struct RenderJob {
     pub source: Arc<str>,
     pub kind: PageKind,
     pub source_view: bool,
+    /// Show only the page's main text (reader mode)
+    pub reader: bool,
     /// Terminal width; the page's border is allowed for
     pub width: u16,
 }
@@ -70,6 +73,8 @@ pub struct RenderedPage {
     pub title: Option<String>,
     pub forms: Vec<Form>,
     pub controls: Vec<FormControl>,
+    /// In reader mode, whether a main text was found (otherwise the whole page is shown)
+    pub reader_found: Option<bool>,
 }
 
 /// Parse and lay out a page. Pure and thread-safe: the UI runs it on a background thread, so a
@@ -84,13 +89,19 @@ pub fn render_page(job: &RenderJob) -> RenderedPage {
             title: None,
             forms: Vec::new(),
             controls: Vec::new(),
+            reader_found: None,
         };
     }
     let mut renderer = DomRenderer::new(job.width as usize);
+    let mut reader_found = None;
     let title = match job.kind {
         PageKind::Html => {
             let document = Html::parse_document(&job.source);
-            renderer.render(&document);
+            if job.reader {
+                reader_found = Some(renderer.render_reader(&document));
+            } else {
+                renderer.render(&document);
+            }
             document_title(&document)
         }
         PageKind::PlainText => {
@@ -105,6 +116,7 @@ pub fn render_page(job: &RenderJob) -> RenderedPage {
         title,
         forms: renderer.forms,
         controls: renderer.controls,
+        reader_found,
     }
 }
 
@@ -263,6 +275,14 @@ pub struct DomRenderer {
     /// Menus already drawn (their entries), so a site's mobile and desktop copies of the same menu
     /// appear once
     menus_drawn: std::collections::HashSet<Vec<(String, Option<String>)>>,
+    /// Reader mode: clutter inside the main text is left out
+    reader: bool,
+    /// Words drawn so far, and the last image's label with the count when it was drawn: an image
+    /// repeated right after itself (a site's copies for different screen sizes) is drawn once
+    words_drawn: usize,
+    last_image: Option<(String, usize)>,
+    /// Lines of preformatted text, which may legitimately repeat
+    preformatted_lines: std::collections::HashSet<usize>,
 }
 
 impl DomRenderer {
@@ -298,6 +318,10 @@ impl DomRenderer {
             active_control: None,
             inline_depth: 0,
             menus_drawn: std::collections::HashSet::new(),
+            reader: false,
+            words_drawn: 0,
+            last_image: None,
+            preformatted_lines: std::collections::HashSet::new(),
         }
     }
 
@@ -345,6 +369,9 @@ impl DomRenderer {
             return;
         }
         if self.line_has_text {
+            if self.preserve_whitespace {
+                self.preformatted_lines.insert(self.lines.len());
+            }
             self.lines.push(Line::from(std::mem::take(&mut self.current_line)));
             self.last_line_blank = false;
         }
@@ -510,6 +537,7 @@ impl DomRenderer {
         if word.is_empty() {
             return;
         }
+        self.words_drawn += 1;
         self.apply_prefix();
         // Two different links with nothing between them (sites space them with CSS) would read
         // as one; separate them
@@ -635,7 +663,7 @@ impl DomRenderer {
     fn walk_element(&mut self, element: ElementRef) {
         let elem = element.value();
         let tag = elem.name();
-        if SKIPPED_TAGS.contains(&tag) || is_hidden(elem) {
+        if SKIPPED_TAGS.contains(&tag) || is_hidden(elem) || (self.reader && reader::is_clutter(elem)) {
             return;
         }
         if self.depth >= MAX_NESTING {
@@ -663,9 +691,13 @@ impl DomRenderer {
                     None if self.active_link_url.is_some() => "image".to_string(),
                     None => return,
                 };
+                if self.last_image.as_ref().is_some_and(|(last, at)| *last == label && *at == self.words_drawn) {
+                    return;
+                }
                 self.add_style(|s| s.fg(Color::DarkGray));
                 self.push_word(&format!("[{}]", sanitize_for_terminal(&label)));
                 self.style_stack.pop();
+                self.last_image = Some((label, self.words_drawn));
                 return;
             }
             "iframe" => {
