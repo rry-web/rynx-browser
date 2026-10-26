@@ -200,8 +200,8 @@ fn apply_search_highlights(
         }
 
         // Highlight current search match with different color (green background)
-        if let Some(current_match) = search_state.matches.get(search_state.current_match_index) {
-            if current_match.line_index >= start_index && current_match.line_index < end_index {
+        if let Some(current_match) = search_state.matches.get(search_state.current_match_index)
+            && current_match.line_index >= start_index && current_match.line_index < end_index {
                 let relative_line_idx = current_match.line_index - start_index;
 
                 if let Some(line) = lines.get_mut(relative_line_idx) {
@@ -219,7 +219,6 @@ fn apply_search_highlights(
                     }
                 }
             }
-        }
     }
 }
 

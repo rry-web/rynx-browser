@@ -48,7 +48,7 @@ async fn test_full_request_to_render_flow() {
 
         // Use the actual terminal width constant or a test value
         let test_width = 80;
-        handle_network_event::<TestBackend>(
+        handle_network_event(
             &mut app,
             NetworkResponse::Success(id, title, body, final_url, kind),
             test_width,
@@ -57,7 +57,7 @@ async fn test_full_request_to_render_flow() {
         // Pages are laid out on a background thread; wait for the result
         while app.is_rendering(app.active_tab_index) {
             let resp = app.rx.recv().await.unwrap();
-            handle_network_event::<TestBackend>(&mut app, resp, test_width).unwrap();
+            handle_network_event(&mut app, resp, test_width).unwrap();
         }
         assert_eq!(app.current_tab().page_title, "Test Page");
 
@@ -174,7 +174,7 @@ async fn test_input_handling_switch_to_edit_mode() {
     };
 
     // Simulate key event on a 80x24 terminal
-    let result = handle_key_event::<TestBackend>(&mut app, key_event, 80, 24);
+    let result = handle_key_event(&mut app, key_event, 80, 24);
     assert!(result.is_ok());
 
     // Verify app state changed to Editing
@@ -232,7 +232,7 @@ fn key(code: KeyCode) -> KeyEvent {
 /// Deliver a page to the active tab as if it had just finished loading
 fn load_page(app: &mut App, html: &str) {
     let id = app.current_tab().id;
-    handle_network_event::<TestBackend>(
+    handle_network_event(
         app,
         NetworkResponse::Success(id, "Page".to_string(), html.to_string(), TEST_PAGE_URL.to_string(), PageKind::Html),
         80,
@@ -271,7 +271,7 @@ async fn test_rerender_clamps_link_selection() {
     app.current_tab().selected_link_index = 25;
 
     // Source view has no links, so the selection must be pulled back in range
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
     assert_eq!(app.current_tab().selected_link_index, 0);
 
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
@@ -283,11 +283,11 @@ async fn test_visual_mode_on_empty_page_does_not_panic() {
     let mut app = test_app();
     // Source view of an empty page has no lines at all
     load_page(&mut app, "");
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
     assert!(app.current_tab().rendered_content.is_empty());
 
     for code in [KeyCode::Char('v'), KeyCode::Char('j'), KeyCode::Char('k'), KeyCode::Char('l')] {
-        handle_key_event::<TestBackend>(&mut app, key(code), 80, 24).unwrap();
+        handle_key_event(&mut app, key(code), 80, 24).unwrap();
     }
 }
 
@@ -297,7 +297,6 @@ async fn test_download_popups_render_in_tiny_terminal() {
 
     let mut app = test_app();
     app.current_tab().download_state = Some(Download {
-        _id: 0,
         filename: "file.zip".to_string(),
         bytes_downloaded: 10,
         total_size: Some(100),
@@ -319,7 +318,7 @@ async fn test_download_popups_render_in_tiny_terminal() {
 
 fn type_text(app: &mut App, text: &str) {
     for c in text.chars() {
-        handle_key_event::<TestBackend>(app, key(KeyCode::Char(c)), 80, 24).unwrap();
+        handle_key_event(app, key(KeyCode::Char(c)), 80, 24).unwrap();
     }
 }
 
@@ -328,10 +327,10 @@ async fn test_typed_url_records_previous_page_in_history() {
     let mut app = test_app();
     app.current_tab().url_input = "http://127.0.0.1:1/first".to_string();
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('e')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('e')), 80, 24).unwrap();
     app.current_tab().url_input.clear();
     type_text(&mut app, "http://127.0.0.1:1/second");
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Enter), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Enter), 80, 24).unwrap();
 
     assert_eq!(history_urls(&app.tabs[0]), ["http://127.0.0.1:1/first"]);
     assert_eq!(app.current_tab().url_input, "http://127.0.0.1:1/second");
@@ -342,9 +341,9 @@ async fn test_escape_restores_address_bar() {
     let mut app = test_app();
     app.current_tab().url_input = "http://127.0.0.1:1/first".to_string();
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('e')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('e')), 80, 24).unwrap();
     type_text(&mut app, "garbage");
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Esc), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Esc), 80, 24).unwrap();
 
     assert_eq!(app.current_tab().url_input, "http://127.0.0.1:1/first");
     assert!(app.current_tab().history.is_empty());
@@ -355,7 +354,7 @@ async fn test_search_survives_query_with_no_matches() {
     let mut app = test_app();
     load_page(&mut app, "<p>hello world</p>");
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('/')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('/')), 80, 24).unwrap();
     // Typo: "wx" matches nothing, then correct it to "wo"
     type_text(&mut app, "wx");
     assert_eq!(app.current_tab().input_mode, rynx_browser::models::InputMode::Search);
@@ -368,7 +367,7 @@ async fn test_search_survives_query_with_no_matches() {
     let screen: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
     assert!(screen.contains("FIND") && screen.contains("no matches"), "{screen}");
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
     type_text(&mut app, "o");
     let state = app.current_tab().search_state.as_ref().unwrap();
     assert_eq!(state.query, "wo");
@@ -386,7 +385,7 @@ async fn finish_download(app: &mut App) -> (NetworkResponse, usize) {
         match resp {
             NetworkResponse::DownloadProgress(..) => {
                 progress_messages += 1;
-                handle_network_event::<TestBackend>(app, resp, 80).unwrap();
+                handle_network_event(app, resp, 80).unwrap();
             }
             NetworkResponse::DownloadFinished(..) | NetworkResponse::DownloadError(..) => {
                 return (resp, progress_messages);
@@ -408,7 +407,7 @@ async fn test_failed_download_keeps_current_page() {
     start_download(&mut app, "http://127.0.0.1:1/file.zip");
     let (resp, _) = finish_download(&mut app).await;
     assert!(matches!(resp, NetworkResponse::DownloadError(..)));
-    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    handle_network_event(&mut app, resp, 80).unwrap();
 
     let tab = app.current_tab();
     assert_eq!(tab.html_source, source_before, "page was replaced by download error");
@@ -425,14 +424,13 @@ async fn test_page_error_does_not_fail_active_download() {
 
     let mut app = test_app();
     app.current_tab().download_state = Some(Download {
-        _id: 0,
         filename: String::new(),
         bytes_downloaded: 10,
         total_size: None,
         status: DownloadStatus::Active,
     });
     let id = app.current_tab().id;
-    handle_network_event::<TestBackend>(&mut app, NetworkResponse::Error(id, "boom".into()), 80)
+    handle_network_event(&mut app, NetworkResponse::Error(id, "boom".into()), 80)
         .unwrap();
 
     assert!(matches!(
@@ -451,7 +449,7 @@ async fn test_process_network_events_drains_queue() {
         app.tx.send(NetworkResponse::Info(id, format!("msg {i}"))).await.unwrap();
     }
 
-    process_network_events::<TestBackend>(&mut app, 80).unwrap();
+    process_network_events(&mut app, 80).unwrap();
 
     assert!(app.rx.try_recv().is_err(), "messages left in the queue");
     assert_eq!(app.current_tab().status_message, "msg 4");
@@ -478,7 +476,7 @@ async fn test_download_progress_is_throttled() {
         NetworkResponse::DownloadFinished(_, path) => std::path::PathBuf::from(path),
         _ => panic!("download did not finish"),
     };
-    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    handle_network_event(&mut app, resp, 80).unwrap();
 
     let saved_len = std::fs::metadata(&saved_path).unwrap().len();
     let _ = std::fs::remove_dir_all(&download_dir);
@@ -533,7 +531,7 @@ async fn test_download_ignores_query_string_and_saves_to_prompted_path() {
     let (resp, _) = finish_download(&mut app).await;
     let NetworkResponse::DownloadFinished(_, saved) = &resp else { panic!("download failed") };
     assert_eq!(std::path::PathBuf::from(saved), expected_path);
-    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    handle_network_event(&mut app, resp, 80).unwrap();
     assert!(matches!(
         app.current_tab().download_state.as_ref().map(|d| &d.status),
         Some(DownloadStatus::Completed)
@@ -653,19 +651,19 @@ async fn test_missing_clipboard_reports_instead_of_panicking() {
         kind: KeyEventKind::Press,
         state: KeyEventState::empty(),
     };
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('e')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('e')), 80, 24).unwrap();
 
-    handle_key_event::<TestBackend>(&mut app, ctrl('y'), 80, 24).unwrap();
+    handle_key_event(&mut app, ctrl('y'), 80, 24).unwrap();
     assert_eq!(app.current_tab().status_message, "Clipboard unavailable");
 
     // Ctrl+K must not wipe the address when there is nothing to paste
-    handle_key_event::<TestBackend>(&mut app, ctrl('k'), 80, 24).unwrap();
+    handle_key_event(&mut app, ctrl('k'), 80, 24).unwrap();
     assert_eq!(app.current_tab().url_input, "https://example.com");
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Esc), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Esc), 80, 24).unwrap();
     load_page(&mut app, "<p>some text</p>");
     for code in [KeyCode::Char('v'), KeyCode::Char('l'), KeyCode::Char('l'), KeyCode::Char('y')] {
-        handle_key_event::<TestBackend>(&mut app, key(code), 80, 24).unwrap();
+        handle_key_event(&mut app, key(code), 80, 24).unwrap();
     }
     assert_eq!(app.current_tab().status_message, "Clipboard unavailable");
 }
@@ -679,20 +677,20 @@ async fn test_cursor_movement_scrolls_in_normal_and_visual_mode() {
     let visible = 16;
 
     for _ in 0..20 {
-        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('j')), 80, 24).unwrap();
+        handle_key_event(&mut app, key(KeyCode::Char('j')), 80, 24).unwrap();
     }
     assert_eq!(app.current_tab().cursor_line, 20);
     assert_eq!(app.current_tab().scroll, 20 + 1 - visible);
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('v')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('v')), 80, 24).unwrap();
     for _ in 0..20 {
-        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('j')), 80, 24).unwrap();
+        handle_key_event(&mut app, key(KeyCode::Char('j')), 80, 24).unwrap();
     }
     assert_eq!(app.current_tab().cursor_line, 40);
     assert_eq!(app.current_tab().scroll, 40 + 1 - visible, "visual mode did not scroll");
 
     for _ in 0..40 {
-        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('k')), 80, 24).unwrap();
+        handle_key_event(&mut app, key(KeyCode::Char('k')), 80, 24).unwrap();
     }
     assert_eq!(app.current_tab().scroll, 0);
 }
@@ -718,17 +716,17 @@ async fn test_scrolling_stops_at_end_of_page() {
     let max_scroll = total - 16;
 
     for _ in 0..100 {
-        handle_mouse_event::<TestBackend>(&mut app, wheel(MouseEventKind::ScrollDown), 80, 24).unwrap();
+        handle_mouse_event(&mut app, wheel(MouseEventKind::ScrollDown), 80, 24).unwrap();
     }
     assert_eq!(app.current_tab().scroll, max_scroll);
 
     for _ in 0..100 {
-        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Down), 80, 24).unwrap();
+        handle_key_event(&mut app, key(KeyCode::Down), 80, 24).unwrap();
     }
     assert_eq!(app.current_tab().scroll, max_scroll);
 
     // Scrolling back up takes effect immediately instead of unwinding overshoot first
-    handle_mouse_event::<TestBackend>(&mut app, wheel(MouseEventKind::ScrollUp), 80, 24).unwrap();
+    handle_mouse_event(&mut app, wheel(MouseEventKind::ScrollUp), 80, 24).unwrap();
     assert_eq!(app.current_tab().scroll, max_scroll - 3);
 }
 
@@ -740,17 +738,17 @@ async fn test_cursor_follows_wheel_scroll_so_j_does_not_jump_to_top() {
     let mut app = test_app();
     sixty_line_page(&mut app);
     for _ in 0..10 {
-        handle_mouse_event::<TestBackend>(&mut app, wheel(MouseEventKind::ScrollDown), 80, 24).unwrap();
+        handle_mouse_event(&mut app, wheel(MouseEventKind::ScrollDown), 80, 24).unwrap();
     }
     assert_eq!(app.current_tab().scroll, 30);
     assert_eq!(app.current_tab().cursor_line, 30, "cursor should be pulled onto the screen");
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('j')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('j')), 80, 24).unwrap();
     assert_eq!(app.current_tab().cursor_line, 31);
     assert_eq!(app.current_tab().scroll, 30, "j jumped the view");
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('k')), 80, 24).unwrap();
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('k')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('k')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('k')), 80, 24).unwrap();
     assert_eq!(app.current_tab().cursor_line, 29);
     assert_eq!(app.current_tab().scroll, 29, "k should scroll by one line, not to the top");
 }
@@ -762,9 +760,9 @@ async fn test_wheel_scroll_in_visual_mode_extends_selection() {
 
     let mut app = test_app();
     sixty_line_page(&mut app);
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('v')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('v')), 80, 24).unwrap();
     for _ in 0..10 {
-        handle_mouse_event::<TestBackend>(&mut app, wheel(MouseEventKind::ScrollDown), 80, 24).unwrap();
+        handle_mouse_event(&mut app, wheel(MouseEventKind::ScrollDown), 80, 24).unwrap();
     }
     let sel = app.current_tab().selection.as_ref().unwrap();
     assert_eq!((sel.start_line, sel.end_line), (0, 30));
@@ -797,7 +795,7 @@ async fn test_fragment_link_jumps_within_page_without_reloading() {
     assert!(line_text(&mut app, anchor_line + 1).contains("Chapter Two") || line_text(&mut app, anchor_line).contains("Chapter Two"));
 
     // First link is selected by default
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Enter), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Enter), 80, 24).unwrap();
 
     let tab = app.current_tab();
     assert_eq!(tab.scroll, anchor_line);
@@ -809,7 +807,7 @@ async fn test_fragment_link_jumps_within_page_without_reloading() {
     assert!(!made_request(&mut app).await, "fragment link refetched the page");
 
     // Back returns to the top of the same page, also without a refetch
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
     assert_eq!(app.current_tab().scroll, 0);
     assert_eq!(app.current_tab().url_input, TEST_PAGE_URL);
     assert!(!made_request(&mut app).await, "going back refetched the page");
@@ -821,9 +819,9 @@ async fn test_missing_anchor_reports_and_stays_put() {
     load_page(&mut app, &book_page());
     app.current_tab().scroll = 5;
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Tab), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Tab), 80, 24).unwrap();
     app.current_tab().scroll = 5;
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Enter), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Enter), 80, 24).unwrap();
 
     assert_eq!(app.current_tab().scroll, 5);
     assert!(app.current_tab().status_message.contains("#nowhere"));
@@ -846,7 +844,7 @@ async fn test_loading_url_with_fragment_jumps_after_load() {
     loop {
         match app.rx.recv().await.unwrap() {
             resp @ NetworkResponse::Success(..) => {
-                handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+                handle_network_event(&mut app, resp, 80).unwrap();
                 break;
             }
             NetworkResponse::Error(_, e) => panic!("load failed: {e}"),
@@ -865,7 +863,7 @@ async fn test_redirected_page_resolves_links_against_final_url() {
     let mut app = test_app();
     app.current_tab().url_input = "https://example.com/ebooks/1.html".to_string();
     let id = app.current_tab().id;
-    handle_network_event::<TestBackend>(
+    handle_network_event(
         &mut app,
         NetworkResponse::Success(
             id,
@@ -1043,7 +1041,7 @@ async fn test_control_characters_never_reach_the_terminal() {
     );
     let mut app = test_app();
     let id = app.current_tab().id;
-    handle_network_event::<TestBackend>(
+    handle_network_event(
         &mut app,
         NetworkResponse::Success(id, "Title\x1b]0;pwned\x07".to_string(), html, TEST_PAGE_URL.into(), PageKind::Html),
         80,
@@ -1051,7 +1049,6 @@ async fn test_control_characters_never_reach_the_terminal() {
     .unwrap();
     app.current_tab().status_message = format!("status{evil}");
     app.current_tab().download_state = Some(Download {
-        _id: id,
         filename: format!("file{evil}.zip"),
         bytes_downloaded: 0,
         total_size: None,
@@ -1126,7 +1123,7 @@ async fn test_compressed_page_under_limit_still_loads() {
     let resp = load_url(&mut app, &format!("{}/small", mock_server.uri())).await;
     let NetworkResponse::Success(_, _, ref body, _, _) = resp else { panic!("small page failed") };
     assert!(body.contains("compressed ok"));
-    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    handle_network_event(&mut app, resp, 80).unwrap();
     assert_eq!(app.current_tab().page_title, "Small");
 }
 
@@ -1164,7 +1161,7 @@ async fn test_non_web_links_are_refused() {
     for (i, (_, scheme)) in links.iter().enumerate() {
         app.current_tab().selected_link_index = i;
         for code in [KeyCode::Enter, KeyCode::Char('t'), KeyCode::Char('d')] {
-            handle_key_event::<TestBackend>(&mut app, key(code), 80, 24).unwrap();
+            handle_key_event(&mut app, key(code), 80, 24).unwrap();
             let tab = app.current_tab();
             assert_eq!(tab.status_message, format!("Unsupported link type: {scheme}"), "{code:?}");
             tab.status_message.clear();
@@ -1218,12 +1215,12 @@ async fn test_selected_link_destination_is_shown() {
     terminal.draw(|f| ui(f, &app)).unwrap();
     assert!(screen_text(&terminal).contains("Link: https://evil.example/login"));
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Tab), 100, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Tab), 100, 24).unwrap();
     terminal.draw(|f| ui(f, &app)).unwrap();
     assert!(screen_text(&terminal).contains("Link: http://127.0.0.1:1/docs/page.html"));
 
     // A Cyrillic "а" look-alike is shown as punycode, not as "apple.com"
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Tab), 100, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Tab), 100, 24).unwrap();
     terminal.draw(|f| ui(f, &app)).unwrap();
     assert!(screen_text(&terminal).contains("Link: https://xn--pple-43d.com/"), "{}", screen_text(&terminal));
 }
@@ -1328,7 +1325,7 @@ async fn test_error_messages_cannot_inject_markup() {
     let mut app = test_app();
     let id = app.current_tab().id;
     let msg = "failed <a href='https://evil.example/'>click here</a> & <b>more</b>";
-    handle_network_event::<TestBackend>(&mut app, NetworkResponse::Error(id, msg.into()), 80).unwrap();
+    handle_network_event(&mut app, NetworkResponse::Error(id, msg.into()), 80).unwrap();
 
     let tab = app.current_tab();
     assert!(tab.link_regions.is_empty(), "error text became a link");
@@ -1413,7 +1410,7 @@ async fn test_plain_text_pages_are_shown_as_text() {
     let NetworkResponse::Success(_, ref title, _, _, kind) = resp else { panic!("load failed") };
     assert_eq!(kind, PageKind::PlainText);
     assert_eq!(title, "notes.txt");
-    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    handle_network_event(&mut app, resp, 80).unwrap();
 
     let tab = app.current_tab();
     let lines: Vec<String> = tab.rendered_content.iter().map(|l| l.to_string()).collect();
@@ -1422,8 +1419,8 @@ async fn test_plain_text_pages_are_shown_as_text() {
     assert_eq!(tab.link_regions[0].url, "https://example.com/docs");
 
     // Source view and back keep it as text
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
     assert_eq!(app.current_tab().rendered_content[0].to_string(), "<b>not markup</b>");
 }
 
@@ -1439,7 +1436,7 @@ async fn test_binary_files_offer_a_download_instead_of_garbage() {
     let mut app = test_app();
     let url = format!("{}/photo.png", mock_server.uri());
     let resp = load_url(&mut app, &url).await;
-    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    handle_network_event(&mut app, resp, 80).unwrap();
 
     let tab = app.current_tab();
     assert_eq!(tab.page_title, "photo.png");
@@ -1450,7 +1447,7 @@ async fn test_binary_files_offer_a_download_instead_of_garbage() {
     assert_eq!(tab.link_regions[0].url, url);
 
     // The link downloads the file
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('d')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('d')), 80, 24).unwrap();
     assert_eq!(app.current_tab().download_prompt.as_ref().map(|p| p.filename.as_str()), Some("photo.png"));
 }
 
@@ -1581,7 +1578,7 @@ async fn test_downloads_record_their_origin() {
 /// Load a page at a URL the way a finished network request would
 fn arrive(app: &mut App, url: &str, html: &str) {
     let id = app.current_tab().id;
-    handle_network_event::<TestBackend>(
+    handle_network_event(
         app,
         NetworkResponse::Success(id, "Page".into(), html.into(), url.into(), PageKind::Html),
         80,
@@ -1609,20 +1606,20 @@ async fn test_back_and_forward_restore_scroll_positions() {
     assert_eq!(app.current_tab().scroll, 0);
     app.current_tab().scroll = 12;
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
     assert_eq!(app.current_tab().url_input, first);
     arrive(&mut app, first, &long_page("first"));
     assert_eq!((app.current_tab().scroll, app.current_tab().cursor_line), (40, 45));
     assert_eq!(app.current_tab().forward_history.len(), 1);
 
     // Forward returns to the second page where it was left
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Right), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Right), 80, 24).unwrap();
     assert_eq!(app.current_tab().url_input, second);
     arrive(&mut app, second, &long_page("second"));
     assert_eq!(app.current_tab().scroll, 12);
 
     // Following a new link clears the forward history
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('H')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('H')), 80, 24).unwrap();
     arrive(&mut app, first, &long_page("first"));
     app.follow_link("http://127.0.0.1:1/third".into());
     assert!(app.current_tab().forward_history.is_empty());
@@ -1634,10 +1631,10 @@ async fn test_back_within_a_page_restores_position_without_reloading() {
     app.current_tab().url_input = TEST_PAGE_URL.into();
     arrive(&mut app, TEST_PAGE_URL, &book_page());
     app.current_tab().scroll = 7;
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Enter), 80, 24).unwrap(); // #ch2
+    handle_key_event(&mut app, key(KeyCode::Enter), 80, 24).unwrap(); // #ch2
     assert!(app.current_tab().scroll > 7);
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
     assert_eq!(app.current_tab().scroll, 7);
     assert!(!made_request(&mut app).await);
 }
@@ -1648,7 +1645,7 @@ async fn test_reload_keeps_the_scroll_position() {
     app.current_tab().url_input = TEST_PAGE_URL.into();
     arrive(&mut app, TEST_PAGE_URL, &long_page("page"));
     app.current_tab().scroll = 30;
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('r')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('r')), 80, 24).unwrap();
     assert!(made_request(&mut app).await, "reload didn't fetch the page");
     arrive(&mut app, TEST_PAGE_URL, &long_page("page"));
     assert_eq!(app.current_tab().scroll, 30);
@@ -1661,17 +1658,17 @@ async fn test_paging_keys() {
     let total = app.current_tab().rendered_content.len();
     let ctrl = |c| KeyEvent { code: KeyCode::Char(c), modifiers: KeyModifiers::CONTROL, kind: KeyEventKind::Press, state: KeyEventState::empty() };
     // 24 rows leaves 16 visible
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::PageDown), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::PageDown), 80, 24).unwrap();
     assert_eq!(app.current_tab().scroll, 16);
-    handle_key_event::<TestBackend>(&mut app, ctrl('d'), 80, 24).unwrap();
+    handle_key_event(&mut app, ctrl('d'), 80, 24).unwrap();
     assert_eq!(app.current_tab().scroll, 24);
     assert!(app.current_tab().download_prompt.is_none(), "Ctrl+d must not start a download");
-    handle_key_event::<TestBackend>(&mut app, ctrl('u'), 80, 24).unwrap();
+    handle_key_event(&mut app, ctrl('u'), 80, 24).unwrap();
     assert_eq!(app.current_tab().scroll, 16);
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('G')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('G')), 80, 24).unwrap();
     assert_eq!(app.current_tab().scroll, total - 16);
     assert_eq!(app.current_tab().cursor_line, total - 1);
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('g')), 80, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('g')), 80, 24).unwrap();
     assert_eq!((app.current_tab().scroll, app.current_tab().cursor_line), (0, 0));
 }
 
@@ -1691,7 +1688,7 @@ async fn test_only_binary_file_links_skip_straight_to_downloading() {
         let mut app = test_app();
         arrive(&mut app, TEST_PAGE_URL, &format!("<a href='{href}'>link</a>"));
         // The page's first line is drawn at row 7 (below the tab bar and address bar)
-        handle_mouse_event::<TestBackend>(&mut app, click(7), 80, 24).unwrap();
+        handle_mouse_event(&mut app, click(7), 80, 24).unwrap();
         assert_eq!(app.current_tab().download_prompt.is_some(), prompts, "{href}");
     }
 }
@@ -1742,10 +1739,10 @@ async fn copy_mode_is_clearly_labelled() {
     let (screen, _) = draw(&app);
     assert!(screen.contains("Address") && screen.contains("Clearweb") && !screen.contains("COPY MODE"));
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('v')), 100, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('v')), 100, 24).unwrap();
     // The arrow keys select as well as h j k l
     for _ in 0..5 {
-        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Right), 100, 24).unwrap();
+        handle_key_event(&mut app, key(KeyCode::Right), 100, 24).unwrap();
     }
     let (screen, buffer) = draw(&app);
     assert!(screen.contains("COPY MODE"), "{screen}");
@@ -1756,7 +1753,7 @@ async fn copy_mode_is_clearly_labelled() {
     assert!(label.is_some_and(|c| c.fg == ratatui::style::Color::Black));
     assert!(!buffer.content().iter().any(|c| c.bg == ratatui::style::Color::Blue));
 
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Esc), 100, 24).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Esc), 100, 24).unwrap();
     let (screen, _) = draw(&app);
     assert!(!screen.contains("COPY MODE") && screen.contains("127.0.0.1"), "the address is back");
 }
@@ -1776,17 +1773,17 @@ async fn show_address_bar() {
         }
     };
     show(&app, "normal");
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('v')), 80, 8).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('v')), 80, 8).unwrap();
     for _ in 0..5 {
-        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Right), 80, 8).unwrap();
+        handle_key_event(&mut app, key(KeyCode::Right), 80, 8).unwrap();
     }
     show(&app, "copy");
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Esc), 80, 8).unwrap();
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('/')), 80, 8).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Esc), 80, 8).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('/')), 80, 8).unwrap();
     type_text(&mut app, "text");
     show(&app, "find");
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Esc), 80, 8).unwrap();
-    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('e')), 80, 8).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Esc), 80, 8).unwrap();
+    handle_key_event(&mut app, key(KeyCode::Char('e')), 80, 8).unwrap();
     app.i2p_mode = true;
     show(&app, "editing, I2P");
 }

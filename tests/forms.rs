@@ -137,7 +137,7 @@ fn key(code: KeyCode) -> KeyEvent {
 }
 
 fn press(app: &mut App, code: KeyCode) {
-    handle_key_event::<TestBackend>(app, key(code), 80, 24).unwrap();
+    handle_key_event(app, key(code), 80, 24).unwrap();
 }
 
 fn type_text(app: &mut App, text: &str) {
@@ -158,7 +158,7 @@ fn arrive(app: &mut App, url: &str, html: &str) {
     let id = app.current_tab().id;
     app.current_tab().url_input = url.to_string();
     let resp = NetworkResponse::Success(id, "Page".into(), html.into(), url.into(), PageKind::Html);
-    handle_network_event::<TestBackend>(app, resp, 80).unwrap();
+    handle_network_event(app, resp, 80).unwrap();
 }
 
 /// Handle network messages until a page has loaded
@@ -166,7 +166,7 @@ async fn wait_for_page(app: &mut App) {
     loop {
         let resp = tokio::time::timeout(std::time::Duration::from_secs(10), app.rx.recv()).await.unwrap().unwrap();
         let done = matches!(resp, NetworkResponse::Success(..) | NetworkResponse::Error(..));
-        handle_network_event::<TestBackend>(app, resp, 80).unwrap();
+        handle_network_event(app, resp, 80).unwrap();
         if done {
             return;
         }

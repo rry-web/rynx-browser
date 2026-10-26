@@ -1,7 +1,6 @@
 //! The settings file and bookmarks.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
-use ratatui::backend::TestBackend;
 use rynx_browser::app::App;
 use rynx_browser::bookmarks::{BOOKMARKS_FILE, BOOKMARKS_PAGE, Bookmarks};
 use rynx_browser::event_handler::{handle_key_event, handle_network_event};
@@ -88,7 +87,7 @@ fn key(code: KeyCode) -> KeyEvent {
 }
 
 fn press(app: &mut App, code: KeyCode) {
-    handle_key_event::<TestBackend>(app, key(code), 80, 24).unwrap();
+    handle_key_event(app, key(code), 80, 24).unwrap();
 }
 
 fn test_app(settings: Settings) -> App {
@@ -114,7 +113,7 @@ async fn pages_can_be_bookmarked_and_listed() {
     let id = app.current_tab().id;
     app.current_tab().url_input = url.into();
     let resp = NetworkResponse::Success(id, "x".into(), "<title>An Article</title><p>text</p>".into(), url.into(), PageKind::Html);
-    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    handle_network_event(&mut app, resp, 80).unwrap();
     press(&mut app, KeyCode::Char('b'));
     assert!(app.bookmarks.contains(url));
 
@@ -201,7 +200,7 @@ async fn visits_are_listed_on_the_history_page_and_can_be_cleared() {
     let id = app.current_tab().id;
     app.current_tab().url_input = url.into();
     let resp = NetworkResponse::Success(id, "x".into(), "<title>A Page</title><p>text</p>".into(), url.into(), PageKind::Html);
-    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    handle_network_event(&mut app, resp, 80).unwrap();
     assert_eq!(app.history.entries.len(), 1);
     assert_eq!(app.history.entries[0].url, "https://example.com/page", "credentials are stripped");
 
@@ -259,7 +258,7 @@ async fn user_agents_sent(settings: Settings, i2p: bool) -> Vec<String> {
     loop {
         let resp = app.rx.recv().await.unwrap();
         let done = matches!(resp, NetworkResponse::Success(..) | NetworkResponse::Error(..));
-        handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+        handle_network_event(&mut app, resp, 80).unwrap();
         if done {
             break;
         }

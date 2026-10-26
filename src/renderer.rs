@@ -1023,8 +1023,8 @@ impl DomRenderer {
             if let Some(url) = target {
                 let line_index = self.lines.len();
                 // Merge with the previous region if it's the same link and contiguous
-                if let Some(last) = self.links.last_mut() {
-                    if last.line_index == line_index
+                if let Some(last) = self.links.last_mut()
+                    && last.line_index == line_index
                         && last.url == url
                         && last.control == control
                         && last.x_end == start_x
@@ -1032,7 +1032,6 @@ impl DomRenderer {
                         last.x_end = end_x;
                         continue;
                     }
-                }
                 // A zero-width character (combining mark, zero-width space) can't start a
                 // clickable region on its own
                 if width == 0 {

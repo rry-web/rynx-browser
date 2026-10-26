@@ -213,7 +213,7 @@ fn test_app() -> App {
 
 fn press(app: &mut App, code: KeyCode) -> bool {
     let key = KeyEvent { code, modifiers: KeyModifiers::empty(), kind: KeyEventKind::Press, state: KeyEventState::empty() };
-    handle_key_event::<TestBackend>(app, key, 80, 24).unwrap()
+    handle_key_event(app, key, 80, 24).unwrap()
 }
 
 fn text(app: &mut App) -> String {
@@ -225,7 +225,7 @@ async fn settle(app: &mut App, done: fn(&NetworkResponse) -> bool) {
     loop {
         let resp = tokio::time::timeout(std::time::Duration::from_secs(10), app.rx.recv()).await.unwrap().unwrap();
         let finished = done(&resp);
-        handle_network_event::<TestBackend>(app, resp, 80).unwrap();
+        handle_network_event(app, resp, 80).unwrap();
         if finished {
             return;
         }
@@ -328,7 +328,7 @@ async fn web_pages_cannot_reach_tools_directly() {
                 <a href=\"about:tool-result?id=1\">old result</a>";
     app.current_tab().url_input = "https://evil.example/".into();
     let resp = NetworkResponse::Success(id, "t".into(), html.into(), "https://evil.example/".into(), PageKind::Html);
-    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    handle_network_event(&mut app, resp, 80).unwrap();
     app.submit_form(0, None);
     assert!(app.current_tab().tool_prompt.is_none());
     assert!(app.current_tab().status_message.contains("Not sent"), "{}", app.current_tab().status_message);

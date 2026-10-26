@@ -148,9 +148,6 @@ async fn run(
     }
     app.open_home_page();
 
-    // Initialize MCP
-    //app.init_mcp().await;
-
     // Run App
     let res = run_app(&mut terminal, app).await;
 
@@ -179,7 +176,7 @@ async fn run_app<B: Backend<Error = io::Error>>(terminal: &mut Terminal<B>, mut 
         terminal.draw(|f| ui(f, &app))?;
 
         // Handle network events
-        process_network_events::<B>(&mut app, size.width)?;
+        process_network_events(&mut app, size.width)?;
 
         // Handle input events: wait briefly for the first, then everything already queued before
         // redrawing. One event per frame let touchpad bursts pile up and replay long after.
@@ -193,12 +190,12 @@ async fn run_app<B: Backend<Error = io::Error>>(terminal: &mut Terminal<B>, mut 
                     app.resize_all_tabs(width);
                 }
                 Event::Key(key) => {
-                    if handle_key_event::<B>(&mut app, key, size.width, size.height)? {
+                    if handle_key_event(&mut app, key, size.width, size.height)? {
                         return Ok(()); // Quit signal received
                     }
                 }
                 Event::Mouse(mouse) => {
-                    handle_mouse_event::<B>(&mut app, mouse, size.width, size.height)?;
+                    handle_mouse_event(&mut app, mouse, size.width, size.height)?;
                 }
                 _ => {}
             }

@@ -127,7 +127,7 @@ fn pages_show_the_feeds_they_announce() {
 
 #[tokio::test]
 async fn feeds_served_as_xml_open_as_a_page() {
-    use ratatui::backend::TestBackend;
+    
     use rynx_browser::app::App;
     use rynx_browser::event_handler::handle_network_event;
     use rynx_browser::network::NetworkResponse;
@@ -148,7 +148,7 @@ async fn feeds_served_as_xml_open_as_a_page() {
     loop {
         let resp = app.rx.recv().await.unwrap();
         let done = matches!(resp, NetworkResponse::Success(..) | NetworkResponse::Error(..));
-        handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+        handle_network_event(&mut app, resp, 80).unwrap();
         if done {
             break;
         }

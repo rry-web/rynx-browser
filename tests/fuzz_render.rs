@@ -184,7 +184,7 @@ fn drive_app(app: &mut App, rng: &mut Rng, html: &str) {
     let width = 1 + rng.below(120) as u16;
     let height = 1 + rng.below(50) as u16;
     let id = app.current_tab().id;
-    handle_network_event::<TestBackend>(
+    handle_network_event(
         app,
         NetworkResponse::Success(id, "t".into(), html.into(), "http://127.0.0.1:1/p".into(), PageKind::Html),
         width,
@@ -194,18 +194,18 @@ fn drive_app(app: &mut App, rng: &mut Rng, html: &str) {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     for _ in 0..30 {
         match rng.below(14) {
-            0 => handle_key_event::<TestBackend>(app, key(KeyCode::Char('j')), width, height),
-            1 => handle_key_event::<TestBackend>(app, key(KeyCode::Char('k')), width, height),
-            2 => handle_key_event::<TestBackend>(app, key(KeyCode::Char('h')), width, height),
-            3 => handle_key_event::<TestBackend>(app, key(KeyCode::Char('l')), width, height),
-            4 => handle_key_event::<TestBackend>(app, key(KeyCode::Tab), width, height),
-            5 => handle_key_event::<TestBackend>(app, key(KeyCode::BackTab), width, height),
-            6 => handle_key_event::<TestBackend>(app, key(KeyCode::Char('v')), width, height),
-            7 => handle_key_event::<TestBackend>(app, key(KeyCode::Esc), width, height),
-            8 => handle_key_event::<TestBackend>(app, key(KeyCode::Char('/')), width, height),
-            9 => handle_key_event::<TestBackend>(app, key(KeyCode::Char('o')), width, height),
-            10 => handle_key_event::<TestBackend>(app, key(KeyCode::Char('V')), width, height),
-            11 => handle_key_event::<TestBackend>(app, key(KeyCode::Down), width, height),
+            0 => handle_key_event(app, key(KeyCode::Char('j')), width, height),
+            1 => handle_key_event(app, key(KeyCode::Char('k')), width, height),
+            2 => handle_key_event(app, key(KeyCode::Char('h')), width, height),
+            3 => handle_key_event(app, key(KeyCode::Char('l')), width, height),
+            4 => handle_key_event(app, key(KeyCode::Tab), width, height),
+            5 => handle_key_event(app, key(KeyCode::BackTab), width, height),
+            6 => handle_key_event(app, key(KeyCode::Char('v')), width, height),
+            7 => handle_key_event(app, key(KeyCode::Esc), width, height),
+            8 => handle_key_event(app, key(KeyCode::Char('/')), width, height),
+            9 => handle_key_event(app, key(KeyCode::Char('o')), width, height),
+            10 => handle_key_event(app, key(KeyCode::Char('V')), width, height),
+            11 => handle_key_event(app, key(KeyCode::Down), width, height),
             12 => {
                 let kind = if rng.below(2) == 0 {
                     MouseEventKind::ScrollDown
@@ -213,7 +213,7 @@ fn drive_app(app: &mut App, rng: &mut Rng, html: &str) {
                     MouseEventKind::ScrollUp
                 };
                 let event = MouseEvent { kind, column: 5, row: 9, modifiers: KeyModifiers::empty() };
-                handle_mouse_event::<TestBackend>(app, event, width, height).map(|_| false)
+                handle_mouse_event(app, event, width, height).map(|_| false)
             }
             _ => {
                 let new_width = 1 + rng.below(120) as u16;

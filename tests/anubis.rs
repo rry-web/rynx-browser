@@ -1,7 +1,6 @@
 //! Anubis bot checks, passed without JavaScript, against a fake Anubis that checks answers the
 //! way the real one does.
 
-use ratatui::backend::TestBackend;
 use rynx_browser::anubis::{self, Challenge};
 use rynx_browser::app::App;
 use rynx_browser::event_handler::handle_network_event;
@@ -187,7 +186,7 @@ async fn load(app: &mut App, url: &str) {
             return;
         };
         loaded |= matches!(resp, NetworkResponse::Success(..) | NetworkResponse::Error(..));
-        handle_network_event::<TestBackend>(app, resp, 80).unwrap();
+        handle_network_event(app, resp, 80).unwrap();
     }
 }
 

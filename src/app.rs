@@ -413,24 +413,22 @@ impl BrowserTab {
     }
 
     pub fn next_search_match(&mut self) {
-        if let Some(search_state) = &mut self.search_state {
-            if !search_state.matches.is_empty() {
+        if let Some(search_state) = &mut self.search_state
+            && !search_state.matches.is_empty() {
                 search_state.current_match_index =
                     (search_state.current_match_index + 1) % search_state.matches.len();
             }
-        }
     }
 
     pub fn previous_search_match(&mut self) {
-        if let Some(search_state) = &mut self.search_state {
-            if !search_state.matches.is_empty() {
+        if let Some(search_state) = &mut self.search_state
+            && !search_state.matches.is_empty() {
                 search_state.current_match_index = if search_state.current_match_index == 0 {
                     search_state.matches.len() - 1
                 } else {
                     search_state.current_match_index - 1
                 };
             }
-        }
     }
 
     pub fn clear_search(&mut self) {
@@ -1187,15 +1185,13 @@ impl App {
             let mut resp_result =
                 crate::network::send_following_redirects(client, &target_url, use_i2p, form_body).await;
 
-            if let Ok(ref resp) = resp_result {
-                if should_attempt_jump(use_i2p, &domain_for_jump, resp.status()) {
-                    if let Ok(jump_resp) =
-                        attempt_jump(&client, &domain_for_jump, tx_clone.clone(), id).await
+            if let Ok(ref resp) = resp_result
+                && should_attempt_jump(use_i2p, &domain_for_jump, resp.status())
+                    && let Ok(jump_resp) =
+                        attempt_jump(client, &domain_for_jump, tx_clone.clone(), id).await
                     {
                         resp_result = Ok(jump_resp);
                     }
-                }
-            }
 
             // An Anubis bot check is passed at most once per page, so a site that keeps asking
             // can't make rynx work forever
@@ -1225,14 +1221,13 @@ impl App {
 
                         // Fast rejection when the server declares the size; read_text_limited
                         // enforces the limit when it doesn't
-                        if let Some(len) = resp.content_length() {
-                            if len > MAX_PAGE_SIZE_BYTES {
+                        if let Some(len) = resp.content_length()
+                            && len > MAX_PAGE_SIZE_BYTES {
                                 let _ = tx_clone
                                     .send(NetworkResponse::Error(id, "Page too large".to_string()))
                                     .await;
                                 return;
                             }
-                        }
 
                         let body = match crate::network::read_text_limited(resp, MAX_PAGE_SIZE_BYTES).await {
                             Ok(body) => body,
@@ -1248,8 +1243,8 @@ impl App {
                         if anubis_tried && (status.is_client_error() || status.is_server_error()) {
                             anubis_problem = Some(String::from("the site didn't accept rynx's answer"));
                         }
-                        if class == ContentClass::Html && anubis_problem.is_none() {
-                            if let Some(challenge) = crate::anubis::detect(&body) {
+                        if class == ContentClass::Html && anubis_problem.is_none()
+                            && let Some(challenge) = crate::anubis::detect(&body) {
                                 if anubis_tried {
                                     anubis_problem = Some(String::from("the site didn't accept rynx's answer"));
                                 } else if !solve_anubis {
@@ -1269,7 +1264,6 @@ impl App {
                                     }
                                 }
                             }
-                        }
 
                         if crate::mcp::is_endpoint_answer(content_type.as_deref(), &body) {
                             let html = crate::mcp::endpoint_page_html(&final_url);
@@ -1486,7 +1480,6 @@ impl App {
         let tab = self.current_tab();
         let tab_id = tab.id;
         tab.download_state = Some(crate::models::Download {
-            _id: tab_id,
             filename: prompt.filename,
             bytes_downloaded: 0,
             total_size: None,
@@ -1536,20 +1529,18 @@ impl App {
                 };
                 if file_handle.is_none() {
                     // 2. Create Downloads Directory
-                    if let Some(dir) = target_path.parent() {
-                        if let Err(e) = tokio::fs::create_dir_all(dir).await {
+                    if let Some(dir) = target_path.parent()
+                        && let Err(e) = tokio::fs::create_dir_all(dir).await {
                             let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Folder error: {}", e))).await;
                             return;
                         }
-                    }
 
                     // 3. Sniff Extension; only the confirmed path may be overwritten
                     let mut file_path = target_path.clone();
-                    if file_path.extension().is_none() {
-                        if let Some(ext) = crate::network::sniff_extension(&chunk) {
+                    if file_path.extension().is_none()
+                        && let Some(ext) = crate::network::sniff_extension(&chunk) {
                             file_path = Self::unused_path(&file_path.with_extension(ext));
                         }
-                    }
 
                     // 4. Safe File Creation (No unwraps). Never write through a symbolic link: one
                     // planted in Downloads could point the write at e.g. ~/.bashrc

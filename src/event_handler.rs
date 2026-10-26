@@ -5,7 +5,6 @@ use crate::network::NetworkResponse;
 use crate::constants::*;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use ratatui::backend::Backend;
 use std::io::Result;
 
 /// Whether a clicked link should go straight to the download prompt: its file name has an
@@ -31,7 +30,7 @@ fn viewport_height(terminal_height: u16) -> usize {
     terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize
 }
 
-pub fn handle_key_event<B: Backend>(
+pub fn handle_key_event(
     app: &mut App,
     key: KeyEvent,
     terminal_width: u16,
@@ -66,16 +65,16 @@ pub fn handle_key_event<B: Backend>(
     let active_mode = app.current_tab().input_mode;
 
     match active_mode {
-        InputMode::Normal => handle_normal_mode::<B>(app, key, terminal_width, terminal_height),
+        InputMode::Normal => handle_normal_mode(app, key, terminal_width, terminal_height),
         InputMode::Editing => handle_editing_mode(app, key),
         InputMode::Visual => handle_visual_mode(app, key, terminal_height),
         InputMode::Search => handle_search_mode(app, key),
-        InputMode::FormEdit => handle_form_edit_mode::<B>(app, key, terminal_width, terminal_height),
+        InputMode::FormEdit => handle_form_edit_mode(app, key, terminal_width, terminal_height),
     }
 }
 
 /// Typing into a form field
-fn handle_form_edit_mode<B: Backend>(
+fn handle_form_edit_mode(
     app: &mut App,
     key: KeyEvent,
     terminal_width: u16,
@@ -123,14 +122,14 @@ fn handle_form_edit_mode<B: Backend>(
         // Tab leaves the field and moves on, as in normal mode
         KeyCode::Tab | KeyCode::BackTab => {
             tab.stop_editing();
-            return handle_normal_mode::<B>(app, key, terminal_width, terminal_height);
+            return handle_normal_mode(app, key, terminal_width, terminal_height);
         }
         _ => {}
     }
     Ok(false)
 }
 
-fn handle_normal_mode<B: Backend>(
+fn handle_normal_mode(
     app: &mut App,
     key: KeyEvent,
     terminal_width: u16,
@@ -369,7 +368,7 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
             match app.paste_from_clipboard() {
                 Ok(text) => {
                     // Sanitize to remove newlines for the address bar
-                    let sanitized = text.replace(|c: char| c == '\n' || c == '\r', "");
+                    let sanitized = text.replace(['\n', '\r'], "");
                     app.current_tab().url_input.push_str(&sanitized);
                 }
                 Err(e) => app.current_tab().status_message = e,
@@ -380,7 +379,7 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
         KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             match app.paste_from_clipboard() {
                 Ok(text) => {
-                    let sanitized = text.replace(|c: char| c == '\n' || c == '\r', "");
+                    let sanitized = text.replace(['\n', '\r'], "");
                     app.current_tab().url_input.clear();
                     app.current_tab().url_input.push_str(&sanitized);
                 }
@@ -501,7 +500,7 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent, terminal_height: u16) -> Res
     Ok(false)
 }
 
-pub fn handle_mouse_event<B: Backend>(
+pub fn handle_mouse_event(
     app: &mut App,
     mouse: MouseEvent,
     terminal_width: u16,
@@ -590,14 +589,14 @@ pub fn handle_mouse_event<B: Backend>(
 }
 
 /// Handle every network message that is waiting, so bursts don't queue up behind the frame rate
-pub fn process_network_events<B: Backend>(app: &mut App, terminal_width: u16) -> Result<()> {
+pub fn process_network_events(app: &mut App, terminal_width: u16) -> Result<()> {
     while let Ok(response) = app.rx.try_recv() {
-        handle_network_event::<B>(app, response, terminal_width)?;
+        handle_network_event(app, response, terminal_width)?;
     }
     Ok(())
 }
 
-pub fn handle_network_event<B: Backend>(
+pub fn handle_network_event(
     app: &mut App,
     response: NetworkResponse,
     terminal_width: u16,
@@ -621,7 +620,6 @@ pub fn handle_network_event<B: Backend>(
                 let tab = &mut app.tabs[index];
                 // Update in place so the filename set by trigger_download is kept
                 let d = tab.download_state.get_or_insert_with(|| crate::models::Download {
-                    _id: target_id,
                     filename: String::new(),
                     bytes_downloaded: 0,
                     total_size: None,
@@ -639,7 +637,6 @@ pub fn handle_network_event<B: Backend>(
                 let tab = &mut app.tabs[index];
                 // Small files can finish before a throttled progress update creates the state
                 let d = tab.download_state.get_or_insert_with(|| crate::models::Download {
-                    _id: target_id,
                     filename: String::new(),
                     bytes_downloaded: 0,
                     total_size: None,
@@ -694,7 +691,6 @@ pub fn handle_network_event<B: Backend>(
                     Some(ref mut d) => d.status = DownloadStatus::Failed(msg.clone()),
                     None => {
                         tab.download_state = Some(crate::models::Download {
-                            _id: target_id,
                             filename: String::new(),
                             bytes_downloaded: 0,
                             total_size: None,

@@ -1,7 +1,6 @@
 //! Pages are laid out on a background thread so slow pages never freeze the UI.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
-use ratatui::backend::TestBackend;
 use rynx_browser::app::{App, RENDERING_STATUS};
 use rynx_browser::event_handler::{handle_key_event, handle_network_event};
 use rynx_browser::network::{NetworkResponse, PageKind};
@@ -21,7 +20,7 @@ fn background_app() -> App {
 fn deliver(app: &mut App, html: String) {
     let id = app.current_tab().id;
     let resp = NetworkResponse::Success(id, "page".into(), html, "http://127.0.0.1:1/p".into(), PageKind::Html);
-    handle_network_event::<TestBackend>(app, resp, WIDTH).unwrap();
+    handle_network_event(app, resp, WIDTH).unwrap();
 }
 
 /// Handle events until the tab's background render is done; returns how many renders arrived
@@ -35,7 +34,7 @@ async fn settle(app: &mut App) -> usize {
         if matches!(resp, NetworkResponse::Rendered(..)) {
             renders += 1;
         }
-        handle_network_event::<TestBackend>(app, resp, WIDTH).unwrap();
+        handle_network_event(app, resp, WIDTH).unwrap();
     }
     renders
 }
@@ -64,7 +63,7 @@ async fn slow_pages_do_not_block_the_ui() {
     // Input is handled while the page is being laid out
     let key = KeyEvent { code: KeyCode::Char('j'), modifiers: KeyModifiers::empty(), kind: KeyEventKind::Press, state: KeyEventState::empty() };
     let started = Instant::now();
-    handle_key_event::<TestBackend>(&mut app, key, WIDTH, 24).unwrap();
+    handle_key_event(&mut app, key, WIDTH, 24).unwrap();
     assert!(started.elapsed() < Duration::from_millis(50));
 
     settle(&mut app).await;
@@ -85,7 +84,7 @@ async fn an_older_render_never_replaces_a_newer_page() {
     // The slow page's render still arrives later; it must be ignored
     let resp = tokio::time::timeout(Duration::from_secs(60), app.rx.recv()).await.unwrap().unwrap();
     assert!(matches!(resp, NetworkResponse::Rendered(..)));
-    handle_network_event::<TestBackend>(&mut app, resp, WIDTH).unwrap();
+    handle_network_event(&mut app, resp, WIDTH).unwrap();
     assert_eq!(text(&mut app), "new content");
     assert_eq!(app.current_tab().page_title, "new page");
 }
