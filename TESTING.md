@@ -444,9 +444,9 @@ Worth repeating after any dependency upgrade.
 
 ## Site tools (MCP)
 
-- [ ] **MCP-01 Listing tools.** Press `e` and type
-      `about:tools?server=https://mcp.deepwiki.com/mcp`.
-      *Expected:* "Tools from mcp.deepwiki.com" with three tools, each with a description, its
+- [ ] **MCP-01 Listing tools.** Press `e` and type `https://mcp.deepwiki.com/mcp`.
+      *Expected:* a page saying it's an MCP server, with an "Open its tools" link (not a "Not
+      Acceptable" error). Following it shows "Tools from mcp.deepwiki.com" with three tools, each with a description, its
       fields marked "(required)" where needed, and a Run button.
 - [ ] **MCP-02 (priority) Confirming a call.** In "read_wiki_structure", type `rust-lang/rust`
       into repoName and press Enter.

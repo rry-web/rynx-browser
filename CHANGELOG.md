@@ -17,7 +17,7 @@
   link, which lists the server's tools as forms. Running one shows exactly what will be sent and
   needs `y` to confirm; the result opens as a page. Works with any MCP server using the
   Streamable HTTP transport (JSON or event-stream answers), including `about:tools?server=...`
-  typed by hand.
+  typed by hand. Opening an MCP server's address as a page says what it is and links to its tools.
 
 ### Fixed
 - The download confirmation box now takes every key until answered: other keys (even `q`) used

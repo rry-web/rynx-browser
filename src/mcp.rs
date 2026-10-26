@@ -382,6 +382,24 @@ fn back_link(server: &str) -> String {
     format!("<hr><p><a href=\"{}\">Back to the tools</a></p>", escape_html(&tools_address(server)))
 }
 
+/// Whether a response to an ordinary page request is a JSON-RPC message: what an MCP server
+/// answers when its address is opened as a page
+pub fn is_endpoint_answer(content_type: Option<&str>, body: &str) -> bool {
+    let json = content_type.is_some_and(|ct| ct.split(';').next().unwrap_or("").trim().eq_ignore_ascii_case("application/json"));
+    json && body.len() < 64 * 1024
+        && serde_json::from_str::<Value>(body).is_ok_and(|v| v.get("jsonrpc").and_then(Value::as_str) == Some("2.0"))
+}
+
+/// The page shown when an MCP server's address is opened as a page
+pub fn endpoint_page_html(url: &str) -> String {
+    format!(
+        "<title>MCP server</title><h1>MCP server</h1><p>{} is an MCP server, which offers tools \
+         rather than a web page.</p><p><a href=\"{}\">Open its tools</a></p>",
+        escape_html(url),
+        escape_html(&tools_address(url))
+    )
+}
+
 /// A page explaining why the tools couldn't be listed
 pub fn error_page_html(server: &str, error: &str) -> String {
     format!(

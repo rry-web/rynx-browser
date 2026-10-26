@@ -85,8 +85,9 @@ aren't available in I2P mode, and downloading from them isn't supported yet.
 A page that offers tools shows a `Tools:` link at the top. It opens a page listing each tool with
 a form for its input. Fill it in and press Enter: a box shows exactly what will be sent, and
 **`y`** runs the tool while **`n`** cancels. The result opens as a page; Back returns to the tools.
-You can also open any MCP server's tools by typing `about:tools?server=<address>`, for example
-`about:tools?server=https://mcp.deepwiki.com/mcp`.
+You can also type an MCP server's address, such as `https://mcp.deepwiki.com/mcp`: rynx
+recognises it and offers a link to its tools (or type `about:tools?server=<address>` to go straight
+there).
 
 For site authors: announce an MCP server (Streamable HTTP transport) in your page's `<head>`
 with `<link rel="mcp" href="/mcp">`. It must be on the same site as the page (or a subdomain).

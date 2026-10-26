@@ -179,6 +179,15 @@ async fn shop(stream: bool) -> (MockServer, Arc<Mutex<Vec<Value>>>) {
         .respond_with(FakeServer { received: Arc::clone(&received), stream })
         .mount(&server)
         .await;
+    // Opened as a page, the server refuses the way real ones do
+    Mock::given(method("GET"))
+        .and(path("/mcp"))
+        .respond_with(ResponseTemplate::new(406).set_body_json(json!({
+            "jsonrpc": "2.0", "id": "server-error",
+            "error": { "code": -32600, "message": "Not Acceptable: Client must accept text/event-stream" }
+        })))
+        .mount(&server)
+        .await;
     Mock::given(method("GET"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200).set_body_raw(
@@ -290,6 +299,25 @@ async fn a_sites_tools_are_listed_confirmed_and_run() {
         assert_eq!(methods(&received).iter().filter(|m| *m == "tools/call").count(), 1);
         assert_eq!(methods(&received).iter().filter(|m| *m == "initialize").count(), 1, "the session is kept");
     }
+}
+
+#[tokio::test]
+async fn opening_a_server_as_a_page_offers_its_tools() {
+    let (server, _) = shop(false).await;
+    let mut app = test_app();
+    app.current_tab().url_input = format!("{}/mcp", server.uri());
+    app.submit_request();
+    settle(&mut app, |r| matches!(r, NetworkResponse::Success(..))).await;
+    let page = text(&mut app);
+    assert!(page.contains("is an MCP server") && !page.contains("Not Acceptable"), "{page}");
+
+    press(&mut app, KeyCode::Enter);
+    settle(&mut app, |r| matches!(r, NetworkResponse::ToolsListed(..))).await;
+    assert!(text(&mut app).contains("Search the shop"));
+
+    // Ordinary JSON stays JSON
+    assert!(!mcp::is_endpoint_answer(Some("application/json"), r#"{"name": "x"}"#));
+    assert!(!mcp::is_endpoint_answer(Some("text/plain"), r#"{"jsonrpc": "2.0"}"#));
 }
 
 #[tokio::test]
