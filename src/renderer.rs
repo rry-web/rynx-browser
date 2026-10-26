@@ -24,6 +24,17 @@ pub fn sanitize_for_terminal(text: &str) -> Cow<'_, str> {
     Cow::Owned(clean)
 }
 
+/// Width of a rendered line as drawn: one cell per character's width. This can differ from
+/// Line::width(), which measures whole strings (an emoji joined with ZWJ is width 2 as a string
+/// but is drawn, and laid out by the renderer, character by character).
+pub fn display_width(line: &Line) -> usize {
+    line.spans
+        .iter()
+        .flat_map(|span| span.content.chars())
+        .map(|ch| UnicodeWidthChar::width(ch).unwrap_or(0))
+        .sum()
+}
+
 pub struct DomRenderer {
     pub lines: Vec<Line<'static>>,
     current_line: Vec<Span<'static>>,
@@ -100,19 +111,20 @@ impl DomRenderer {
         }
     }
 
-    /// Internal helper to push a span to the current line and track its link region
-    /// Now breaks content into individual characters for precise visual mode selection
+    /// Internal helper to push text to the current line and track its link region
     fn push_span_to_line(&mut self, content: String) {
-        let chars: Vec<char> = content.chars().collect();
-
-        for ch in chars {
-            let char_str = ch.to_string();
+        let style = self.current_style();
+        for ch in content.chars() {
             let width = UnicodeWidthChar::width(ch).unwrap_or(0);
             let start_x = self.current_line_width;
             let end_x = start_x + width;
 
-            self.current_line
-                .push(Span::styled(char_str, self.current_style()));
+            // Runs of same-styled text share one span; a span per character used ~70x the page
+            // size in memory. The UI splits visible lines into characters for highlighting.
+            match self.current_line.last_mut() {
+                Some(last) if last.style == style => last.content.to_mut().push(ch),
+                _ => self.current_line.push(Span::styled(ch.to_string(), style)),
+            }
             self.current_line_width += width;
 
             // Track link regions - merge contiguous characters with same link

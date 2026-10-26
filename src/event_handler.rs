@@ -184,7 +184,7 @@ fn handle_normal_mode<B: Backend>(
             let line_len = tab
                 .rendered_content
                 .get(tab.cursor_line)
-                .map(|l| l.width())
+                .map(crate::renderer::display_width)
                 .unwrap_or(0);
             tab.cursor_char = (tab.cursor_char + 1).min(line_len);
         }
@@ -328,7 +328,7 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent, terminal_height: u16) -> Res
             tab.scroll_to_line(tab.cursor_line, viewport_height(terminal_height));
 
             // Ensure cursor_char is valid for the new line
-            let line_len = tab.rendered_content.get(tab.cursor_line).map(|l| l.width()).unwrap_or(0);
+            let line_len = tab.rendered_content.get(tab.cursor_line).map(crate::renderer::display_width).unwrap_or(0);
             tab.cursor_char = tab.cursor_char.min(line_len);
 
             if let Some(ref mut sel) = tab.selection {
@@ -342,7 +342,7 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent, terminal_height: u16) -> Res
             tab.cursor_line = tab.cursor_line.saturating_sub(1);
             tab.scroll_to_line(tab.cursor_line, viewport_height(terminal_height));
 
-            let line_len = tab.rendered_content.get(tab.cursor_line).map(|l| l.width()).unwrap_or(0);
+            let line_len = tab.rendered_content.get(tab.cursor_line).map(crate::renderer::display_width).unwrap_or(0);
             tab.cursor_char = tab.cursor_char.min(line_len);
 
             if let Some(ref mut sel) = tab.selection {
@@ -353,7 +353,7 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent, terminal_height: u16) -> Res
         // MOVE RIGHT
         KeyCode::Char('l') => {
             let tab = app.current_tab();
-            let line_len = tab.rendered_content.get(tab.cursor_line).map(|l| l.width()).unwrap_or(0);
+            let line_len = tab.rendered_content.get(tab.cursor_line).map(crate::renderer::display_width).unwrap_or(0);
             tab.cursor_char = (tab.cursor_char + 1).min(line_len);
 
             if let Some(ref mut sel) = tab.selection {

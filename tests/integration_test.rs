@@ -1290,3 +1290,25 @@ async fn test_error_messages_cannot_inject_markup() {
     let text: String = tab.rendered_content.iter().map(|l| l.to_string()).collect();
     assert!(text.contains("failed <a href='https://evil.example/'>click here</a> & <b>more</b>"), "{text}");
 }
+
+#[test]
+fn test_rendered_text_is_stored_compactly() {
+    // A span per character made a 10MB page use ~700MB; same-styled runs must share spans
+    let html = "<p>plain text paragraph with <b>some bold</b> and a <a href='/x'>link</a></p>".repeat(1000);
+    let document = scraper::Html::parse_document(&html);
+    let mut renderer = rynx_browser::renderer::DomRenderer::new(80);
+    renderer.render(&document);
+    let spans: usize = renderer.lines.iter().map(|l| l.spans.len()).sum();
+    let chars: usize = renderer.lines.iter().map(|l| l.to_string().chars().count()).sum();
+    assert!(spans * 10 < chars, "{spans} spans for {chars} characters");
+}
+
+#[test]
+fn test_link_regions_match_drawn_width_for_joined_emoji() {
+    // A ZWJ family emoji is width 2 as one string but drawn as 6 cells character by character
+    let document = scraper::Html::parse_document("<a href='/f'>family \u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}</a>");
+    let mut renderer = rynx_browser::renderer::DomRenderer::new(80);
+    renderer.render(&document);
+    let link = &renderer.links[0];
+    assert!(link.x_end <= rynx_browser::renderer::display_width(&renderer.lines[link.line_index]));
+}

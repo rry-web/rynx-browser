@@ -265,6 +265,19 @@ fn apply_cursor_highlight(
     }
 }
 
+fn split_into_characters<'a>(line: &'a Line<'a>) -> Line<'a> {
+    let spans: Vec<Span<'a>> = line
+        .spans
+        .iter()
+        .flat_map(|span| {
+            span.content
+                .char_indices()
+                .map(move |(i, ch)| Span::styled(&span.content[i..i + ch.len_utf8()], span.style))
+        })
+        .collect();
+    Line::from(spans)
+}
+
 /// Where the selected link really goes, so link text can't disguise its destination
 fn link_preview(tab: &crate::app::BrowserTab) -> Line<'static> {
     match tab.link_regions.get(tab.selected_link_index) {
@@ -291,8 +304,13 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
     let total_lines = active_tab.rendered_content.len();
     let end_index = (start_index + content_area_height).min(total_lines);
 
-    let mut viewport_content = if start_index < total_lines {
-        active_tab.rendered_content[start_index..end_index].to_vec()
+    // Pages are stored with one span per run of same-styled text; split just the visible lines
+    // into one span per character so highlights can style exactly the characters they cover
+    let mut viewport_content: Vec<Line> = if start_index < total_lines {
+        active_tab.rendered_content[start_index..end_index]
+            .iter()
+            .map(split_into_characters)
+            .collect()
     } else {
         Vec::new()
     };

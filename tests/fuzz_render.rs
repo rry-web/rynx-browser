@@ -118,7 +118,7 @@ fn check_render_invariants(seed: u64, html: &str, width: usize) {
         assert!(link.line_index < lines.len(), "seed {seed}: link on missing line");
         assert!(link.x_start < link.x_end, "seed {seed}: empty link region");
         assert!(
-            link.x_end <= lines[link.line_index].width(),
+            link.x_end <= rynx_browser::renderer::display_width(&lines[link.line_index]),
             "seed {seed}: link region past end of line"
         );
     }
@@ -180,7 +180,7 @@ fn drive_app(app: &mut App, rng: &mut Rng, html: &str) {
             }
         }
         .unwrap();
-        terminal.draw(|f| ui(f, &app)).unwrap();
+        terminal.draw(|f| ui(f, app)).unwrap();
     }
 }
 
