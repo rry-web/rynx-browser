@@ -37,6 +37,8 @@ pub struct BrowserTab {
     pub download_state: Option<crate::models::Download>,
     pub search_state: Option<SearchState>,
     pub download_prompt: Option<crate::models::DownloadPrompt>,
+    /// Address bar contents when Edit mode was entered, for history and cancelling
+    pub url_before_edit: Option<String>,
 }
 
 impl BrowserTab {
@@ -106,6 +108,7 @@ impl BrowserTab {
             download_state: None,
             search_state: None,
             download_prompt: None,
+            url_before_edit: None,
         }
     }
 

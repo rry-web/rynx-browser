@@ -279,3 +279,36 @@ async fn test_download_popups_render_in_tiny_terminal() {
         terminal.draw(|f| ui(f, &app)).unwrap();
     }
 }
+
+fn type_text(app: &mut App, text: &str) {
+    for c in text.chars() {
+        handle_key_event::<TestBackend>(app, key(KeyCode::Char(c)), 80, 24).unwrap();
+    }
+}
+
+#[tokio::test]
+async fn test_typed_url_records_previous_page_in_history() {
+    let mut app = test_app();
+    app.current_tab().url_input = "http://127.0.0.1:1/first".to_string();
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('e')), 80, 24).unwrap();
+    app.current_tab().url_input.clear();
+    type_text(&mut app, "http://127.0.0.1:1/second");
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Enter), 80, 24).unwrap();
+
+    assert_eq!(app.current_tab().history, vec!["http://127.0.0.1:1/first"]);
+    assert_eq!(app.current_tab().url_input, "http://127.0.0.1:1/second");
+}
+
+#[tokio::test]
+async fn test_escape_restores_address_bar() {
+    let mut app = test_app();
+    app.current_tab().url_input = "http://127.0.0.1:1/first".to_string();
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('e')), 80, 24).unwrap();
+    type_text(&mut app, "garbage");
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Esc), 80, 24).unwrap();
+
+    assert_eq!(app.current_tab().url_input, "http://127.0.0.1:1/first");
+    assert!(app.current_tab().history.is_empty());
+}

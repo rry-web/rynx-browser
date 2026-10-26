@@ -110,8 +110,10 @@ fn handle_normal_mode<B: Backend>(
         // --- PAGE CONTROLS (Targeting current_tab) ---
         KeyCode::Char('q') => return Ok(true), // Signal to quit
         KeyCode::Char('e') => {
-            app.current_tab().input_mode = InputMode::Editing;
-            app.current_tab().status_message = String::from("EDIT MODE - Type URL and press Enter");
+            let tab = app.current_tab();
+            tab.url_before_edit = Some(tab.url_input.clone());
+            tab.input_mode = InputMode::Editing;
+            tab.status_message = String::from("EDIT MODE - Type URL and press Enter");
         }
         KeyCode::Char('/') => {
             app.current_tab().input_mode = InputMode::Search;
@@ -288,9 +290,11 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
     match key.code {
         KeyCode::Enter => {
             let tab = app.current_tab();
-            // Save history
-            if !tab.url_input.is_empty() {
-                tab.history.push(tab.url_input.clone());
+            // Save the page we're leaving, not the address that was just typed
+            if let Some(previous_url) = tab.url_before_edit.take() {
+                if !previous_url.is_empty() {
+                    tab.history.push(previous_url);
+                }
             }
 
             app.submit_request();
@@ -332,8 +336,13 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
             app.current_tab().url_input.pop();
         }
         KeyCode::Esc => {
-            app.current_tab().input_mode = InputMode::Normal;
-            app.current_tab().status_message = String::from("Ready");
+            let tab = app.current_tab();
+            // Cancelling discards the edit and restores the original address
+            if let Some(previous_url) = tab.url_before_edit.take() {
+                tab.url_input = previous_url;
+            }
+            tab.input_mode = InputMode::Normal;
+            tab.status_message = String::from("Ready");
         }
         _ => {}
     }
