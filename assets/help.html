@@ -1,38 +1,53 @@
-            <h1>NAVIGATION/NORMAL</h1>
-            <p><b>h / j / k / l:</b> Move cursor (Vim-style). View scrolls to follow.</p>
-            <p><b>Left Click:</b> Position cursor and follow links.</p>
-            <p><b>Ctrl + Left Click:</b> Open link in new tab.</p>
-            <p><b>Up / Down Arrow:</b> Scroll page without moving cursor.</p>
-            <p><b>Scroll:</b> Scroll page up/down by 3 lines.</p>
-            <p><b>Tab / Shift + Tab:</b> Cycle through links (Forward / Backward).</p>
-            <p><b>Enter:</b> Open the currently selected link.</p>
-            <p><b>Backspace / Left Arrow:</b> Go back to previous page.</p>
-            <p><b>d:</b> Download from the currently selected link.</p>
-            <p><b>Esc:</b> Clear finished or failed download overlays, or return to Normal Mode if in Edit/Visual.</p>
-            <hr>
-            <h1>CLIPBOARD & VISUAL MODES</h1>
-            <p><b>v:</b> Enter <b>Visual Mode</b> (Character selection).</p>
-            <p><b>y (in Visual):</b> Yank (Copy) selected text to system clipboard.</p>
-            <hr>
-            <h1>EDIT MODE (Press 'e')</h1>
-            <p><b>Ctrl + u:</b> Clear address bar.</p>
-            <p><b>Ctrl + y:</b> Copy address to clipboard.</p>
-            <p><b>Ctrl + v:</b> Paste from clipboard.</p>
-            <p><b>Ctrl + k:</b> Clear address bar AND paste.</p>
-            <p>Non valid URLs will automatically search in Marginalia, but this currently doesn't work due to lack of JS.</p>
-            <hr>
-            <h1>SEARCH MODE (Press '/')</h1>
-            <p><b>Typing:</b> Input search query with live highlighting of matches.</p>
-            <p><b>&gt;:</b> Jump to next search match.</p>
-            <p><b>&lt;:</b> Jump to previous search match.</p>
-            <p><b>Enter:</b> Finish search and return to Normal Mode.</p>
-            <p><b>Esc:</b> Cancel search and return to Normal Mode.</p>
-            <p><b>Backspace:</b> Remove characters from search query.</p>
-            <hr>
-            <h1>BROWSER CONTROL</h1>
-            <p><b>n / w:</b> New Tab / Close Tab.</p>
-            <p><b>t:</b> Open highlighted address in new tab.</p>
-            <p><b>p:</b> Toggle I2P mode.</p>
-            <p><b>q:</b> Quit the browser.</p>
-            <p><b>[ / ]:</b> Switch between tabs.</p>
-            <p><b>Shift + V:</b> Toggle Page Source View.</p>
+<h1>RYNX BROWSER</h1>
+<p>Press <b>e</b>, type an address or search words, and press Enter. <b>q</b> quits.</p>
+
+<h2>Moving around</h2>
+<table>
+<tr><td><b>h j k l</b></td><td>Move the cursor; the view follows</td></tr>
+<tr><td><b>Up / Down</b>, scroll wheel</td><td>Scroll; the cursor stays on screen</td></tr>
+<tr><td><b>PageUp / PageDown</b>, <b>Ctrl+b / Ctrl+f</b></td><td>Scroll a screen</td></tr>
+<tr><td><b>Ctrl+u / Ctrl+d</b></td><td>Scroll half a screen</td></tr>
+<tr><td><b>g / G</b>, <b>Home / End</b></td><td>Top / bottom of the page</td></tr>
+</table>
+
+<h2>Links and history</h2>
+<table>
+<tr><td><b>Tab / Shift+Tab</b></td><td>Select the next / previous link or form field (where it goes is shown at the bottom)</td></tr>
+<tr><td><b>Enter</b>, click</td><td>Open the link, or use the form field</td></tr>
+<tr><td><b>Backspace</b>, <b>Left</b>, <b>H</b></td><td>Back (to where you were on the page)</td></tr>
+<tr><td><b>Right</b>, <b>L</b></td><td>Forward</td></tr>
+<tr><td><b>r</b></td><td>Reload</td></tr>
+<tr><td><b>d</b></td><td>Download the selected link</td></tr>
+<tr><td><b>Esc</b></td><td>Clear a finished download</td></tr>
+</table>
+
+<h2>Forms</h2>
+<table>
+<tr><td><b>Enter</b> on a field</td><td>Start typing; <b>Enter</b> submits, <b>Esc</b> stops typing, <b>Ctrl+u</b> clears</td></tr>
+<tr><td><b>Enter</b> on a box or choice</td><td>Tick a checkbox, pick an option, or show the next choice</td></tr>
+<tr><td><b>Enter</b> on a button</td><td>Submit the form</td></tr>
+</table>
+
+<h2>Tabs</h2>
+<table>
+<tr><td><b>n</b> / <b>w</b></td><td>New tab / close tab</td></tr>
+<tr><td><b>t</b>, Ctrl+click</td><td>Open the selected link in a new tab</td></tr>
+<tr><td><b>[ / ]</b></td><td>Previous / next tab</td></tr>
+</table>
+
+<h2>Address bar (press e)</h2>
+<table>
+<tr><td><b>Enter</b></td><td>Go; words that aren't an address are searched with Marginalia</td></tr>
+<tr><td><b>Esc</b></td><td>Cancel and restore the address</td></tr>
+<tr><td><b>Ctrl+u</b> / <b>Ctrl+k</b></td><td>Clear / clear and paste</td></tr>
+<tr><td><b>Ctrl+y</b> / <b>Ctrl+v</b></td><td>Copy / paste</td></tr>
+</table>
+<p>Marginalia sometimes shows a "wait a moment" page first; select its "proceed manually" link to continue.</p>
+
+<h2>Find on page, copying, and more</h2>
+<table>
+<tr><td><b>/</b></td><td>Find on the page; <b>&gt;</b> / <b>&lt;</b> jump between matches, <b>Esc</b> clears</td></tr>
+<tr><td><b>v</b>, then <b>y</b></td><td>Select text with the cursor keys, then copy it</td></tr>
+<tr><td><b>Shift+V</b></td><td>Show the page source</td></tr>
+<tr><td><b>p</b></td><td>Toggle I2P mode (through the proxy at 127.0.0.1:4444)</td></tr>
+</table>

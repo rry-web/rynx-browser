@@ -1,10 +1,20 @@
 # RYNX BROWSER
 
-A terminal CLI browser programmed in Rust, loosely inspired by other CLI browsers such as **Lynx** or **w3m**.
+A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**, with absolutely
+**zero JavaScript**.
 
-It supports browser tabs, some mouse support for links/scrolling, and absolutely **zero javascript**.
-
-Pages are laid out for the terminal: headings, numbered and nested lists, blockquotes, aligned table columns, and preformatted code. Plain-text files (`.txt`, JSON, source code) are shown as text with clickable URLs, and files that can't be displayed (images, PDFs, archives) are offered for download.
+- **Readable pages:** headings, numbered and nested lists, blockquotes, aligned table columns, and
+  preformatted code, laid out for the terminal. Plain-text files (`.txt`, JSON, source code) are
+  shown as text with clickable URLs; images, PDFs and other files are offered for download.
+- **Forms:** search boxes and other forms work: text fields, checkboxes, choices and buttons, sent
+  with GET or POST.
+- **Tabs, history and search:** Back and Forward return you to where you were on each page,
+  in-page links jump without reloading, and `/` finds text on the page.
+- **Fast:** pages are laid out on a background thread, so even huge or slow pages never freeze the
+  screen.
+- **Private and hardened:** no cookies, no JavaScript, HTTPS everywhere, and on Linux a filesystem
+  sandbox. See [Security and privacy](#security-and-privacy).
+- **I2P:** browse `.i2p` sites through a local I2P router.
 
 ## Installation
 
@@ -12,107 +22,147 @@ Pre-built binaries for Linux, macOS and Windows are on the
 [releases page](https://github.com/rry-web/rynx-browser/releases), including beta builds. Each
 release explains how to verify the download and get past the warnings shown for unsigned binaries.
 
-To build from source instead, set up Rust on your machine and then run:
+To build from source, install [Rust](https://rustup.rs) and run:
 
 ```sh
-cargo run
+cargo run --release
 ```
 
-To run the test suite:
+Command-line options:
+
+| Option | Effect |
+| :--- | :--- |
+| `--version`, `-V` | Print the version |
+| `--help`, `-h` | Print usage |
+| `--no-sandbox` | Turn off the Linux filesystem sandbox (for troubleshooting) |
+
+## Using it
+
+Press **`e`**, type an address (or search words) and press Enter. Words that aren't an address are
+searched with [Marginalia](https://marginalia-search.com), a search engine for the
+non-commercial web. Marginalia sometimes shows a "wait a moment" page to slow down bots; select its
+"proceed manually" link to continue.
+
+Press **`Tab`** to step through the links and form fields on a page. The bottom border always shows
+where the selected link goes, or what a form field is and where its form sends what you type.
+
+To use a form, select a field and press **Enter** to start typing, then **Enter** again to submit
+(or **Esc** to stop typing). There are no cookies, so sites that need you to log in won't keep
+you signed in.
+
+Downloads (**`d`** on a link) are saved to your Downloads folder after you confirm.
+
+## Key bindings
+
+The same list is on the start page.
+
+### Moving around
+| Key | Action |
+| :--- | :--- |
+| **`h` `j` `k` `l`** | Move the cursor (vim-style); the view follows |
+| **`Up` / `Down`**, scroll wheel | Scroll; the cursor stays on screen |
+| **`PageUp` / `PageDown`**, **`Ctrl+b` / `Ctrl+f`** | Scroll a screen |
+| **`Ctrl+u` / `Ctrl+d`** | Scroll half a screen |
+| **`g` / `G`**, **`Home` / `End`** | Top / bottom of the page |
+
+### Links and history
+| Key | Action |
+| :--- | :--- |
+| **`Tab` / `Shift+Tab`** | Select the next / previous link or form field |
+| **`Enter`**, click | Open the selected link, or use the form field |
+| **`Backspace`**, **`Left`**, **`H`** | Back, to where you were on the page |
+| **`Right`**, **`L`** | Forward |
+| **`r`** | Reload, keeping your place |
+| **`d`** | Download the selected link |
+| **`Esc`** | Clear a finished or failed download |
+
+### Forms
+| Key | Action |
+| :--- | :--- |
+| **`Enter`** on a text field | Start typing |
+| **`Enter`** while typing | Submit the form (in a text area: new line) |
+| **`Esc`** while typing | Stop typing, keeping the text |
+| **`Ctrl+u`** / **`Ctrl+v`** while typing | Clear the field / paste |
+| **`Enter`** on a checkbox, option or choice | Tick it, pick it, or show the next choice |
+| **`Enter`** on a button | Submit the form |
+
+### Tabs
+| Key | Action |
+| :--- | :--- |
+| **`n`** / **`w`** | New tab / close tab |
+| **`t`**, **`Ctrl`+click** | Open the selected link in a new tab |
+| **`[`** / **`]`** | Previous / next tab |
+
+### Address bar (press `e`)
+| Key | Action |
+| :--- | :--- |
+| **`Enter`** | Go (or search, if it isn't an address) |
+| **`Esc`** | Cancel and restore the address |
+| **`Ctrl+u`** / **`Ctrl+k`** | Clear / clear and paste |
+| **`Ctrl+y`** / **`Ctrl+v`** | Copy / paste |
+
+### Finding text, copying, and more
+| Key | Action |
+| :--- | :--- |
+| **`/`** | Find on the page (live highlighting) |
+| **`>`** / **`<`** | Next / previous match |
+| **`v`**, then **`y`** | Select text with the cursor keys, then copy it |
+| **`Shift+V`** | Show the page source |
+| **`p`** | Toggle I2P mode (through the proxy at `127.0.0.1:4444`) |
+| **`q`** | Quit |
+
+## Security and privacy
+
+A text browser without JavaScript already avoids the biggest source of browser exploits. On top of
+that:
+
+- **No tracking:** no cookies, no storage, no `Referer` header, no JavaScript.
+- **HTTPS everywhere:** addresses, redirects, downloads and form submissions are upgraded to HTTPS
+  (except `localhost` and `.i2p` sites). Certificates are checked by your operating system,
+  including revocation on macOS and Windows, with TLS 1.2 or newer.
+- **Linux sandbox:** the browser restricts itself with Landlock (kernel 5.13+): it can write only
+  to your Downloads folder and can't read the rest of your home directory, so a bug can't be used
+  to read SSH keys or plant files. The status line shows whether it's active.
+- **Hostile pages are contained:** escape sequences that could take over your terminal are
+  stripped; oversized, deeply nested or compressed "bomb" pages can't freeze or crash the browser;
+  public pages can't redirect into your local network.
+- **Careful with links and forms:** `mailto:`, `javascript:` and `file:` links are refused; a form
+  is never allowed to put a password in a web address; the destination of every link and form is
+  shown before you use it.
+- **Safe downloads:** files are tagged as coming from the internet (macOS quarantine, Windows Mark
+  of the Web, Linux `user.xdg.origin.url`) so your OS checks them before they run; filenames are
+  made safe on every OS, and existing files are never overwritten silently.
+- **I2P:** in I2P mode all traffic goes through the I2P proxy, and `.i2p` addresses are never looked
+  up outside it.
+- **Maintained dependencies:** `cargo audit` runs in CI on every change and weekly.
+
+## Development
 
 ```sh
-cargo test
+cargo test                                   # unit, integration and randomised renderer tests
+cargo test --test live_tls -- --ignored      # TLS checks against public test servers
+FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render
 ```
 
-Run `rynx_browser --help` for command-line options.
-
-On Linux the browser sandboxes itself (Landlock, kernel 5.13+): it can write only to your Downloads
-folder and can't read the rest of your home directory. The status line shows whether the sandbox is
-active.
-
-For hands-on checks of terminal, touchpad, download and I2P behaviour, see [TESTING.md](TESTING.md), and record results in [TEST_LOG.md](TEST_LOG.md).
-
-## Key Bindings & Controls
-
-### Navigation (Normal Mode)
-| Key | Action |
-| :--- | :--- |
-| **`h / j / k / l`** | Move cursor (Vim-style). View scrolls to follow. |
-| **`Up / Down`** | Scroll the page up or down by 1 line. |
-| **`Tab / Shift + Tab`** | Cycle through links visible on the screen. (Forward/Backward) The bottom border shows where the selected link goes. |
-| **`Enter`** | Open the currently selected link. |
-| **`Backspace / Left`** | Go back to the previous page in history. |
-| **`d`** | Download the currently selected link. |
-| **`Esc`** | Clear finished or failed downloads. |
-
-### Tab Management
-| Key | Action |
-| :--- | :--- |
-| **`n`** | Open a new, blank tab. |
-| **`t`** | Open the **currently highlighted link** in a new tab. |
-| **`w`** | Close the current tab. |
-| **`]`** | Switch to the **Next** tab. |
-| **`[`** | Switch to the **Previous** tab. |
-
-### Browser Controls
-| Key | Action |
-| :--- | :--- |
-| **`e`** | Enter **Edit Mode** to type a URL or search query. |
-| **`/`** | Enter **Search Mode** to search within the current page. |
-| **`p`** | Toggle **I2P Mode** (Routes traffic via local proxy `127.0.0.1:4444`). |
-| **`Shift + v`** | Toggle Page Source View. |
-| **`q`** | Quit the browser. |
-
-### Visual Mode ###
-| Key | Action |
-| :--- | :--- |
-| **`v`** | Enter visual mode within the browser. |
-| **`y`** | Copy text to clipboard. |
-
-### Search Mode (Press '/')
-| Key | Action |
-| :--- | :--- |
-| **Typing** | Input search query with live results. |
-| **`>`** | Jump to next search match. |
-| **`<`** | Jump to previous search match. |
-| **`Enter`** | Finish search and return to Normal Mode. |
-| **`Esc`** | Cancel search and return to Normal Mode. |
-| **`Backspace`** | Remove characters from search query. |
-
-### Edit Mode (URL Bar)
-_Active after pressing `e`_
-| Key | Action |
-| :--- | :--- |
-| **Typing** | Input URL or search terms. |
-| **`Enter`** | Submit request (Defaults to **Marginalia Search** if not a valid URL). |
-| **`Esc`** | Cancel editing and return to Normal Mode. |
-| **`Ctrl + u`** | Clear address bar. |
-| **`Ctrl + y`** | Copy address to clipboard. |
-| **`Ctrl + v`** | Paste from clipboard. |
-| **`Ctrl + k`** | Clear address and paste from clipboard. |
-
-
-### Mouse Support
-| Action | Function |
-| :--- | :--- |
-| **Scroll Wheel** | Scroll page up/down by 3 lines. |
-| **Left Click** | Open the clicked link. |
-| **`Ctrl` + Click** | Open the clicked link in a **New Tab**. |
+[TESTING.md](TESTING.md) has a checklist of hands-on checks (terminals, touchpads, platforms, I2P)
+with results recorded in [TEST_LOG.md](TEST_LOG.md). Changes are listed in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
-- [x] **I2P Integration**: Routes via local proxy `127.0.0.1:4444`.
-- [x] **Download Manager**: Memory-efficient streaming with progress tracking.
-- [x] **Clipboard Support**: Full copy/paste support for URL bar and content.
-- [x] **Search Functionality**: Character-level search with highlighting and navigation.
-- [ ] **MCP Support**: Integration for Model Context Protocol as a JS alternative.
-- [ ] **High-Fidelity Images**: Implementing `ratatui-image` for Sixel/Kitty support.
-- [ ] **Text Input**: For entering usernames, passwords, or messages into text boxes.
-- [ ] **RSS and Gopher Support**: Additional protocols to add support for.
+- [x] **I2P integration** through a local proxy
+- [x] **Downloads** with progress, safe filenames and OS security tagging
+- [x] **Clipboard** support for the address bar and page text
+- [x] **Find on page** with highlighting
+- [x] **Rendering** of tables, lists, quotes, code and plain-text files
+- [x] **Forms** for searching and other text input
+- [ ] **Images** with `ratatui-image` (Sixel/Kitty)
+- [ ] **Bookmarks** and persistent history
+- [ ] **Settings file** (home page, search engine, I2P proxy)
+- [ ] **Gopher, Gemini and RSS** support
+- [ ] **MCP support** as an alternative to JavaScript
 
-And many other potential features down the line!
-
-If you want to contribute just poke at me on github and I'll get a notification sent to my email.
+If you want to contribute, open an issue or pull request on GitHub.
 
 ## License
 
-This project is licensed under GPLv3
+This project is licensed under GPLv3.

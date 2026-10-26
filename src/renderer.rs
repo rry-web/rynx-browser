@@ -1470,7 +1470,10 @@ impl DomRenderer {
                     if i > 0 {
                         let pad = (x - COLUMN_SEPARATOR_WIDTH).saturating_sub(self.current_line_width);
                         self.emit(&" ".repeat(pad), Style::default(), None);
-                        self.emit(COLUMN_SEPARATOR, separator_style, None);
+                        // No trailing space when the last cell has nothing on this line
+                        let ends_line = i == cells.len() - 1 && cell.lines.get(k).is_none();
+                        let separator = if ends_line { COLUMN_SEPARATOR.trim_end() } else { COLUMN_SEPARATOR };
+                        self.emit(separator, separator_style, None);
                     }
                     if let Some(line) = cell.lines.get(k) {
                         let x = self.current_line_width;

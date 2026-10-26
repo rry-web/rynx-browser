@@ -11,11 +11,20 @@ GitHub issues; [TESTING.md](https://github.com/rry-web/rynx-browser/blob/main/TE
 - Inline code no longer breaks paragraphs; code blocks keep their lines.
 - Correct spacing around inline tags; `&nbsp;` preserved.
 - Plain-text files (`.txt`, JSON, source code) shown as text, with clickable URLs.
-- Images, PDFs and other non-text files offered for download instead of shown as garbage.
+- Images, PDFs and other non-text files offered for download instead of shown as garbage;
+  links only go straight to the download prompt for known file types.
 - Embedded video, audio and frames shown as links; `<noscript>` content displayed.
 - Pages are parsed and laid out on a background thread: slow pages never freeze the UI.
 
+### Forms
+- Search boxes and other forms work: text and password fields, text areas, checkboxes, radio
+  buttons, choices and buttons, submitted with GET or POST.
+- The bottom bar shows where a form sends what you type; GET forms never put a password in the
+  address.
+
 ### Navigation
+- Back and Forward (`Right` / `L`) return to where you were on each page; `r` reloads.
+- Paging keys: `PageUp`/`PageDown`, `Ctrl+u`/`Ctrl+d`, `g`/`G`.
 - In-page links (`#chapter-1`) jump within the page instead of reloading it.
 - Redirects are tracked: the address bar shows where you ended up.
 - Back after typing a URL returns to the previous page; Esc cancels editing.

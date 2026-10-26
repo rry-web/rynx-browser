@@ -175,6 +175,39 @@ Worth repeating after any dependency upgrade.
       *Expected:* the browser tries `https://` and shows an error, rather than loading the
       page over plain HTTP.
 
+## Forms
+
+- [ ] **FORM-01 Search box.** Open `https://en.wikipedia.org/`, press `Tab` until the search field
+      is selected, press Enter, type a word, press Enter.
+      *Expected:* the bottom bar showed `Text field "search" → sends to …/w/index.php` before you
+      typed; the search results page loads.
+- [ ] **FORM-02 Search in a table.** On `https://news.ycombinator.com/`, scroll to the bottom and
+      search with the "Search:" field.
+      *Expected:* hn.algolia.com opens with your query.
+- [ ] **FORM-03 Checkboxes, options and choices.** On a page with a form that has them (e.g. a
+      search engine's advanced search), use Enter on each.
+      *Expected:* checkboxes toggle `[x]`, picking an option clears the others in its group,
+      choices cycle through their options.
+- [ ] **FORM-04 Passwords.** On any login form, type into the password field.
+      *Expected:* only `•` characters are shown. (Logging in won't stick: there are no cookies.)
+- [ ] **FORM-05 Typing keeps up.** Type quickly into a field on a large page (e.g. Wikipedia).
+      *Expected:* characters appear immediately.
+
+## History and paging
+
+- [ ] **HIST-01 Back keeps your place.** Scroll partway down a long page, follow a link, then go
+      back.
+      *Expected:* you return to the same place on the first page, not its top.
+- [ ] **HIST-02 Forward and reload.** After going back, press `Right` (or `L`); then press `r`.
+      *Expected:* forward returns to the second page where you left it; reload keeps your place.
+- [ ] **HIST-03 Paging keys.** On a long page, try `PageDown`/`PageUp`, `Ctrl+d`/`Ctrl+u`, `G`,
+      `g`.
+      *Expected:* screen / half-screen moves, bottom and top; `Ctrl+d` never starts a download.
+- [ ] **HIST-04 Links to /files/ pages.** Click an ordinary link whose address contains `/files/`
+      or `/download/` but ends in `.html` or `/`.
+      *Expected:* the page opens (no download prompt). Links ending in `.zip`, `.pdf` etc. still go
+      to the download prompt.
+
 ## Scrolling and input
 
 - [ ] **SCROLL-01 (priority) Touchpad scrolling keeps up.** On the Moby Dick page, scroll

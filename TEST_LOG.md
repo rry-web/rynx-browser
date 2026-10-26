@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 79 (16 priority).
+Total checks: 88 (16 priority).
 
 
 ## Automated checks
@@ -68,6 +68,25 @@ Total checks: 79 (16 priority).
 | NAV-07 | Fragment link in a new tab |  |  |  |  |
 | NAV-08 | Redirects within a local server |  |  |  |  |
 | NAV-09 | HTTP-only sites are not downgraded |  |  |  |  |
+
+## Forms
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| FORM-01 | Search box |  |  |  |  |
+| FORM-02 | Search in a table |  |  |  |  |
+| FORM-03 | Checkboxes, options and choices |  |  |  |  |
+| FORM-04 | Passwords |  |  |  |  |
+| FORM-05 | Typing keeps up |  |  |  |  |
+
+## History and paging
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| HIST-01 | Back keeps your place |  |  |  |  |
+| HIST-02 | Forward and reload |  |  |  |  |
+| HIST-03 | Paging keys |  |  |  |  |
+| HIST-04 | Links to /files/ pages |  |  |  |  |
 
 ## Scrolling and input
 

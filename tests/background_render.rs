@@ -132,5 +132,5 @@ async fn the_help_page_survives_a_resize() {
     let mut app = background_app();
     app.resize_all_tabs(60);
     settle(&mut app).await;
-    assert!(text(&mut app).contains("NAVIGATION"), "help page was blanked by a resize");
+    assert!(text(&mut app).contains("Moving around"), "help page was blanked by a resize");
 }
