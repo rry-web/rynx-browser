@@ -250,6 +250,7 @@ cargo test                                   # unit, integration and randomised 
 cargo test --test live_tls -- --ignored      # TLS checks against public test servers
 cargo test --test smallweb --test feeds --test mcp -- --ignored   # real Gemini, Gopher, feed and MCP servers
 FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render
+cargo run --example render_file -- page.html 100   # print a saved page as rynx lays it out
 ```
 
 [TESTING.md](TESTING.md) has a checklist of hands-on checks (terminals, touchpads, platforms, I2P)

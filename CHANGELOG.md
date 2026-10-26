@@ -26,6 +26,12 @@
   `anubis = off` turns it off.
 
 ### Changed
+- More site menus are drawn on one line: lists whose CSS classes lay them out in a row (`flex`,
+  `inline`, `lg:flex-row`, as on Ars Technica) count as menus, and a menu repeated for another
+  screen size is shown once. Menus of form buttons keep their buttons working, on the menu's
+  line, instead of becoming plain text.
+- A button's content stays on one line: Ars Technica's view buttons used to split as
+  `[ Classic` / `]`.
 - The address bar shows the current mode as a clear label (COPY MODE, FIND, EDITING ADDRESS,
   TYPING INTO FORM) with the keys that matter, and Clearweb / I2P mode on the right. Copy mode
   used to show only a dark blue address that was hard to read; it now explains itself and counts

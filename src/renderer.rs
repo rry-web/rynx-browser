@@ -427,6 +427,17 @@ fn looks_like_menu(list: ElementRef) -> bool {
     in_navigation
         || has_menu_class(list.value())
         || list.ancestors().filter_map(ElementRef::wrap).take(2).any(|a| has_menu_class(a.value()))
+        || lays_out_in_a_row(list.value())
+}
+
+/// Whether a list's own classes lay its items out side by side, as utility CSS frameworks write
+/// it: "flex", "inline-flex", "lg:flex lg:flex-row" (but not "flex-col"). Its items still have
+/// to be short links or labels for it to be drawn as a menu.
+fn lays_out_in_a_row(list: &scraper::node::Element) -> bool {
+    let Some(classes) = list.attr("class") else { return false };
+    let words = class_words(classes);
+    let has = |w: &str| words.iter().any(|word| word == w);
+    (has("flex") || has("inline")) && !has("col") && !has("column")
 }
 
 /// One entry of a menu: a link (or a plain label) and its submenu, if any
@@ -434,13 +445,18 @@ struct MenuItem<'a> {
     label: String,
     href: Option<String>,
     submenu: Option<ElementRef<'a>>,
+    /// An item holding a form control (e.g. a button) is drawn as itself, on the menu's line
+    with_control: Option<ElementRef<'a>>,
 }
+
+/// Form controls, which a menu item may hold one of instead of a link
+const CONTROL_TAGS: &[&str] = &["button", "input", "select", "textarea"];
 
 /// What a list item holds, if it could be a menu entry: its visible text outside any submenu,
 /// its links outside the submenu, and the submenu. None as soon as it holds too much text or more
 /// than one link. The scan never enters the submenu or hidden content and stops early, so each item
 /// costs a small, bounded amount of work however large or deeply nested the page is.
-fn scan_menu_item(li: ElementRef) -> Option<(String, Option<ElementRef>, Option<ElementRef>)> {
+fn scan_menu_item(li: ElementRef) -> Option<(String, Option<ElementRef>, Option<ElementRef>, bool)> {
     // The submenu is a list near the top of the item (li > ul, or li > div > ul)
     let mut submenu = None;
     let mut frontier: Vec<ElementRef> = vec![li];
@@ -462,6 +478,7 @@ fn scan_menu_item(li: ElementRef) -> Option<(String, Option<ElementRef>, Option<
 
     let mut text = String::new();
     let mut link = None;
+    let mut control = false;
     let mut stack = vec![*li];
     while let Some(node) = stack.pop() {
         match node.value() {
@@ -479,12 +496,18 @@ fn scan_menu_item(li: ElementRef) -> Option<(String, Option<ElementRef>, Option<
                 if skip {
                     continue;
                 }
-                if elem.name() == "a" && elem.attr("href").is_some() {
-                    if link.is_some() {
+                let is_link = elem.name() == "a" && elem.attr("href").is_some();
+                let is_control = CONTROL_TAGS.contains(&elem.name()) && elem.attr("type") != Some("hidden");
+                if is_link || is_control {
+                    if link.is_some() || control {
                         // Several links in one item is a sentence or a compound entry
                         return None;
                     }
-                    link = ElementRef::wrap(node);
+                    if is_link {
+                        link = ElementRef::wrap(node);
+                    } else {
+                        control = true;
+                    }
                 }
                 // Children in reverse, so text comes out in document order
                 let children: Vec<_> = node.children().collect();
@@ -496,7 +519,7 @@ fn scan_menu_item(li: ElementRef) -> Option<(String, Option<ElementRef>, Option<
     // Also trims non-breaking spaces at the ends, which menus sometimes use for padding
     let text = text.split_ascii_whitespace().collect::<Vec<_>>().join(" ");
     let text = text.trim_matches(char::is_whitespace).to_string();
-    (text.chars().count() <= MAX_MENU_ITEM_CHARS).then_some((text, link, submenu))
+    (text.chars().count() <= MAX_MENU_ITEM_CHARS).then_some((text, link, submenu, control))
 }
 
 /// The visible text of a link in a menu
@@ -533,17 +556,18 @@ fn menu_items(list: ElementRef, min_items: usize) -> Option<Vec<MenuItem>> {
         if li.value().name() != "li" || is_hidden(li.value()) {
             continue;
         }
-        let (label, link, submenu) = scan_menu_item(li)?;
+        let (label, link, submenu, control) = scan_menu_item(li)?;
         match link {
+            None if control => items.push(MenuItem { label, href: None, submenu, with_control: Some(li) }),
             None if label.is_empty() && submenu.is_none() => continue,
-            None => items.push(MenuItem { label, href: None, submenu }),
+            None => items.push(MenuItem { label, href: None, submenu, with_control: None }),
             Some(link) => {
                 let text = link_label(link);
                 if text.is_empty() {
                     continue;
                 }
                 let href = link.value().attr("href").map(str::to_string);
-                items.push(MenuItem { label: text, href, submenu });
+                items.push(MenuItem { label: text, href, submenu, with_control: None });
             }
         }
     }
@@ -667,6 +691,12 @@ pub struct DomRenderer {
     form_ids: HashMap<String, usize>,
     /// The control (e.g. a <button>) whose content is being drawn
     active_control: Option<usize>,
+    /// Above zero while drawing something that stays on one line (a button's content, a menu
+    /// item holding a form control): blocks inside it don't start new lines
+    inline_depth: usize,
+    /// Menus already drawn (their entries), so a site's mobile and desktop copies of the same menu
+    /// appear once
+    menus_drawn: std::collections::HashSet<Vec<(String, Option<String>)>>,
 }
 
 impl DomRenderer {
@@ -700,6 +730,8 @@ impl DomRenderer {
             current_form: None,
             form_ids: HashMap::new(),
             active_control: None,
+            inline_depth: 0,
+            menus_drawn: std::collections::HashSet::new(),
         }
     }
 
@@ -849,7 +881,25 @@ impl DomRenderer {
 
     // --- Lines ---
 
+    /// Lay out something that places its own lines (tables, menus), even inside a one-line
+    /// element: its line numbers for links and jump targets rely on its lines really ending
+    fn outside_one_line(&mut self, layout: impl FnOnce(&mut Self)) {
+        let saved = std::mem::take(&mut self.inline_depth);
+        layout(self);
+        self.inline_depth = saved;
+    }
+
+    /// End the current line where a block ends; on a one-line element, just a space
     fn flush_line(&mut self) {
+        if self.inline_depth > 0 {
+            self.note_space();
+            return;
+        }
+        self.end_line();
+    }
+
+    /// End the current line, always: for wrapping
+    fn end_line(&mut self) {
         if self.marker_pending {
             return;
         }
@@ -885,6 +935,9 @@ impl DomRenderer {
 
     /// Separate blocks (paragraphs, headings, lists) with a single blank line
     fn add_vertical_space(&mut self) {
+        if self.inline_depth > 0 {
+            return self.note_space();
+        }
         if self.marker_pending {
             return;
         }
@@ -896,6 +949,9 @@ impl DomRenderer {
 
     /// An explicit line break (<br>, a newline in <pre>); breaking an empty line leaves it blank
     fn line_break(&mut self) {
+        if self.inline_depth > 0 {
+            return self.note_space();
+        }
         if self.marker_pending {
             return;
         }
@@ -1034,7 +1090,7 @@ impl DomRenderer {
             }
             self.emit_text(word);
         } else if self.line_has_text && self.line_prefix_width + width <= self.max_width {
-            self.flush_line();
+            self.end_line();
             self.apply_prefix();
             self.emit_text(word);
         } else {
@@ -1046,7 +1102,7 @@ impl DomRenderer {
     /// Split text that is too wide for any line (e.g. a long URL) across lines
     fn hard_wrap(&mut self, text: &str) {
         if self.line_has_text && !self.marker_pending {
-            self.flush_line();
+            self.end_line();
         }
         let mut remaining = text;
         while !remaining.is_empty() {
@@ -1067,7 +1123,7 @@ impl DomRenderer {
             self.emit_text(chunk);
             remaining = rest;
             if !remaining.is_empty() {
-                self.flush_line();
+                self.end_line();
             }
         }
     }
@@ -1077,7 +1133,7 @@ impl DomRenderer {
         for ch in text.chars() {
             self.apply_prefix();
             if self.line_has_text && self.current_line_width + char_width(ch) > self.max_width {
-                self.flush_line();
+                self.end_line();
                 self.apply_prefix();
             }
             let mut buf = [0u8; 4];
@@ -1203,15 +1259,24 @@ impl DomRenderer {
                     if let Some(id) = elem.attr("id") {
                         self.anchors.entry(id.to_string()).or_insert(self.lines.len());
                     }
-                    self.add_vertical_space();
-                    self.render_menu(&items, None, 0);
-                    return self.add_vertical_space();
+                    // Only flat menus of links count as repeats: submenus and controls can differ
+                    // behind the same labels
+                    let flat = items.iter().all(|i| i.submenu.is_none() && i.with_control.is_none());
+                    let entries = items.iter().map(|i| (i.label.clone(), i.href.clone())).collect();
+                    if flat && !self.menus_drawn.insert(entries) {
+                        return;
+                    }
+                    return self.outside_one_line(|r| {
+                        r.add_vertical_space();
+                        r.render_menu(&items, None, 0);
+                        r.add_vertical_space();
+                    });
                 }
             }
             "input" => return self.render_input(elem),
             "textarea" => return self.render_textarea(element),
             "select" => return self.render_select(element),
-            "table" => return self.render_table(element),
+            "table" => return self.outside_one_line(|r| r.render_table(element)),
             _ => {}
         }
 
@@ -1234,11 +1299,15 @@ impl DomRenderer {
             self.anchors.entry(name.to_string()).or_insert(self.lines.len());
         }
 
+        // A button's content stays on one line, as in browsers, whatever blocks it holds
+        let one_line = tag == "button";
+        self.inline_depth += usize::from(one_line);
         self.depth += 1;
         for child in element.children() {
             self.walk(child);
         }
         self.depth -= 1;
+        self.inline_depth -= usize::from(one_line);
 
         let after = self.close_element(tag);
         if after != AfterElement::Nothing {
@@ -1513,9 +1582,19 @@ impl DomRenderer {
                     self.note_space();
                 }
             }
-            match &item.href {
-                Some(href) => self.push_link_text(&item.label, href),
-                None => self.push_text(&item.label),
+            match (&item.href, item.with_control) {
+                (Some(href), _) => self.push_link_text(&item.label, href),
+                (None, Some(li)) => {
+                    // The item's own content, so its control works: walked on this line
+                    self.inline_depth += 1;
+                    for child in li.children() {
+                        if item.submenu.is_none_or(|s| s.id() != child.id()) {
+                            self.walk(child);
+                        }
+                    }
+                    self.inline_depth -= 1;
+                }
+                (None, None) => self.push_text(&item.label),
             }
             self.note_space();
         }

@@ -347,3 +347,67 @@ fn deeply_nested_menus_do_not_overflow_the_stack() {
     assert!(text_lines(&html, 80).concat().contains("deepest"));
     assert!(started.elapsed() < std::time::Duration::from_secs(20), "took {:?}", started.elapsed());
 }
+
+// --- Menus laid out by utility CSS classes (Ars Technica) ---
+
+#[test]
+fn lists_styled_as_rows_are_menus() {
+    // Outside <nav>, but its classes lay it out in a row ("hidden" until the xxl breakpoint)
+    let html = r#"<ul class="xxl:flex hidden gap-4 text-sm">
+        <li><a class="text-gray-250" href="/ai/"> AI </a></li>
+        <li><a href="/information-technology/"> Biz &amp; IT </a></li>
+        <li><a href="/cars/"> Cars </a></li></ul>"#;
+    assert_eq!(text_lines(html, 80), ["AI · Biz & IT · Cars"]);
+
+    // A column layout stays a list
+    let column = r#"<ul class="flex flex-col"><li><a href="/a">A</a></li><li><a href="/b">B</a></li></ul>"#;
+    assert_eq!(text_lines(column, 80).len(), 2);
+
+    // Article cards laid out in a row are content, not a menu
+    let cards = r#"<ul class="flex"><li><a href="/1">A long article headline about something</a>
+        <p>And its summary, which is more than a menu entry would ever be.</p></li>
+        <li><a href="/2">Another</a> <a href="/2#comments">12 comments</a></li></ul>"#;
+    assert!(text_lines(cards, 80).iter().all(|l| !l.contains(" · ")), "{:?}", text_lines(cards, 80));
+}
+
+#[test]
+fn a_buttons_content_stays_on_one_line() {
+    // Ars's view buttons hold an underline bar as a <div>
+    let html = r#"<form action="/" method="post"><button name="view" value="classic" type="submit">
+        <svg></svg> Classic <div class="absolute h-1 w-full"> </div></button></form>"#;
+    assert_eq!(text_lines(html, 80), ["[ Classic ]"]);
+}
+
+#[test]
+fn menus_of_buttons_keep_working_buttons() {
+    let html = r#"<nav><ul>
+        <li><form action="/" method="post"><button name="view" value="classic">Classic</button></form></li>
+        <li><form action="/" method="post"><button name="view" value="grid" disabled>Grid</button></form></li>
+        <li><form action="/" method="post"><button name="view" value="list">List</button></form></li>
+        </ul></nav>"#;
+    let renderer = render_full(html, 80);
+    let lines: Vec<String> = renderer.lines.iter().map(|l| l.to_string()).filter(|l| !l.trim().is_empty()).collect();
+    assert_eq!(lines, ["[Classic] · Grid · [List]"]);
+    // Two working buttons (Grid is disabled), each selectable on that line
+    assert_eq!(renderer.controls.len(), 2);
+    assert_eq!(renderer.links.iter().filter(|l| l.control.is_some()).count(), 2);
+}
+
+#[test]
+fn a_menu_repeated_for_another_screen_size_appears_once() {
+    let menu = r#"<li><a href="/ai/">AI</a></li><li><a href="/cars/">Cars</a></li>"#;
+    let html = format!(r#"<nav><ul>{menu}</ul></nav><p>Middle</p><ul class="lg:flex">{menu}</ul><nav><ul><li><a href="/ai/">AI</a></li><li><a href="/x/">Other</a></li></ul></nav>"#);
+    assert_eq!(text_lines(&html, 80), ["AI · Cars", "Middle", "AI · Other"]);
+}
+
+#[test]
+fn tables_inside_buttons_keep_valid_positions() {
+    let html = r#"<form><button><table><tr><td id="t1">a</td></tr><tr><td id="t2"><a href="/x">b</a></td></tr></table></button></form>"#;
+    let renderer = render_full(html, 80);
+    for (name, &line) in &renderer.anchors {
+        assert!(line <= renderer.lines.len(), "{name} at {line} of {}", renderer.lines.len());
+    }
+    for link in &renderer.links {
+        assert!(link.line_index < renderer.lines.len());
+    }
+}
