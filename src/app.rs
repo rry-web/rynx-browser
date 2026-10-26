@@ -186,9 +186,15 @@ impl BrowserTab {
     }
 
     pub fn initiate_download_request(&mut self, url: String, download_dir: &Path) {
-        let raw_filename = url.split('/').last().unwrap_or("download.dat");
-        let sanitized_name = crate::app::App::sanitize_filename(raw_filename);
+        // Each tab tracks one download; a second would fight over the same overlay
+        if let Some(crate::models::Download { status: crate::models::DownloadStatus::Active, .. }) =
+            self.download_state
+        {
+            self.status_message = String::from("A download is already in progress in this tab");
+            return;
+        }
 
+        let sanitized_name = App::download_filename(&url);
         let target_path = download_dir.join(&sanitized_name);
         let file_exists = target_path.exists();
 
@@ -400,6 +406,19 @@ impl App {
         });
     }
 
+    /// Derive a safe local filename from the last path segment of a URL, ignoring query and fragment
+    pub fn download_filename(url: &str) -> String {
+        let raw_name = Url::parse(url)
+            .ok()
+            .and_then(|u| {
+                u.path_segments()
+                    .and_then(|mut segments| segments.rfind(|s| !s.is_empty()).map(str::to_string))
+            })
+            .unwrap_or_default();
+        let decoded = percent_encoding::percent_decode_str(&raw_name).decode_utf8_lossy();
+        Self::sanitize_filename(&decoded)
+    }
+
     /// Sanitize filename to prevent path traversal attacks
     fn sanitize_filename(filename: &str) -> String {
         // Get just the filename part, stripping any path components
@@ -412,6 +431,7 @@ impl App {
         // Remove any dangerous characters and ensure it's safe
         let safe_name = filename_only
             .chars()
+            .map(|c| if c.is_whitespace() { '_' } else { c })
             .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '-' || *c == '_')
             .collect::<String>();
 
@@ -422,12 +442,43 @@ impl App {
             safe_name
         }
     }
-    pub fn trigger_download(&mut self, url: String) {
-        let tab_id = self.current_tab().id;
+    /// Start downloading a confirmed prompt into exactly the path that was shown to the user
+    /// Return `path`, or `name_1.ext`, `name_2.ext`, ... if it already exists
+    fn unused_path(path: &Path) -> PathBuf {
+        if !path.exists() {
+            return path.to_path_buf();
+        }
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("download");
+        let ext = path.extension().and_then(|e| e.to_str());
+        (1..)
+            .map(|n| {
+                let name = match ext {
+                    Some(ext) => format!("{}_{}.{}", stem, n, ext),
+                    None => format!("{}_{}", stem, n),
+                };
+                path.with_file_name(name)
+            })
+            .find(|candidate| !candidate.exists())
+            .expect("unbounded range always finds a free name")
+    }
+
+    pub fn trigger_download(&mut self, prompt: crate::models::DownloadPrompt) {
+        let tab = self.current_tab();
+        let tab_id = tab.id;
+        tab.download_state = Some(crate::models::Download {
+            _id: tab_id,
+            filename: prompt.filename,
+            bytes_downloaded: 0,
+            total_size: None,
+            status: crate::models::DownloadStatus::Active,
+        });
+        tab.status_message = String::from("Download starting...");
+
+        let url = prompt.url;
+        let target_path = prompt.target_path;
         let tx = self.tx.clone();
         let use_i2p = self.i2p_mode;
         let nm = Arc::clone(&self.network_manager);
-        let download_dir = self.download_dir.clone();
 
         tokio::spawn(async move {
             let client = nm.get_download_client(use_i2p);
@@ -440,6 +491,12 @@ impl App {
                     return;
                 }
             };
+
+            // Don't save a server's error page as if it were the file
+            if !res.status().is_success() {
+                let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Server returned {}", res.status()))).await;
+                return;
+            }
 
             let total = res.content_length();
             let mut stream = res.bytes_stream();
@@ -459,22 +516,20 @@ impl App {
                 };
                 if file_handle.is_none() {
                     // 2. Create Downloads Directory
-                    if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
-                        let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Folder error: {}", e))).await;
-                        return;
-                    }
-
-                    // 3. Sanitize and Sniff Extension
-                    let raw_name = url.split('/').last().unwrap_or("download.dat");
-                    let mut sanitized = Self::sanitize_filename(raw_name);
-
-                    if !sanitized.contains('.') {
-                        if let Some(ext) = crate::network::sniff_extension(&chunk) {
-                            sanitized.push_str(&format!(".{}", ext));
+                    if let Some(dir) = target_path.parent() {
+                        if let Err(e) = tokio::fs::create_dir_all(dir).await {
+                            let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Folder error: {}", e))).await;
+                            return;
                         }
                     }
 
-                    let file_path = download_dir.join(&sanitized);
+                    // 3. Sniff Extension; only the confirmed path may be overwritten
+                    let mut file_path = target_path.clone();
+                    if file_path.extension().is_none() {
+                        if let Some(ext) = crate::network::sniff_extension(&chunk) {
+                            file_path = Self::unused_path(&file_path.with_extension(ext));
+                        }
+                    }
 
                     // 4. Safe File Creation (No unwraps)
                     let file = match tokio::fs::File::create(&file_path).await {

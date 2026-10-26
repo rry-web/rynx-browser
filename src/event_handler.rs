@@ -64,7 +64,7 @@ fn handle_normal_mode<B: Backend>(
 
         KeyCode::Char('y') | KeyCode::Char('Y') if app.current_tab().download_prompt.is_some() => {
             if let Some(prompt) = app.current_tab().download_prompt.take() {
-                app.trigger_download(prompt.url);
+                app.trigger_download(prompt);
             }
         }
 
@@ -454,7 +454,7 @@ pub fn handle_mouse_event<B: Backend>(
                     // Detect clicks on the button line (popup_y + offset)
                     if mouse.row == popup_y + DOWNLOAD_PROMPT_BUTTON_ROW_OFFSET {
                         if mouse.column < popup_x + (popup_w / 2) {
-                            app.trigger_download(prompt.url);
+                            app.trigger_download(prompt);
                         } else {
                             tab.download_prompt = None;
                         }
@@ -536,17 +536,20 @@ pub fn handle_network_event<B: Backend>(
         match response {
             NetworkResponse::DownloadProgress(_, downloaded, total) => {
                 let tab = &mut app.tabs[index];
-                tab.download_state = Some(crate::models::Download {
+                // Update in place so the filename set by trigger_download is kept
+                let d = tab.download_state.get_or_insert_with(|| crate::models::Download {
                     _id: target_id,
-                    filename: String::from("Downloading..."),
-                    bytes_downloaded: downloaded,
-                    total_size: total,
-                    status: crate::models::DownloadStatus::Active,
+                    filename: String::new(),
+                    bytes_downloaded: 0,
+                    total_size: None,
+                    status: DownloadStatus::Active,
                 });
+                d.bytes_downloaded = downloaded;
+                d.total_size = total;
                 // Update status message for footer
                 tab.status_message = match total {
-                    Some(t) => format!("Downloading: {}%", (downloaded * 100) / t),
-                    None => format!("Downloading: {} bytes", downloaded),
+                    Some(t) if t > 0 => format!("Downloading: {}%", (downloaded * 100) / t),
+                    _ => format!("Downloading: {} bytes", downloaded),
                 };
             }
             NetworkResponse::DownloadFinished(_, filename) => {

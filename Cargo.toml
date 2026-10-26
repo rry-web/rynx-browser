@@ -12,6 +12,7 @@ crossterm = "0.28"
 tokio = { version = "1", features = ["full"] } # Added Tokio
 regex = "1"
 url = "2.5"
+percent-encoding = "2.3"
 async-trait = "0.1"
 scraper = "0.25"
 ego-tree = "0.10.0"

@@ -181,7 +181,28 @@ async fn test_input_handling_switch_to_edit_mode() {
 
 fn test_app() -> App {
     let (tx, rx) = mpsc::channel(10);
-    App::new(tx, rx).expect("Failed to create App")
+    let mut app = App::new(tx, rx).expect("Failed to create App");
+    // Never let a test write into the real Downloads folder
+    app.download_dir = unique_temp_dir();
+    app
+}
+
+fn unique_temp_dir() -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    std::env::temp_dir().join(format!(
+        "rynx-test-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ))
+}
+
+/// Go through the same prompt-then-confirm flow as the 'd' key and 'y' answer
+fn start_download(app: &mut App, url: &str) {
+    let dir = app.download_dir.clone();
+    app.current_tab().initiate_download_request(url.to_string(), &dir);
+    let prompt = app.current_tab().download_prompt.take().expect("prompt shown");
+    app.trigger_download(prompt);
 }
 
 fn key(code: KeyCode) -> KeyEvent {
@@ -368,7 +389,7 @@ async fn test_failed_download_keeps_current_page() {
     let source_before = app.current_tab().html_source.clone();
 
     // Nothing listens on port 1, so the connection is refused
-    app.trigger_download("http://127.0.0.1:1/file.zip".to_string());
+    start_download(&mut app, "http://127.0.0.1:1/file.zip");
     let (resp, _) = finish_download(&mut app).await;
     assert!(matches!(resp, NetworkResponse::DownloadError(..)));
     handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
@@ -432,11 +453,10 @@ async fn test_download_progress_is_throttled() {
         .mount(&mock_server)
         .await;
 
-    let download_dir = std::env::temp_dir().join(format!("rynx-test-dl-{}", std::process::id()));
     let mut app = test_app();
-    app.download_dir = download_dir.clone();
+    let download_dir = app.download_dir.clone();
 
-    app.trigger_download(format!("{}/big.bin", mock_server.uri()));
+    start_download(&mut app, &format!("{}/big.bin", mock_server.uri()));
     let (resp, progress_messages) = finish_download(&mut app).await;
     let saved_path = match &resp {
         NetworkResponse::DownloadFinished(_, path) => std::path::PathBuf::from(path),
@@ -454,4 +474,109 @@ async fn test_download_progress_is_throttled() {
         app.current_tab().download_state.as_ref().map(|d| &d.status),
         Some(DownloadStatus::Completed)
     ));
+}
+
+#[test]
+fn test_download_filename_from_url() {
+    let cases = [
+        ("https://x.com/a/file.zip?token=abc#frag", "file.zip"),
+        ("https://x.com/releases/v1.2/", "v1.2"),
+        ("https://x.com/", "download.dat"),
+        ("https://x.com/my%20report.pdf", "my_report.pdf"),
+        // Encoded path traversal must collapse to a bare filename
+        ("https://x.com/..%2F..%2Fetc%2Fpasswd", "passwd"),
+    ];
+    for (url, expected) in cases {
+        assert_eq!(App::download_filename(url), expected, "for {url}");
+    }
+}
+
+#[tokio::test]
+async fn test_download_ignores_query_string_and_saves_to_prompted_path() {
+    use rynx_browser::models::DownloadStatus;
+
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/file.zip"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"PK\x03\x04data".to_vec()))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let dir = app.download_dir.clone();
+    let url = format!("{}/file.zip?token=secret", mock_server.uri());
+    app.current_tab().initiate_download_request(url, &dir);
+    let prompt = app.current_tab().download_prompt.take().unwrap();
+    assert_eq!(prompt.filename, "file.zip");
+    let expected_path = prompt.target_path.clone();
+
+    app.trigger_download(prompt);
+    // The overlay shows the real name from the start, not "Downloading..."
+    assert_eq!(app.current_tab().download_state.as_ref().unwrap().filename, "file.zip");
+
+    let (resp, _) = finish_download(&mut app).await;
+    let NetworkResponse::DownloadFinished(_, saved) = &resp else { panic!("download failed") };
+    assert_eq!(std::path::PathBuf::from(saved), expected_path);
+    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    assert!(matches!(
+        app.current_tab().download_state.as_ref().map(|d| &d.status),
+        Some(DownloadStatus::Completed)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn test_download_of_error_page_is_not_saved() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/missing.zip"))
+        .respond_with(ResponseTemplate::new(404).set_body_raw("<h1>Not Found</h1>", "text/html"))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let dir = app.download_dir.clone();
+    start_download(&mut app, &format!("{}/missing.zip", mock_server.uri()));
+    let (resp, _) = finish_download(&mut app).await;
+
+    let NetworkResponse::DownloadError(_, msg) = &resp else { panic!("404 was treated as success") };
+    assert!(msg.contains("404"), "unexpected message: {msg}");
+    assert!(!dir.join("missing.zip").exists());
+}
+
+#[tokio::test]
+async fn test_sniffed_extension_does_not_overwrite_existing_file() {
+    let png = b"\x89PNG\r\n\x1a\nnew image".to_vec();
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/photo"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(png.clone()))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let dir = app.download_dir.clone();
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("photo.png"), b"original").unwrap();
+
+    // The prompt only warned about "photo", so "photo.png" must not be clobbered
+    start_download(&mut app, &format!("{}/photo", mock_server.uri()));
+    let (resp, _) = finish_download(&mut app).await;
+    let NetworkResponse::DownloadFinished(_, saved) = &resp else { panic!("download failed") };
+
+    assert_eq!(std::path::PathBuf::from(saved), dir.join("photo_1.png"));
+    assert_eq!(std::fs::read(dir.join("photo.png")).unwrap(), b"original");
+    assert_eq!(std::fs::read(dir.join("photo_1.png")).unwrap(), png);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn test_second_download_in_same_tab_is_refused() {
+    let mut app = test_app();
+    start_download(&mut app, "http://127.0.0.1:1/first.zip");
+
+    let dir = app.download_dir.clone();
+    app.current_tab().initiate_download_request("http://127.0.0.1:1/second.zip".into(), &dir);
+    assert!(app.current_tab().download_prompt.is_none());
+    assert!(app.current_tab().status_message.contains("already in progress"));
 }

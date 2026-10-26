@@ -1907,6 +1907,7 @@ dependencies = [
  "directories",
  "ego-tree",
  "futures-util",
+ "percent-encoding",
  "ratatui",
  "regex",
  "reqwest",
