@@ -2,8 +2,27 @@ use crate::constants::UI_BORDER_WIDTH;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use scraper::{Html, Node};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
+/// Make untrusted text safe to draw. Control characters are dropped because a terminal acts on
+/// them (escape sequences can set the title, clear the screen or write the clipboard) instead of
+/// displaying them. Tabs become spaces so they can't move the cursor.
+pub fn sanitize_for_terminal(text: &str) -> Cow<'_, str> {
+    if !text.contains(char::is_control) {
+        return Cow::Borrowed(text);
+    }
+    let mut clean = String::with_capacity(text.len());
+    for ch in text.chars() {
+        if ch == '\t' {
+            clean.push_str("    ");
+        } else if !ch.is_control() {
+            clean.push(ch);
+        }
+    }
+    Cow::Owned(clean)
+}
 
 pub struct DomRenderer {
     pub lines: Vec<Line<'static>>,
@@ -197,16 +216,20 @@ impl DomRenderer {
             Node::Text(text) => {
                 if self.preserve_whitespace {
                     for line in text.text.lines() {
-                        self.push_word(line);
+                        self.push_word(&sanitize_for_terminal(line));
                         self.flush_line();
                     }
                 } else {
                     for word in text.text.split_whitespace() {
+                        let word = sanitize_for_terminal(word);
+                        if word.is_empty() {
+                            continue;
+                        }
                         if self.current_line_width > 0 && !self.current_line.is_empty() {
                             // Add a space between words if we aren't at the start of a line
                             self.push_word(" ");
                         }
-                        self.push_word(word);
+                        self.push_word(&word);
                     }
                 }
             }
@@ -276,7 +299,7 @@ impl DomRenderer {
                         let alt = elem.attr("alt").unwrap_or("IMAGE");
                         let new_style = self.current_style().fg(Color::DarkGray);
                         self.push_style(new_style);
-                        self.push_word(&format!("[{}] ", alt));
+                        self.push_word(&format!("[{}] ", sanitize_for_terminal(alt)));
                         self.pop_style();
                     }
                     "br" => self.flush_line(),

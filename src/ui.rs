@@ -9,13 +9,14 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Gauge, Paragraph, Tabs},
 };
 use crate::constants::*;
+use crate::renderer::sanitize_for_terminal;
 
 /// Render the tab bar showing all open tabs
 fn render_tabs(f: &mut Frame, app: &App, area: Rect) {
     let titles: Vec<Line> = app
         .tabs
         .iter()
-        .map(|t| Line::from(format!(" {} ", t.page_title)))
+        .map(|t| Line::from(format!(" {} ", sanitize_for_terminal(&t.page_title))))
         .collect();
 
     let tabs = Tabs::new(titles)
@@ -86,7 +87,7 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
         ),
     };
 
-    let input = Paragraph::new(display_text)
+    let input = Paragraph::new(sanitize_for_terminal(display_text))
         .style(input_style)
         .block(Block::default().borders(Borders::ALL).title(title));
     f.render_widget(input, area);
@@ -311,7 +312,7 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
         );
     }
 
-    let status_text = format!("Status: {}", active_tab.status_message);
+    let status_text = format!("Status: {}", sanitize_for_terminal(&active_tab.status_message));
     let content = Paragraph::new(viewport_content).scroll((0, 0)).block(
         Block::default()
             .borders(Borders::ALL)
@@ -367,7 +368,7 @@ fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
                         .block(
                             Block::default()
                                 .borders(Borders::ALL)
-                                .title(format!(" Downloading: {} ", state.filename)),
+                                .title(format!(" Downloading: {} ", sanitize_for_terminal(&state.filename))),
                         )
                         .gauge_style(Style::default().fg(Color::Yellow))
                         .percent(percentage)
@@ -379,7 +380,7 @@ fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
                         .block(
                             Block::default()
                                 .borders(Borders::ALL)
-                                .title(format!(" Downloading: {} ", state.filename)),
+                                .title(format!(" Downloading: {} ", sanitize_for_terminal(&state.filename))),
                         )
                         .gauge_style(Style::default().fg(Color::Cyan))
                         .percent(100)
@@ -399,7 +400,7 @@ fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
                     ) // Satisfies "unused" fields
                     .gauge_style(Style::default().fg(Color::Red))
                     .percent(0) // Show as empty/failed
-                    .label(format!("Error: {}", error_msg)); // Displays the error string
+                    .label(format!("Error: {}", sanitize_for_terminal(error_msg))); // Displays the error string
                 f.render_widget(gauge, popup_area);
             }
 
@@ -414,7 +415,7 @@ fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
                     )
                     .gauge_style(Style::default().fg(Color::Green))
                     .percent(100)
-                    .label(format!("Saved: {}", state.filename));
+                    .label(format!("Saved: {}", sanitize_for_terminal(&state.filename)));
                 f.render_widget(gauge, popup_area);
             }
         }
@@ -442,7 +443,7 @@ fn render_download_prompt(f: &mut Frame, app: &App) {
         f.render_widget(Clear, popup_area);
 
         let mut text = vec![
-            Line::from(format!("File: {}", prompt.filename)),
+            Line::from(format!("File: {}", sanitize_for_terminal(&prompt.filename))),
             Line::from(""),
         ];
 

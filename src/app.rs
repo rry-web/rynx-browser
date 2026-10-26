@@ -348,7 +348,7 @@ impl App {
                 tab.rendered_content = tab
                     .html_source
                     .lines()
-                    .map(|l| Line::from(l.to_string()))
+                    .map(|l| Line::from(crate::renderer::sanitize_for_terminal(l).into_owned()))
                     .collect();
                 tab.link_regions.clear();
                 tab.anchors.clear();

@@ -1010,3 +1010,54 @@ async fn test_download_follows_redirects() {
     assert_eq!(std::fs::read(&saved).unwrap(), b"%PDF-1.7 data");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+fn screen_cells(terminal: &Terminal<TestBackend>) -> Vec<String> {
+    terminal.backend().buffer().content().iter().map(|c| c.symbol().to_string()).collect()
+}
+
+#[tokio::test]
+async fn test_control_characters_never_reach_the_terminal() {
+    use rynx_browser::models::{Download, DownloadStatus};
+
+    // OSC 0 sets the window title, OSC 52 writes the clipboard, CSI 2J clears the screen,
+    // and U+009B is the single-byte C1 form of CSI
+    let evil = "\x1b]52;c;ZWNobyBoaQ==\x07\x1b[2J\u{9b}31m";
+    let html = format!(
+        "<p>safe {evil}text</p><img alt='pic{evil}'><pre>col1\tcol2{evil}</pre>"
+    );
+    let mut app = test_app();
+    let id = app.current_tab().id;
+    handle_network_event::<TestBackend>(
+        &mut app,
+        NetworkResponse::Success(id, format!("Title\x1b]0;pwned\x07"), html, TEST_PAGE_URL.into()),
+        80,
+    )
+    .unwrap();
+    app.current_tab().status_message = format!("status{evil}");
+    app.current_tab().download_state = Some(Download {
+        _id: id,
+        filename: format!("file{evil}.zip"),
+        bytes_downloaded: 0,
+        total_size: None,
+        status: DownloadStatus::Failed(format!("boom{evil}")),
+    });
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+    for source_view in [false, true] {
+        app.current_tab().is_source_view = source_view;
+        app.render_tab(0, 100);
+        terminal.draw(|f| ui(f, &app)).unwrap();
+        let bad: Vec<_> = screen_cells(&terminal)
+            .into_iter()
+            .filter(|s| s.contains(char::is_control))
+            .collect();
+        assert!(bad.is_empty(), "control characters on screen (source_view={source_view}): {bad:?}");
+    }
+
+    // The visible text survives, and tabs in <pre> become spaces
+    app.current_tab().is_source_view = false;
+    app.render_tab(0, 100);
+    let text: Vec<String> = app.current_tab().rendered_content.iter().map(|l| l.to_string()).collect();
+    assert!(text.iter().any(|l| l.contains("safe ]52;c;ZWNobyBoaQ==[2J31mtext")), "{text:?}");
+    assert!(text.iter().any(|l| l.contains("col1    col2")), "{text:?}");
+}
