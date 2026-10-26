@@ -8,7 +8,15 @@ It supports browser tabs, some mouse support for links/scrolling, and absolutely
 
 To install, set up Rust on your machine and then run:
 
+```sh
 cargo run
+```
+
+To run the test suite:
+
+```sh
+cargo test
+```
 
 ## Key Bindings & Controls
 
