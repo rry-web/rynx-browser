@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 use url::{Host, Url};
 
 pub enum NetworkResponse {
-    Success(usize, String, String, String), // tab_id, title, html, final URL after redirects
+    Success(usize, String, String, String, PageKind), // tab_id, title, body, final URL, kind
     Error(usize, String),
     Loading(usize),
     Info(usize, String),
@@ -19,6 +19,98 @@ pub enum NetworkResponse {
     DownloadProgress(usize, u64, Option<u64>),
     DownloadFinished(usize, String), // tab_id, filename
     DownloadError(usize, String),    // tab_id, message; leaves the page untouched
+}
+
+/// How a page's body is shown
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PageKind {
+    Html,
+    /// Plain text, JSON, source code...: shown as text with its lines kept
+    PlainText,
+}
+
+/// What a response's Content-Type says it holds
+#[derive(Debug, PartialEq)]
+pub enum ContentClass {
+    Html,
+    Text,
+    /// Not displayable as a page (images, PDFs, archives); carries the MIME type
+    Binary(String),
+}
+
+pub fn classify_content_type(content_type: Option<&str>) -> ContentClass {
+    let mime = content_type
+        .and_then(|ct| ct.split(';').next())
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    match mime.as_str() {
+        // A missing type is treated as HTML, as before
+        "" | "text/html" | "application/xhtml+xml" => ContentClass::Html,
+        m if m.starts_with("text/") => ContentClass::Text,
+        "application/json" | "application/xml" | "application/javascript"
+        | "application/ecmascript" | "application/x-javascript" | "application/x-sh"
+        | "application/toml" | "application/yaml" | "application/x-yaml" | "application/sql" => {
+            ContentClass::Text
+        }
+        m if m.ends_with("+json") || m.ends_with("+xml") => ContentClass::Text,
+        _ => ContentClass::Binary(mime),
+    }
+}
+
+/// Escape text for inclusion in generated HTML, so it can't inject markup or links
+pub fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+/// A short name for a page that has no <title>: its file name, or else its host
+pub fn title_from_url(url: &str) -> String {
+    let Ok(parsed) = Url::parse(url) else {
+        return url.to_string();
+    };
+    let segment = parsed
+        .path_segments()
+        .and_then(|mut segments| segments.rfind(|s| !s.is_empty()))
+        .map(|s| percent_encoding::percent_decode_str(s).decode_utf8_lossy().into_owned());
+    segment
+        .or_else(|| parsed.host_str().map(str::to_string))
+        .unwrap_or_else(|| url.to_string())
+}
+
+fn format_size(bytes: u64) -> String {
+    const UNITS: &[&str] = &["bytes", "KB", "MB", "GB", "TB"];
+    let mut size = bytes as f64;
+    let mut unit = 0;
+    while size >= 1024.0 && unit < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{} bytes", bytes)
+    } else {
+        format!("{:.1} {}", size, UNITS[unit])
+    }
+}
+
+/// A page standing in for a file that can't be shown, offering it for download.
+/// Returns (title, html).
+pub fn binary_notice_page(url: &str, mime: &str, size: Option<u64>) -> (String, String) {
+    let name = title_from_url(url);
+    let size = size.map(|s| format!(", {}", format_size(s))).unwrap_or_default();
+    let html = format!(
+        "<h1>{name}</h1><p>This is a <b>{mime}</b> file{size}, which can't be shown as a page.</p>\
+         <p><a href=\"{url}\">Download {name}</a></p>\
+         <p>Select the link and press <b>d</b> to save it to your Downloads folder.</p>",
+        name = escape_html(&name),
+        mime = escape_html(mime),
+        size = escape_html(&size),
+        url = escape_html(url),
+    );
+    (name, html)
 }
 
 /// The #fragment of a URL, if it has one

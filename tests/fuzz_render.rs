@@ -12,7 +12,7 @@ use crossterm::event::{
 use ratatui::{Terminal, backend::TestBackend};
 use rynx_browser::app::App;
 use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, handle_network_event};
-use rynx_browser::network::NetworkResponse;
+use rynx_browser::network::{NetworkResponse, PageKind};
 use rynx_browser::renderer::DomRenderer;
 use rynx_browser::ui::ui;
 use scraper::Html;
@@ -51,7 +51,8 @@ const TEXT: &[&str] = &[
     "hello", "world", " ", "  ", "\n", "\t", "a", "longwordwithoutanyspacesatallthatmustbehardwrapped",
     "漢字テキスト", "中文", "🦀", "👨‍👩‍👧", "e\u{301}", "\u{200b}", "\u{202e}rtl", "\u{1b}[31m",
     "\u{1b}]52;c;cHduZWQ=\u{7}", "\u{9b}2J", "\r", "\u{0}", "&amp;", "&lt;b&gt;", "&#x1F980;", "&nbsp;",
-    "x\u{fe0f}", "\u{fffd}",
+    "x\u{fe0f}", "\u{fffd}", "https://example.com/a(b).", "see http://x.y/z,", "<https://q.r/>",
+    "https://",
 ];
 
 const NUMBERS: &[&str] = &[
@@ -140,6 +141,25 @@ fn check_render_invariants(seed: u64, html: &str, width: usize) {
     }
 }
 
+fn check_plain_text_invariants(seed: u64, text: &str, width: usize) {
+    let mut renderer = DomRenderer::new(width);
+    renderer.render_plain_text(text);
+    for line in &renderer.lines {
+        assert!(
+            !line.to_string().contains(char::is_control),
+            "seed {seed}: control character in plain text line"
+        );
+    }
+    for link in &renderer.links {
+        assert!(link.line_index < renderer.lines.len(), "seed {seed}: plain link on missing line");
+        assert!(link.x_start < link.x_end, "seed {seed}: empty plain link region");
+        assert!(
+            link.x_end <= rynx_browser::renderer::display_width(&renderer.lines[link.line_index]),
+            "seed {seed}: plain link region past end of line"
+        );
+    }
+}
+
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent {
         code,
@@ -157,7 +177,7 @@ fn drive_app(app: &mut App, rng: &mut Rng, html: &str) {
     let id = app.current_tab().id;
     handle_network_event::<TestBackend>(
         app,
-        NetworkResponse::Success(id, "t".into(), html.into(), "http://127.0.0.1:1/p".into()),
+        NetworkResponse::Success(id, "t".into(), html.into(), "http://127.0.0.1:1/p".into(), PageKind::Html),
         width,
     )
     .unwrap();
@@ -214,6 +234,7 @@ fn run_case(app: &mut App, seed: u64) {
     };
     let started = std::time::Instant::now();
     check_render_invariants(seed, &html, width);
+    check_plain_text_invariants(seed, &html, width);
     let rendered = started.elapsed();
     drive_app(app, &mut rng, &html);
     if std::env::var("FUZZ_VERBOSE").is_ok() {

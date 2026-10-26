@@ -2,7 +2,7 @@ use rynx_browser::app::App;
 use rynx_browser::constants::{DEFAULT_TAB_INDEX, INITIAL_TAB_ID};
 use rynx_browser::event_handler::handle_key_event;
 use rynx_browser::event_handler::handle_network_event;
-use rynx_browser::network::NetworkResponse;
+use rynx_browser::network::{NetworkResponse, PageKind};
 use rynx_browser::ui::ui;
 use tokio::sync::mpsc;
 
@@ -42,14 +42,14 @@ async fn test_full_request_to_render_flow() {
         }
     }
 
-    if let Some(NetworkResponse::Success(id, title, body, final_url)) = final_response {
+    if let Some(NetworkResponse::Success(id, title, body, final_url, kind)) = final_response {
         assert_eq!(title, "Test Page");
 
         // Use the actual terminal width constant or a test value
         let test_width = 80;
         handle_network_event::<TestBackend>(
             &mut app,
-            NetworkResponse::Success(id, title, body, final_url),
+            NetworkResponse::Success(id, title, body, final_url, kind),
             test_width,
         )
         .unwrap();
@@ -221,7 +221,7 @@ fn load_page(app: &mut App, html: &str) {
     let id = app.current_tab().id;
     handle_network_event::<TestBackend>(
         app,
-        NetworkResponse::Success(id, "Page".to_string(), html.to_string(), TEST_PAGE_URL.to_string()),
+        NetworkResponse::Success(id, "Page".to_string(), html.to_string(), TEST_PAGE_URL.to_string(), PageKind::Html),
         80,
     )
     .unwrap();
@@ -858,6 +858,7 @@ async fn test_redirected_page_resolves_links_against_final_url() {
             "Book".into(),
             "<a href='images/cover.jpg'>cover</a>".into(),
             "https://example.com/cache/epub/1/book.html".into(),
+            PageKind::Html,
         ),
         80,
     )
@@ -951,7 +952,7 @@ async fn test_redirects_are_followed_to_final_page() {
 
     let mut app = test_app();
     let resp = load_url(&mut app, &format!("{}/old", mock_server.uri())).await;
-    let NetworkResponse::Success(_, _, body, final_url) = resp else { panic!("redirect not followed") };
+    let NetworkResponse::Success(_, _, body, final_url, _) = resp else { panic!("redirect not followed") };
     assert!(body.contains("moved here"));
     assert_eq!(final_url, format!("{}/new", mock_server.uri()));
 }
@@ -1030,7 +1031,7 @@ async fn test_control_characters_never_reach_the_terminal() {
     let id = app.current_tab().id;
     handle_network_event::<TestBackend>(
         &mut app,
-        NetworkResponse::Success(id, "Title\x1b]0;pwned\x07".to_string(), html, TEST_PAGE_URL.into()),
+        NetworkResponse::Success(id, "Title\x1b]0;pwned\x07".to_string(), html, TEST_PAGE_URL.into(), PageKind::Html),
         80,
     )
     .unwrap();
@@ -1109,7 +1110,7 @@ async fn test_compressed_page_under_limit_still_loads() {
 
     let mut app = test_app();
     let resp = load_url(&mut app, &format!("{}/small", mock_server.uri())).await;
-    let NetworkResponse::Success(_, title, body, _) = resp else { panic!("small page failed") };
+    let NetworkResponse::Success(_, title, body, _, _) = resp else { panic!("small page failed") };
     assert_eq!(title, "Small");
     assert!(body.contains("compressed ok"));
 }
@@ -1129,7 +1130,7 @@ async fn test_page_charset_is_honoured() {
 
     let mut app = test_app();
     let resp = load_url(&mut app, &format!("{}/latin1", mock_server.uri())).await;
-    let NetworkResponse::Success(_, _, body, _) = resp else { panic!("page failed") };
+    let NetworkResponse::Success(_, _, body, _, _) = resp else { panic!("page failed") };
     assert!(body.contains("café"), "{body}");
 }
 
@@ -1331,4 +1332,81 @@ async fn test_requests_send_no_referer_header() {
         requests.iter().all(|r| !r.headers.contains_key("referer")),
         "a Referer header was sent"
     );
+}
+
+
+#[test]
+fn test_content_types_are_classified() {
+    use rynx_browser::network::{ContentClass, classify_content_type};
+
+    for html in [None, Some("text/html"), Some("text/html; charset=utf-8"), Some("application/xhtml+xml")] {
+        assert_eq!(classify_content_type(html), ContentClass::Html, "{html:?}");
+    }
+    for text in [
+        "text/plain", "text/markdown", "text/css; charset=utf-8", "application/json",
+        "application/ld+json", "application/rss+xml", "application/javascript", "TEXT/PLAIN",
+    ] {
+        assert_eq!(classify_content_type(Some(text)), ContentClass::Text, "{text}");
+    }
+    for binary in ["image/png", "application/pdf", "application/octet-stream", "video/mp4"] {
+        assert_eq!(classify_content_type(Some(binary)), ContentClass::Binary(binary.to_string()));
+    }
+}
+
+#[tokio::test]
+async fn test_plain_text_pages_are_shown_as_text() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/notes.txt"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            "<b>not markup</b>\n\n  indented\nSee https://example.com/docs.",
+            "text/plain; charset=utf-8",
+        ))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let resp = load_url(&mut app, &format!("{}/notes.txt", mock_server.uri())).await;
+    let NetworkResponse::Success(_, ref title, _, _, kind) = resp else { panic!("load failed") };
+    assert_eq!(kind, PageKind::PlainText);
+    assert_eq!(title, "notes.txt");
+    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+
+    let tab = app.current_tab();
+    let lines: Vec<String> = tab.rendered_content.iter().map(|l| l.to_string()).collect();
+    assert_eq!(lines, ["<b>not markup</b>", "", "  indented", "See https://example.com/docs."]);
+    assert_eq!(tab.link_regions.len(), 1);
+    assert_eq!(tab.link_regions[0].url, "https://example.com/docs");
+
+    // Source view and back keep it as text
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
+    assert_eq!(app.current_tab().rendered_content[0].to_string(), "<b>not markup</b>");
+}
+
+#[tokio::test]
+async fn test_binary_files_offer_a_download_instead_of_garbage() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/photo.png"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(b"\x89PNG\r\n\x1a\nbinary".to_vec(), "image/png"))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let url = format!("{}/photo.png", mock_server.uri());
+    let resp = load_url(&mut app, &url).await;
+    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+
+    let tab = app.current_tab();
+    assert_eq!(tab.page_title, "photo.png");
+    let text: String = tab.rendered_content.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+    assert!(text.contains("image/png"), "{text}");
+    assert!(!text.contains("PNG"), "binary content was rendered");
+    assert_eq!(tab.link_regions.len(), 1);
+    assert_eq!(tab.link_regions[0].url, url);
+
+    // The link downloads the file
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('d')), 80, 24).unwrap();
+    assert_eq!(app.current_tab().download_prompt.as_ref().map(|p| p.filename.as_str()), Some("photo.png"));
 }

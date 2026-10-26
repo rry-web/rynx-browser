@@ -4,8 +4,8 @@ use crate::constants::{
 };
 use crate::models::{InputMode, LinkRegion, SearchState, Selection};
 use crate::network::{
-    NetworkManager, NetworkResponse, attempt_jump, fragment_of, parse_html_metadata,
-    should_attempt_jump,
+    ContentClass, NetworkManager, NetworkResponse, PageKind, attempt_jump, classify_content_type,
+    fragment_of, parse_html_metadata, should_attempt_jump,
 };
 use crate::renderer::DomRenderer;
 
@@ -49,6 +49,8 @@ pub struct BrowserTab {
     pub page_url: Option<String>,
     /// #fragment to jump to once the page being loaded arrives
     pub pending_fragment: Option<String>,
+    /// Whether html_source holds HTML or plain text
+    pub page_kind: PageKind,
 }
 
 impl BrowserTab {
@@ -193,6 +195,7 @@ impl BrowserTab {
             anchors: renderer.anchors,
             page_url: None,
             pending_fragment: None,
+            page_kind: PageKind::Html,
         }
     }
 
@@ -357,9 +360,11 @@ impl App {
                 tab.link_regions.clear();
                 tab.anchors.clear();
             } else {
-                let document = Html::parse_document(&tab.html_source);
                 let mut renderer = DomRenderer::new(content_width);
-                renderer.render(&document);
+                match tab.page_kind {
+                    PageKind::Html => renderer.render(&Html::parse_document(&tab.html_source)),
+                    PageKind::PlainText => renderer.render_plain_text(&tab.html_source),
+                }
                 tab.rendered_content = renderer.lines;
                 tab.link_regions = renderer.links;
                 tab.anchors = renderer.anchors;
@@ -516,6 +521,25 @@ impl App {
 
             match resp_result {
                 Ok(resp) => {
+                    // Where redirects actually led; relative links resolve against this
+                    let final_url = resp.url().to_string();
+                    let content_type = resp
+                        .headers()
+                        .get(reqwest::header::CONTENT_TYPE)
+                        .and_then(|v| v.to_str().ok())
+                        .map(str::to_string);
+                    let class = classify_content_type(content_type.as_deref());
+
+                    // Images, PDFs and the like aren't read into memory as a page; offer a download
+                    if let ContentClass::Binary(mime) = &class {
+                        let (title, html) =
+                            crate::network::binary_notice_page(&final_url, mime, resp.content_length());
+                        let _ = tx_clone
+                            .send(NetworkResponse::Success(id, title, html, final_url, PageKind::Html))
+                            .await;
+                        return;
+                    }
+
                     // Fast rejection when the server declares the size; read_text_limited
                     // enforces the limit when it doesn't
                     if let Some(len) = resp.content_length() {
@@ -527,18 +551,14 @@ impl App {
                         }
                     }
 
-                    // Where redirects actually led; relative links resolve against this
-                    let final_url = resp.url().to_string();
                     match crate::network::read_text_limited(resp, MAX_PAGE_SIZE_BYTES).await {
-                        Ok(html_text) => {
-                            let metadata = parse_html_metadata(&html_text);
+                        Ok(body) => {
+                            let (title, kind) = match class {
+                                ContentClass::Html => (parse_html_metadata(&body).title, PageKind::Html),
+                                _ => (crate::network::title_from_url(&final_url), PageKind::PlainText),
+                            };
                             let _ = tx_clone
-                                .send(NetworkResponse::Success(
-                                    id,
-                                    metadata.title,
-                                    html_text,
-                                    final_url,
-                                ))
+                                .send(NetworkResponse::Success(id, title, body, final_url, kind))
                                 .await;
                         }
                         Err(e) => {
