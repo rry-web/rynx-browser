@@ -619,8 +619,9 @@ async fn test_jump_tries_next_service_after_failure() {
     let services = [unreachable.as_str(), no_entry_base.as_str(), working_base.as_str()];
 
     let (tx, _rx) = mpsc::channel(20);
-    let client = reqwest::Client::new();
-    let resp = attempt_jump_with(&client, &services, "example.i2p", tx, 0)
+    // Use the browser's own client: a bare reqwest Client needs a process-wide crypto provider
+    let manager = rynx_browser::network::NetworkManager::new().unwrap();
+    let resp = attempt_jump_with(manager.get_client(false), &services, "example.i2p", tx, 0)
         .await
         .expect("should fall through to the working service");
     assert_eq!(resp.text().await.unwrap(), "<p>found</p>");

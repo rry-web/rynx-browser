@@ -75,15 +75,9 @@ impl NetworkManager {
     ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
         let mut builder = Client::builder().user_agent(user_agent).timeout(timeout);
 
-        if use_proxy {
-            // The OS verifier fetches revocation data directly, outside the I2P proxy, which would
-            // reveal the site being visited; I2P clients keep the bundled webpki roots instead
-            builder = builder
-                .use_rustls_tls()
-                .min_tls_version(reqwest::tls::Version::TLS_1_2);
-        } else {
-            builder = builder.use_preconfigured_tls(Self::platform_tls_config()?);
-        }
+        // The OS verifier fetches revocation data directly, outside the I2P proxy, which would
+        // reveal the site being visited; I2P clients use the bundled webpki roots instead
+        builder = builder.use_preconfigured_tls(Self::tls_config(!use_proxy)?);
 
         if use_proxy {
             let proxy = reqwest::Proxy::http(I2P_PROXY_URL)?;
@@ -96,22 +90,33 @@ impl NetworkManager {
         Ok(builder.build()?)
     }
 
-    /// TLS settings for clearweb clients: certificates are checked by the operating system, which
-    /// uses its own trust store (kept current by OS updates) and, on macOS and Windows, checks
-    /// revocation. reqwest uses this config as-is, so the TLS 1.2 minimum and ALPN are set here.
-    fn platform_tls_config() -> Result<rustls::ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
+    /// TLS settings for every client. With `use_os_verifier`, certificates are checked by the
+    /// operating system, which uses its own trust store (kept current by OS updates) and, on macOS
+    /// and Windows, checks revocation. Otherwise they're checked against the bundled webpki roots.
+    /// reqwest uses the config as-is, so the TLS 1.2 minimum and ALPN are set here.
+    fn tls_config(
+        use_os_verifier: bool,
+    ) -> Result<rustls::ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
         use rustls_platform_verifier::BuilderVerifierExt;
 
         let provider = std::sync::Arc::new(rustls::crypto::ring::default_provider());
-        let mut config = rustls::ClientConfig::builder_with_provider(provider)
-            .with_protocol_versions(&[&rustls::version::TLS13, &rustls::version::TLS12])?
-            .with_platform_verifier()?
-            .with_no_client_auth();
+        let builder = rustls::ClientConfig::builder_with_provider(provider)
+            .with_protocol_versions(&[&rustls::version::TLS13, &rustls::version::TLS12])?;
+        let mut config = if use_os_verifier {
+            builder.with_platform_verifier()?.with_no_client_auth()
+        } else {
+            let roots = rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            builder.with_root_certificates(roots).with_no_client_auth()
+        };
         config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
         Ok(config)
     }
 
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        // Our clients carry their own TLS config, but a reqwest Client built without one panics
+        // when no process-wide crypto provider is installed. Already-installed is fine.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
         // Create all four clients using the build_client helper method
         let client = Self::build_client(
             USER_AGENT,
@@ -374,4 +379,39 @@ pub fn sniff_extension(h: &[u8]) -> Option<&'static str> {
     else if h.starts_with(&[0x4D, 0x5A]) { Some("exe") }
     else if h.starts_with(b"GIF8") { Some("gif") }
     else { None }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NetworkManager;
+
+    /// A client with the I2P clients' TLS config but no proxy, so it can be checked without a router
+    fn bundled_roots_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .use_preconfigured_tls(NetworkManager::tls_config(false).unwrap())
+            .build()
+            .unwrap()
+    }
+
+    // Live checks: run with `cargo test --lib -- --ignored`
+    #[tokio::test]
+    #[ignore]
+    async fn i2p_tls_config_connects_over_http2() {
+        let resp = bundled_roots_client().get("https://www.rust-lang.org/").send().await.unwrap();
+        assert_eq!(resp.version(), reqwest::Version::HTTP_2);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn i2p_tls_config_rejects_bad_certificates_and_old_tls() {
+        let client = bundled_roots_client();
+        for url in [
+            "https://expired.badssl.com/",
+            "https://self-signed.badssl.com/",
+            "https://wrong.host.badssl.com/",
+            "https://tls-v1-1.badssl.com:1011/",
+        ] {
+            assert!(client.get(url).send().await.is_err(), "{url} was accepted");
+        }
+    }
 }

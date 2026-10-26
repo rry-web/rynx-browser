@@ -4,27 +4,29 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# Default features minus native-tls: every client uses rustls
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "charset", "http2", "macos-system-configuration", "gzip", "brotli", "deflate", "stream"] }
-ratatui = "0.29"
-crossterm = "0.28"
-tokio = { version = "1", features = ["full"] }
-url = "2.5"
-percent-encoding = "2.3"
-encoding_rs = "0.8"
+# rustls without a bundled crypto provider: network.rs supplies ring and every TLS config
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "charset", "http2", "system-proxy", "gzip", "brotli", "deflate", "stream"] }
+ratatui = "0.30.2"
+crossterm = "0.29.0"
+tokio = { version = "1.54.1", features = ["full"] }
+url = "2.5.8"
+percent-encoding = "2.3.2"
+encoding_rs = "0.8.42"
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 # OS certificate verification (system trust store and revocation) for clearweb TLS
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-rustls-platform-verifier = "0.6"
-scraper = "0.25"
-ego-tree = "0.10.0"
-unicode-width = "0.2"
-arboard = "3.4"
-futures-util = "0.3.31"
-directories = "6.0"
+rustls-platform-verifier = "0.7.1"
+# Bundled root certificates for I2P, where the OS verifier would leak lookups outside the proxy
+webpki-roots = "1.0.11"
+scraper = "0.29.0"
+ego-tree = "0.11.1"
+unicode-width = "0.2.2"
+arboard = "3.7.0"
+futures-util = "0.3.34"
+directories = "6.0.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-xattr = "1"
+xattr = "1.6.1"
 
 [dev-dependencies]
-wiremock = "0.6"
-flate2 = "1"
+wiremock = "0.6.5"
+flate2 = "1.1.10"

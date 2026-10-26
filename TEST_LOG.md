@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 55 (10 priority).
+Total checks: 56 (10 priority).
 
 
 ## Automated checks
@@ -16,6 +16,7 @@ Total checks: 55 (10 priority).
 | AUTO-01 | Test suite |  |  |  |  |
 | AUTO-02 | Dependency audit |  |  |  |  |
 | AUTO-03 | Live TLS checks |  |  |  |  |
+| AUTO-06 | I2P TLS settings |  |  |  |  |
 | AUTO-04 | Extended fuzzing |  |  |  |  |
 | AUTO-05 | CI runs on GitHub | Yes |  |  |  |
 

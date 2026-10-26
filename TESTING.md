@@ -19,6 +19,9 @@ These run in CI (`.github/workflows/ci.yml`) on every push and weekly, but can b
 - [ ] **AUTO-03 Live TLS checks.** `cargo test --test live_tls -- --ignored` (needs internet): expired,
       self-signed, wrong-host, untrusted and (on macOS/Windows) revoked certificates are
       rejected; TLS 1.0/1.1 are refused; HTTP/2 still works.
+- [ ] **AUTO-06 I2P TLS settings.** `cargo test --lib -- --ignored` (needs internet): the TLS
+      configuration used for I2P connections (bundled root certificates) connects over HTTP/2
+      and rejects bad certificates and TLS 1.1, checked without needing an I2P router.
 - [ ] **AUTO-04 Extended fuzzing.** `FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render`: randomised
       renderer and UI cases (about 4 minutes). Reproduce a failure with `FUZZ_SEED=<seed>`.
 - [ ] **AUTO-05 (priority) CI runs on GitHub.** After pushing to GitHub, open the repository's **Actions** tab.
