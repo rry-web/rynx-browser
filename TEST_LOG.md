@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 69 (10 priority).
+Total checks: 79 (16 priority).
 
 
 ## Automated checks
@@ -123,6 +123,26 @@ Total checks: 69 (10 priority).
 | SEC-05 | Compression bomb rejected |  |  |  |  |
 | SEC-06 | Non-UTF-8 pages still render |  |  |  |  |
 | SEC-07 | Revoked certificates are rejected |  |  |  |  |
+
+## Platform security
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| PLAT-01 | Linux sandbox status | Yes |  |  |  |
+| PLAT-02 | Linux sandbox doesn't break browsing | Yes |  |  |  |
+| PLAT-03 | Linux download origin |  |  |  |  |
+| PLAT-04 | Windows Mark of the Web | Yes |  |  |  |
+| PLAT-05 | macOS "Where from" |  |  |  |  |
+| PLAT-06 | Device-name downloads |  |  |  |  |
+| PLAT-07 | Command-line options |  |  |  |  |
+
+## Releases
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| REL-01 | First beta release | Yes |  |  |  |
+| REL-02 | Verify a downloaded build | Yes |  |  |  |
+| REL-03 | Run each platform's build | Yes |  |  |  |
 
 ## I2P (needs a local I2P router on 127.0.0.1:4444)
 

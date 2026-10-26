@@ -8,7 +8,11 @@ Pages are laid out for the terminal: headings, numbered and nested lists, blockq
 
 ## Installation
 
-To install, set up Rust on your machine and then run:
+Pre-built binaries for Linux, macOS and Windows are on the
+[releases page](https://github.com/rry-web/rynx-browser/releases), including beta builds. Each
+release explains how to verify the download and get past the warnings shown for unsigned binaries.
+
+To build from source instead, set up Rust on your machine and then run:
 
 ```sh
 cargo run
@@ -19,6 +23,12 @@ To run the test suite:
 ```sh
 cargo test
 ```
+
+Run `rynx_browser --help` for command-line options.
+
+On Linux the browser sandboxes itself (Landlock, kernel 5.13+): it can write only to your Downloads
+folder and can't read the rest of your home directory. The status line shows whether the sandbox is
+active.
 
 For hands-on checks of terminal, touchpad, download and I2P behaviour, see [TESTING.md](TESTING.md), and record results in [TEST_LOG.md](TEST_LOG.md).
 

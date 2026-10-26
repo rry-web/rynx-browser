@@ -288,6 +288,45 @@ Worth repeating after any dependency upgrade.
 - [ ] **SEC-07 Revoked certificates are rejected.** Open `https://revoked.badssl.com/`.
       *Expected:* an error mentioning the certificate is revoked (macOS and Windows).
 
+## Platform security
+
+- [ ] **PLAT-01 (priority) Linux sandbox status.** On Linux, start the browser.
+      *Expected:* the status line reads "Ready (filesystem sandbox active)". On kernels older than
+      5.13 it says the kernel lacks Landlock instead.
+- [ ] **PLAT-02 (priority) Linux sandbox doesn't break browsing.** With the sandbox active, browse
+      a few HTTPS sites, download a file, and copy text with `v`/`y`.
+      *Expected:* all of it works; the download lands in `~/Downloads`. If anything fails, note
+      the distribution, then retry with `--no-sandbox` to confirm the sandbox is the cause.
+- [ ] **PLAT-03 Linux download origin.** After a download, run
+      `getfattr -n user.xdg.origin.url ~/Downloads/<file>`.
+      *Expected:* it prints the URL the file came from.
+- [ ] **PLAT-04 (priority) Windows Mark of the Web.** On Windows, download a file, then in
+      PowerShell run `Get-Content <file> -Stream Zone.Identifier`.
+      *Expected:* it shows `ZoneId=3` and the download URL; opening a downloaded program
+      triggers a SmartScreen check.
+- [ ] **PLAT-05 macOS "Where from".** On macOS, download a file and open Finder's Get Info on it.
+      *Expected:* "Where from" shows the download URL.
+- [ ] **PLAT-06 Device-name downloads.** Download a link whose file is named `con.txt` or `NUL`.
+      *Expected:* it's saved as `_con.txt` / `_NUL`.
+- [ ] **PLAT-07 Command-line options.** Run `rynx_browser --version` and `rynx_browser --help`.
+      *Expected:* the version (`0.2.0-beta.1`) and a usage summary; an unknown option prints an
+      error and the usage.
+
+## Releases
+
+- [ ] **REL-01 (priority) First beta release.** Push the version tag:
+      `git tag v0.2.0-beta.1 && git push origin main v0.2.0-beta.1`, then watch the **Release**
+      workflow in the Actions tab.
+      *Expected:* all six builds pass (tests run on five), and a **pre-release** appears on the
+      releases page with six archives, `SHA256SUMS`, and notes from CHANGELOG.md.
+- [ ] **REL-02 (priority) Verify a downloaded build.** Download your platform's archive and
+      `SHA256SUMS`, then run `sha256sum -c SHA256SUMS --ignore-missing` and
+      `gh attestation verify <archive> --repo rry-web/rynx-browser`.
+      *Expected:* the checksum matches and the attestation verifies.
+- [ ] **REL-03 (priority) Run each platform's build.** On each OS you have, extract and run the
+      binary, following the release notes for the unsigned-binary warning.
+      *Expected:* it starts and browses normally.
+
 ## I2P (needs a local I2P router on 127.0.0.1:4444)
 
 - [ ] **I2P-01 (priority) Browsing in I2P mode.** Press `p` and load an `.i2p` site.
