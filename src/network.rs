@@ -76,10 +76,15 @@ impl NetworkManager {
     ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
         let mut builder = Client::builder().user_agent(user_agent).timeout(timeout);
 
-        // Enforce TLS 1.2 as minimum for security, including HTTPS tunnelled through the I2P proxy
-        builder = builder
-            .use_rustls_tls()
-            .min_tls_version(reqwest::tls::Version::TLS_1_2);
+        if use_proxy {
+            // The OS verifier fetches revocation data directly, outside the I2P proxy, which would
+            // reveal the site being visited; I2P clients keep the bundled webpki roots instead
+            builder = builder
+                .use_rustls_tls()
+                .min_tls_version(reqwest::tls::Version::TLS_1_2);
+        } else {
+            builder = builder.use_preconfigured_tls(Self::platform_tls_config()?);
+        }
 
         if include_headers {
             let mut headers = reqwest::header::HeaderMap::new();
@@ -96,6 +101,21 @@ impl NetworkManager {
         builder = builder.redirect(reqwest::redirect::Policy::none());
 
         Ok(builder.build()?)
+    }
+
+    /// TLS settings for clearweb clients: certificates are checked by the operating system, which
+    /// uses its own trust store (kept current by OS updates) and, on macOS and Windows, checks
+    /// revocation. reqwest uses this config as-is, so the TLS 1.2 minimum and ALPN are set here.
+    fn platform_tls_config() -> Result<rustls::ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
+        use rustls_platform_verifier::BuilderVerifierExt;
+
+        let provider = std::sync::Arc::new(rustls::crypto::ring::default_provider());
+        let mut config = rustls::ClientConfig::builder_with_provider(provider)
+            .with_protocol_versions(&[&rustls::version::TLS13, &rustls::version::TLS12])?
+            .with_platform_verifier()?
+            .with_no_client_auth();
+        config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        Ok(config)
     }
 
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {

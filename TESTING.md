@@ -155,6 +155,12 @@ Stop them afterwards with `kill %1 %2` (or `pkill -f http.server; pkill -f bomb_
       `charset=windows-1252` or `ISO-8859-1`.
       *Expected:* accented characters display correctly.
 
+- [ ] **Certificate checks (automated, needs internet).** Run
+      `cargo test --test live_tls -- --ignored`.
+      *Expected:* 4 passed. These confirm that expired, self-signed, wrong-host, untrusted and
+      (on macOS/Windows) revoked certificates are rejected, TLS 1.0/1.1 are refused, and
+      HTTP/2 still works.
+
 ## I2P (needs a local I2P router on 127.0.0.1:4444)
 
 - [ ] **(priority) Browsing in I2P mode.** Press `p` and load an `.i2p` site.
