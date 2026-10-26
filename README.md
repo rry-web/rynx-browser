@@ -3,10 +3,14 @@
 A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**, with absolutely
 **zero JavaScript**.
 
+> **Status: beta.** Version 0.2.0-beta.1 is the first release with pre-built binaries. Please report
+> problems as [GitHub issues](https://github.com/rry-web/rynx-browser/issues).
+
 - **Readable pages:** headings, numbered and nested lists, blockquotes, aligned table columns, and
   preformatted code, laid out for the terminal. Site menus are shown compactly on one line
-  (`Home · News · Sport`) instead of a long column of links. Plain-text files (`.txt`, JSON, source code) are
-  shown as text with clickable URLs; images, PDFs and other files are offered for download.
+  (`Home · News · Sport`) instead of a long column of links. Plain-text files (`.txt`, JSON,
+  source code) are shown as text with clickable URLs; images, PDFs and other files are offered for
+  download.
 - **Forms:** search boxes and other forms work: text fields, checkboxes, choices and buttons, sent
   with GET or POST.
 - **Tabs, history and search:** Back and Forward return you to where you were on each page,
@@ -19,11 +23,26 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
 
 ## Installation
 
-Pre-built binaries for Linux, macOS and Windows are on the
-[releases page](https://github.com/rry-web/rynx-browser/releases), including beta builds. Each
-release explains how to verify the download and get past the warnings shown for unsigned binaries.
+### Pre-built binaries
 
-To build from source, install [Rust](https://rustup.rs) and run:
+Download the archive for your system from the
+[releases page](https://github.com/rry-web/rynx-browser/releases) (beta builds are marked
+*Pre-release*), extract it, and run `rynx_browser` in a terminal:
+
+| System | Archive name contains |
+| :--- | :--- |
+| Linux x86_64 | `x86_64-unknown-linux-gnu`, or `x86_64-unknown-linux-musl` for any distribution |
+| Linux ARM64 | `aarch64-unknown-linux-gnu` |
+| macOS (Apple Silicon / Intel) | `aarch64-apple-darwin` / `x86_64-apple-darwin` |
+| Windows | `x86_64-pc-windows-msvc` |
+
+The binaries aren't code-signed yet, so macOS and Windows warn the first time; the release notes
+explain how to proceed and how to verify the download (`SHA256SUMS` and a build provenance
+attestation).
+
+### From source
+
+Install [Rust](https://rustup.rs) and run:
 
 ```sh
 cargo run --release
@@ -169,6 +188,11 @@ FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render
 [TESTING.md](TESTING.md) has a checklist of hands-on checks (terminals, touchpads, platforms, I2P)
 with results recorded in [TEST_LOG.md](TEST_LOG.md). Changes are listed in
 [CHANGELOG.md](CHANGELOG.md).
+
+CI tests every push on Linux, macOS and Windows, fuzzes the renderer and audits dependencies. To
+make a release, set the version in `Cargo.toml`, add its section to `CHANGELOG.md`, and push a
+matching tag (`git tag v0.2.0-beta.1 && git push origin v0.2.0-beta.1`): the release workflow
+builds every platform and publishes the release. Tags containing `-` become pre-releases.
 
 ## Roadmap
 - [x] **I2P integration** through a local proxy
