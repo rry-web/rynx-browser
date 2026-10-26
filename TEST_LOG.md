@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 56 (10 priority).
+Total checks: 67 (10 priority).
 
 
 ## Automated checks
@@ -29,6 +29,21 @@ Total checks: 56 (10 priority).
 | SMOKE-03 | Resizing |  |  |  |  |
 | SMOKE-04 | Terminal restored on exit |  |  |  |  |
 
+## Rendering
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| RENDER-01 | Documentation pages |  |  |  |  |
+| RENDER-02 | Data tables |  |  |  |  |
+| RENDER-03 | Narrow tables |  |  |  |  |
+| RENDER-04 | Layout tables |  |  |  |  |
+| RENDER-05 | Lists and quotes |  |  |  |  |
+| RENDER-06 | Plain-text files |  |  |  |  |
+| RENDER-07 | JSON |  |  |  |  |
+| RENDER-08 | Non-text files |  |  |  |  |
+| RENDER-09 | Full width |  |  |  |  |
+| RENDER-10 | No-JavaScript notices |  |  |  |  |
+
 ## Crashes and stability
 
 | ID | Check | Priority | Result | Date | Notes |
@@ -38,6 +53,7 @@ Total checks: 56 (10 priority).
 | CRASH-03 | Visual mode on an empty page |  |  |  |  |
 | CRASH-04 | Deeply nested lists |  |  |  |  |
 | CRASH-05 | Extremely narrow terminal |  |  |  |  |
+| CRASH-06 | Extremely deep nesting |  |  |  |  |
 
 ## Navigation and history
 

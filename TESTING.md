@@ -42,6 +42,13 @@ printf '<title>Evil\033]0;TITLE CHANGED\007</title><p>Before\033]52;c;cHduZWQ=\0
 # 60 nested lists: used to freeze the browser at any terminal width
 python3 -c 'print("<ul>" * 60 + "<li>deep item" + "</ul>" * 60)' > nested.html
 
+# 20,000 nested elements: used to crash the browser with a stack overflow
+python3 -c 'print("<span>" * 20000 + "deep text" + "</span>" * 20000)' > deep.html
+
+# A plain-text file with a URL, and a "binary" file
+printf '<b>not markup</b>\n\n    indented line\nSee https://example.com/docs.\n' > notes.txt
+cp /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericDocumentIcon.icns icon.icns 2>/dev/null || head -c 2048 /dev/urandom > icon.icns
+
 # A "compression bomb": ~20KB on the wire that expands to ~20MB, sent without Content-Length
 cat > bomb_server.py <<'EOF'
 import gzip, http.server
@@ -57,7 +64,7 @@ print("serving on http://localhost:8001/", flush=True)
 http.server.HTTPServer(("127.0.0.1", 8001), Handler).serve_forever()
 EOF
 
-python3 -m http.server 8000 --bind 127.0.0.1 &   # serves evil.html and nested.html
+python3 -m http.server 8000 --bind 127.0.0.1 &   # serves the files above
 python3 bomb_server.py &                          # serves the bomb
 ```
 
@@ -76,6 +83,39 @@ Worth repeating after any dependency upgrade.
 - [ ] **SMOKE-04 Terminal restored on exit.** After quitting, the terminal is back to normal (cursor visible, typing
       echoes, no leftover colours).
 
+## Rendering
+
+- [ ] **RENDER-01 Documentation pages.** Open a page with inline code and code blocks, e.g.
+      `https://doc.rust-lang.org/std/vec/struct.Vec.html`.
+      *Expected:* sentences with `inline code` read as normal sentences (no line break at each
+      code word); code blocks keep their lines and indentation, one line of code per line.
+- [ ] **RENDER-02 Data tables.** Open a Wikipedia article with an infobox or table, e.g.
+      `https://en.wikipedia.org/wiki/Rust_(programming_language)`.
+      *Expected:* table cells line up in columns separated by `│`, header rows are bold with a
+      `─┼─` rule underneath, and long cells wrap inside their column.
+- [ ] **RENDER-03 Narrow tables.** Shrink the terminal to about 30 columns on the same page.
+      *Expected:* tables that no longer fit switch to `Header: value` lines per row.
+- [ ] **RENDER-04 Layout tables.** Open `https://news.ycombinator.com/`.
+      *Expected:* ranked titles with their points/comments line underneath; the header reads
+      "Hacker News new | past | ..." (words not glued together).
+- [ ] **RENDER-05 Lists and quotes.** Find a page with numbered lists, nested lists and
+      blockquotes (Wikipedia talk pages, mailing-list archives or GitHub READMEs).
+      *Expected:* numbered lists show `1.`, `2.` (right-aligned past 9), nested bullets change
+      (•, ◦, ▪), wrapped items line up under their text, and quotes have a `│` bar.
+- [ ] **RENDER-06 Plain-text files.** Open `https://www.rfc-editor.org/rfc/rfc1149.txt`, and
+      `http://localhost:8000/notes.txt` with the test servers running.
+      *Expected:* the RFC keeps its indentation and layout; in notes.txt, `<b>not markup</b>`
+      shows literally and the URL is a selectable link (without the trailing period).
+- [ ] **RENDER-07 JSON.** Open `https://httpbin.org/json`.
+      *Expected:* the JSON keeps its line breaks and indentation.
+- [ ] **RENDER-08 Non-text files.** Open `http://localhost:8000/icon.icns` (or any image URL).
+      *Expected:* a page naming the file and its type with a download link, instead of garbage;
+      selecting the link and pressing `d` offers to save it.
+- [ ] **RENDER-09 Full width.** On any text-heavy page, check the right edge.
+      *Expected:* text runs to within a column of the right border (it used to stop 2 short).
+- [ ] **RENDER-10 No-JavaScript notices.** Visit a site that relies on JavaScript.
+      *Expected:* its `<noscript>` message shows as normal text, not as raw `<p>` tags.
+
 ## Crashes and stability
 
 - [ ] **CRASH-01 Stale link selection.** On a long page, press `Tab` many times to select a
@@ -93,6 +133,9 @@ Worth repeating after any dependency upgrade.
 - [ ] **CRASH-05 Extremely narrow terminal.** On any page, drag the terminal window as narrow
       as it goes (2 columns or less), then widen it again.
       *Expected:* the browser stays responsive and recovers. It used to freeze.
+- [ ] **CRASH-06 Extremely deep nesting.** With the test servers running, open
+      `http://localhost:8000/deep.html`.
+      *Expected:* "deep text" appears; no crash.
 
 ## Navigation and history
 

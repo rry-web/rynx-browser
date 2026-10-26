@@ -4,6 +4,8 @@ A terminal CLI browser programmed in Rust, loosely inspired by other CLI browser
 
 It supports browser tabs, some mouse support for links/scrolling, and absolutely **zero javascript**.
 
+Pages are laid out for the terminal: headings, numbered and nested lists, blockquotes, aligned table columns, and preformatted code. Plain-text files (`.txt`, JSON, source code) are shown as text with clickable URLs, and files that can't be displayed (images, PDFs, archives) are offered for download.
+
 ## Installation
 
 To install, set up Rust on your machine and then run:
