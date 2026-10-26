@@ -19,6 +19,12 @@
   Streamable HTTP transport (JSON or event-stream answers), including `about:tools?server=...`
   typed by hand. Opening an MCP server's address as a page says what it is and links to its tools.
 
+- Anubis bot checks are passed without JavaScript: rynx does the check's proof of work natively
+  (`fast`/`slow`, `sha256`, `argon2id`, and the no-JavaScript `metarefresh`), fetches the
+  stylesheet the `css-load` extension asks for, and loads the guarded page. It's tried once per
+  page, gives up after a minute of work, and never follows the check page's honeypot link.
+  `anubis = off` turns it off.
+
 ### Changed
 - rynx now introduces itself honestly as `rynx/<version> (+<project page>)` instead of
   pretending to be Safari. Bot walls like Anubis challenge "Mozilla" browsers with JavaScript

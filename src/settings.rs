@@ -26,6 +26,10 @@ const TEMPLATE: &str = "\
 # then demand JavaScript. I2P mode always sends a generic one instead, so visits don't stand out.
 # user_agent = Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15
 
+# Anubis bot checks (\"Making sure you're not a bot\") are passed by doing their proof of work
+# natively, without JavaScript. Turn it off to see the check's page instead.
+# anubis = off
+
 # Save the pages you visit to history.txt, so the history page (s) keeps them after you quit.
 # Off by default: history is then kept only until you quit. Pages visited in I2P mode are never saved.
 # history = on
@@ -42,6 +46,8 @@ pub struct Settings {
     pub save_history: bool,
     /// The User-Agent sent on the clearweb
     pub user_agent: String,
+    /// Pass Anubis bot checks by doing their proof of work
+    pub solve_anubis: bool,
 }
 
 impl Default for Settings {
@@ -53,6 +59,7 @@ impl Default for Settings {
             download_dir: None,
             save_history: false,
             user_agent: crate::constants::USER_AGENT.to_string(),
+            solve_anubis: true,
         }
     }
 }
@@ -93,11 +100,12 @@ impl Settings {
                 }
                 "download_dir" if !value.is_empty() => settings.download_dir = Some(PathBuf::from(value)),
                 "history" if matches!(value, "on" | "off") => settings.save_history = value == "on",
+                "anubis" if matches!(value, "on" | "off") => settings.solve_anubis = value == "on",
                 // Sent as a header: printable ASCII only, so it can't add headers or break requests
                 "user_agent" if !value.is_empty() && value.len() <= 256 && value.bytes().all(|b| (0x20..0x7f).contains(&b)) => {
                     settings.user_agent = value.to_string()
                 }
-                "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" | "user_agent" => {
+                "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" | "user_agent" | "anubis" => {
                     problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
                 }
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),

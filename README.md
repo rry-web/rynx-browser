@@ -115,6 +115,7 @@ i2p_proxy = http://127.0.0.1:4444
 download_dir = /path/to/folder
 history = on
 user_agent = Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0
+anubis = off
 ```
 
 rynx introduces itself honestly to websites, as `rynx/<version> (+<project page>)`. Bot walls
@@ -122,6 +123,13 @@ such as [Anubis](https://anubis.techaro.lol) demand JavaScript from browsers cla
 "Mozilla", but usually let text browsers through, so this gets you past them without running
 any scripts. A few sites refuse browsers they don't recognise; `user_agent` lets you send another
 browser's identity instead (at the cost of meeting those bot walls again).
+
+When a site does show an Anubis check ("Making sure you're not a bot"), rynx passes it without
+JavaScript: it does the same proof of work the check's script would (finding a hash with enough
+leading zeros, using every CPU core), hands in the answer, and loads the page you asked for. The
+status line says when it's doing this. The `fast`, `slow`, `sha256`, `argon2id` and
+`metarefresh` methods are supported; `hashx` isn't yet. `anubis = off` shows the check's page
+instead.
 
 Bookmarks are kept next to it in `bookmarks.txt`, history (when `history = on`) in
 `history.txt`, and the certificates of Gemini sites you've visited in `gemini_known_hosts.txt`. Pages visited in I2P mode are never saved to the history file.
@@ -192,7 +200,9 @@ The same list is on the start page.
 A text browser without JavaScript already avoids the biggest source of browser exploits. On top of
 that:
 
-- **No tracking:** no cookies, no storage, no `Referer` header, no JavaScript. In I2P mode the
+- **No tracking:** no cookies, no storage, no `Referer` header, no JavaScript. The one exception
+  is the pass an Anubis check gives you: only Anubis's own cookies are kept, in memory, sent
+  only to the site that set them, and forgotten when you quit (with separate ones for I2P). In I2P mode the
   browser always identifies itself as `MYOB/6.66 (AN/ON)`, the generic name the I2P proxy uses, so
   its visits don't stand out (even over HTTPS, where the proxy can't rewrite it). History is saved
   only if you turn it on, and never for I2P sites.

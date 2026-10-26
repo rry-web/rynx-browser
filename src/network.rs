@@ -223,8 +223,13 @@ impl NetworkManager {
         timeout: Duration,
         use_proxy: bool,
         proxy_url: &str,
+        cookies: &std::sync::Arc<crate::anubis::Cookies>,
     ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
-        let mut builder = Client::builder().user_agent(user_agent).timeout(timeout);
+        // The only cookies kept are Anubis's bot-check passes
+        let mut builder = Client::builder()
+            .user_agent(user_agent)
+            .timeout(timeout)
+            .cookie_provider(std::sync::Arc::clone(cookies));
 
         // The OS verifier fetches revocation data directly, outside the I2P proxy, which would
         // reveal the site being visited; I2P clients use the bundled webpki roots instead
@@ -280,29 +285,36 @@ impl NetworkManager {
         let _ = rustls::crypto::ring::default_provider().install_default();
 
         // Create all four clients using the build_client helper method
+        // Separate, so a pass earned on the clearweb can't link it to I2P browsing
+        let clearweb_cookies = std::sync::Arc::default();
+        let i2p_cookies = std::sync::Arc::default();
         let client = Self::build_client(
             user_agent,
             Duration::from_secs(BROWSING_TIMEOUT_SECS),
             false,
             i2p_proxy,
+            &clearweb_cookies,
         )?;
         let i2p_client = Self::build_client(
             I2P_USER_AGENT,
             Duration::from_secs(BROWSING_TIMEOUT_SECS),
             true,
             i2p_proxy,
+            &i2p_cookies,
         )?;
         let download_client = Self::build_client(
             user_agent,
             Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
             false,
             i2p_proxy,
+            &clearweb_cookies,
         )?;
         let i2p_download_client = Self::build_client(
             I2P_USER_AGENT,
             Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
             true,
             i2p_proxy,
+            &i2p_cookies,
         )?;
 
         Ok(Self {

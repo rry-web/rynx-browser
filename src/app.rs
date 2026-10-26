@@ -1151,6 +1151,7 @@ impl App {
         let id = tab.id;
         let tx_clone = self.tx.clone();
         let use_i2p = self.i2p_mode;
+        let solve_anubis = self.settings.solve_anubis;
         let network_manager = Arc::clone(&self.network_manager);
 
         let domain_for_jump = Url::parse(&target_url)
@@ -1196,53 +1197,92 @@ impl App {
                 }
             }
 
-            match resp_result {
-                Ok(resp) => {
-                    // Where redirects actually led; relative links resolve against this
-                    let final_url = resp.url().to_string();
-                    let content_type = resp
-                        .headers()
-                        .get(reqwest::header::CONTENT_TYPE)
-                        .and_then(|v| v.to_str().ok())
-                        .map(str::to_string);
-                    let class = classify_content_type(content_type.as_deref());
+            // An Anubis bot check is passed at most once per page, so a site that keeps asking
+            // can't make rynx work forever
+            let mut anubis_tried = false;
+            loop {
+                match resp_result {
+                    Ok(resp) => {
+                        // Where redirects actually led; relative links resolve against this
+                        let final_url = resp.url().to_string();
+                        let status = resp.status();
+                        let content_type = resp
+                            .headers()
+                            .get(reqwest::header::CONTENT_TYPE)
+                            .and_then(|v| v.to_str().ok())
+                            .map(str::to_string);
+                        let class = classify_content_type(content_type.as_deref());
 
-                    // Images, PDFs and the like aren't read into memory as a page; offer a download
-                    if let ContentClass::Binary(mime) = &class {
-                        let (title, html) =
-                            crate::network::binary_notice_page(&final_url, mime, resp.content_length());
-                        let _ = tx_clone
-                            .send(NetworkResponse::Success(id, title, html, final_url, PageKind::Html))
-                            .await;
-                        return;
-                    }
-
-                    // Fast rejection when the server declares the size; read_text_limited
-                    // enforces the limit when it doesn't
-                    if let Some(len) = resp.content_length() {
-                        if len > MAX_PAGE_SIZE_BYTES {
+                        // Images, PDFs and the like aren't read into memory as a page; offer a download
+                        if let ContentClass::Binary(mime) = &class {
+                            let (title, html) =
+                                crate::network::binary_notice_page(&final_url, mime, resp.content_length());
                             let _ = tx_clone
-                                .send(NetworkResponse::Error(id, "Page too large".to_string()))
+                                .send(NetworkResponse::Success(id, title, html, final_url, PageKind::Html))
                                 .await;
                             return;
                         }
-                    }
 
-                    match crate::network::read_text_limited(resp, MAX_PAGE_SIZE_BYTES).await {
-                        Ok(body) if crate::mcp::is_endpoint_answer(content_type.as_deref(), &body) => {
+                        // Fast rejection when the server declares the size; read_text_limited
+                        // enforces the limit when it doesn't
+                        if let Some(len) = resp.content_length() {
+                            if len > MAX_PAGE_SIZE_BYTES {
+                                let _ = tx_clone
+                                    .send(NetworkResponse::Error(id, "Page too large".to_string()))
+                                    .await;
+                                return;
+                            }
+                        }
+
+                        let body = match crate::network::read_text_limited(resp, MAX_PAGE_SIZE_BYTES).await {
+                            Ok(body) => body,
+                            Err(e) => {
+                                let _ = tx_clone.send(NetworkResponse::Error(id, e)).await;
+                                return;
+                            }
+                        };
+
+                        // An Anubis "making sure you're not a bot" page: do its proof of work natively
+                        // and load what it was guarding. If that fails, the check's page is shown.
+                        let mut anubis_problem = None;
+                        if anubis_tried && (status.is_client_error() || status.is_server_error()) {
+                            anubis_problem = Some(String::from("the site didn't accept rynx's answer"));
+                        }
+                        if class == ContentClass::Html && anubis_problem.is_none() {
+                            if let Some(challenge) = crate::anubis::detect(&body) {
+                                if anubis_tried {
+                                    anubis_problem = Some(String::from("the site didn't accept rynx's answer"));
+                                } else if !solve_anubis {
+                                    anubis_problem = Some(String::from("passing them is turned off in settings.conf"));
+                                } else {
+                                    anubis_tried = true;
+                                    let host = Url::parse(&final_url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+                                    let _ = tx_clone
+                                        .send(NetworkResponse::Info(id, format!("Passing {}'s bot check (Anubis), without JavaScript...", host)))
+                                        .await;
+                                    match crate::anubis::pass(client, &final_url, challenge, use_i2p).await {
+                                        Ok(next) => {
+                                            resp_result = Ok(next);
+                                            continue;
+                                        }
+                                        Err(e) => anubis_problem = Some(e),
+                                    }
+                                }
+                            }
+                        }
+
+                        if crate::mcp::is_endpoint_answer(content_type.as_deref(), &body) {
                             let html = crate::mcp::endpoint_page_html(&final_url);
                             let title = String::from("MCP server");
                             let _ = tx_clone
                                 .send(NetworkResponse::Success(id, title, html, final_url, PageKind::Html))
                                 .await;
-                        }
-                        Ok(body) if crate::feeds::is_feed(content_type.as_deref(), &body) => {
+                        } else if crate::feeds::is_feed(content_type.as_deref(), &body) {
                             let (title, html) = crate::feeds::feed_to_html(&body);
                             let _ = tx_clone
                                 .send(NetworkResponse::Success(id, title, html, final_url, PageKind::Html))
                                 .await;
-                        }
-                        Ok(body) => {
+                        } else {
                             // The page isn't parsed here; an HTML page's <title> replaces this
                             // name once the page has been laid out
                             let title = crate::network::title_from_url(&final_url);
@@ -1254,14 +1294,17 @@ impl App {
                                 .send(NetworkResponse::Success(id, title, body, final_url, kind))
                                 .await;
                         }
-                        Err(e) => {
-                            let _ = tx_clone.send(NetworkResponse::Error(id, e)).await;
+                        if let Some(problem) = anubis_problem {
+                            let _ = tx_clone
+                                .send(NetworkResponse::Info(id, format!("This is a bot check (Anubis), and {}", problem)))
+                                .await;
                         }
                     }
+                    Err(e) => {
+                        let _ = tx_clone.send(NetworkResponse::Error(id, e)).await;
+                    }
                 }
-                Err(e) => {
-                    let _ = tx_clone.send(NetworkResponse::Error(id, e)).await;
-                }
+                return;
             }
         });
     }

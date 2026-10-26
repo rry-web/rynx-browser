@@ -253,6 +253,11 @@ Worth repeating after any dependency upgrade.
       *Expected:* the repository list, not an Anubis "Making sure you're not a bot" page. Then set
       `user_agent` to a browser's string (see the template in settings.conf), restart, and open
       it again: now the challenge page appears. Remove the setting afterwards.
+- [ ] **SET-12 (priority) Anubis.** Open `https://www.royalroad.com/` and a story page there.
+      *Expected:* "Passing www.royalroad.com's bot check (Anubis), without JavaScript..." for a
+      moment, then the real page (not "Making sure you're not a bot"). Later pages on the site
+      load straight away. With `anubis = off`, the check's page shows and the status line says
+      passing is turned off. This has only been tested against a simulated Anubis.
 - [ ] **SET-07 Session history.** With no `history` setting, visit a few pages and press `s`.
       *Expected:* the history page lists them newest first, under a date heading, with their
       titles; selecting one opens it. Restart and press `s`: it's empty, and no `history.txt`
