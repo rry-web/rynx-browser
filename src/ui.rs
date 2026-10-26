@@ -265,6 +265,24 @@ fn apply_cursor_highlight(
     }
 }
 
+/// Where the selected link really goes, so link text can't disguise its destination
+fn link_preview(tab: &crate::app::BrowserTab) -> Line<'static> {
+    match tab.link_regions.get(tab.selected_link_index) {
+        Some(link) => {
+            let target = crate::network::resolve_url(tab.link_base(), &link.url);
+            Line::from(vec![
+                Span::raw(" Link: "),
+                Span::styled(
+                    sanitize_for_terminal(&target).into_owned(),
+                    Style::default().fg(Color::Cyan),
+                ),
+                Span::raw(" "),
+            ])
+        }
+        None => Line::from(""),
+    }
+}
+
 /// Render the main browser content area with all highlighting applied
 fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
     let active_tab = &app.tabs[app.active_tab_index];
@@ -316,7 +334,8 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
     let content = Paragraph::new(viewport_content).scroll((0, 0)).block(
         Block::default()
             .borders(Borders::ALL)
-            .title(format!("Browser - [{}]", status_text)),
+            .title(format!("Browser - [{}]", status_text))
+            .title_bottom(link_preview(active_tab)),
     );
 
     f.render_widget(Clear, area);

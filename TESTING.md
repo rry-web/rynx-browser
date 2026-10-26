@@ -135,6 +135,9 @@ Stop them afterwards with `kill %1 %2` (or `pkill -f http.server; pkill -f bomb_
       cleared, and your clipboard is **not** replaced with "pwned". The page shows
       `Before]52;c;cHduZWQ= after[2J`, i.e. the escape characters removed and the rest as
       plain text.
+- [ ] **Link destinations are shown.** On any page, press `Tab` to select links.
+      *Expected:* the bottom border of the page shows `Link: <full URL>` for the selected
+      link, with relative links resolved. Look-alike domains appear as `xn--...` punycode.
 - [ ] **Non-web links are refused.** On `evil.html`, follow "mail link" and "js link" with
       Enter, `t` and click.
       *Expected:* "Unsupported link type: mailto" / "javascript"; no request, no new tab.

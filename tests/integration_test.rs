@@ -1181,3 +1181,32 @@ async fn test_i2p_sites_are_not_requested_outside_i2p_mode() {
     let NetworkResponse::Error(_, msg) = resp else { panic!("redirect to .i2p was followed") };
     assert!(msg.contains("Enable I2P mode"), "{msg}");
 }
+
+fn screen_text(terminal: &Terminal<TestBackend>) -> String {
+    screen_cells(terminal).concat()
+}
+
+#[tokio::test]
+async fn test_selected_link_destination_is_shown() {
+    let mut app = test_app();
+    // Link text claims one site, href goes to another; the second link is relative
+    load_page(
+        &mut app,
+        "<p><a href='https://evil.example/login'>https://paypal.com</a> \
+         <a href='docs/page.html'>docs</a> \
+         <a href='https://\u{0430}pple.com/'>apple</a></p>",
+    );
+    let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+
+    terminal.draw(|f| ui(f, &app)).unwrap();
+    assert!(screen_text(&terminal).contains("Link: https://evil.example/login"));
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Tab), 100, 24).unwrap();
+    terminal.draw(|f| ui(f, &app)).unwrap();
+    assert!(screen_text(&terminal).contains("Link: http://127.0.0.1:1/docs/page.html"));
+
+    // A Cyrillic "а" look-alike is shown as punycode, not as "apple.com"
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Tab), 100, 24).unwrap();
+    terminal.draw(|f| ui(f, &app)).unwrap();
+    assert!(screen_text(&terminal).contains("Link: https://xn--pple-43d.com/"), "{}", screen_text(&terminal));
+}

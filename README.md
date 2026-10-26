@@ -27,7 +27,7 @@ For hands-on checks of terminal, touchpad, download and I2P behaviour, see [TEST
 | :--- | :--- |
 | **`h / j / k / l`** | Move cursor (Vim-style). View scrolls to follow. |
 | **`Up / Down`** | Scroll the page up or down by 1 line. |
-| **`Tab / Shift + Tab`** | Cycle through links visible on the screen. (Forward/Backward) |
+| **`Tab / Shift + Tab`** | Cycle through links visible on the screen. (Forward/Backward) The bottom border shows where the selected link goes. |
 | **`Enter`** | Open the currently selected link. |
 | **`Backspace / Left`** | Go back to the previous page in history. |
 | **`d`** | Download the currently selected link. |
