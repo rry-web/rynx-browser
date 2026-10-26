@@ -131,6 +131,9 @@ async fn run(
     let mut app = App::with_settings(tx, rx, settings)?;
     if let Some(dir) = &config_dir {
         app.bookmarks = Bookmarks::load(dir.join(rynx_browser::bookmarks::BOOKMARKS_FILE));
+        app.gemini_hosts = std::sync::Arc::new(std::sync::Mutex::new(rynx_browser::gemini::KnownHosts::load(
+            dir.join(rynx_browser::gemini::KNOWN_HOSTS_FILE),
+        )));
         if app.settings.save_history {
             app.history = History::load(dir.join(rynx_browser::history::HISTORY_FILE));
         }

@@ -68,6 +68,10 @@ pub enum ControlValue {
     Fixed,
 }
 
+/// Characters escaped in Gemini and Gopher queries: everything but unreserved characters
+const QUERY: &percent_encoding::AsciiSet =
+    &percent_encoding::NON_ALPHANUMERIC.remove(b'-').remove(b'.').remove(b'_').remove(b'~');
+
 /// Longest text a field accepts when the page sets no maxlength
 const MAX_FIELD_CHARS: usize = 10_000;
 
@@ -264,6 +268,28 @@ pub fn build_submission(
         }
     }
     let encoded = pairs.finish();
+
+    // Gemini and Gopher take the text typed as the whole query: gemini://host/path?words, or
+    // gopher://host/7selector%09words for a Gopher search
+    if crate::network::is_small_web(url.as_str()) {
+        let text = controls
+            .iter()
+            .zip(values)
+            .find(|(c, _)| c.form == Some(form) && c.is_text())
+            .and_then(|(_, v)| match v {
+                ControlValue::Text(text) => Some(text.clone()),
+                _ => None,
+            })
+            .unwrap_or_default();
+        let words: String = percent_encoding::utf8_percent_encode(&text, QUERY).to_string();
+        if url.scheme() == "gopher" {
+            let path = format!("{}%09{}", url.path(), words);
+            url.set_path(&path);
+        } else {
+            url.set_query(Some(&words));
+        }
+        return Ok(Submission { method: FormMethod::Get, url: url.to_string(), body: None });
+    }
 
     match form_info.method {
         FormMethod::Get => {

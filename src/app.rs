@@ -449,6 +449,10 @@ impl BrowserTab {
             self.status_message = format!("Unsupported link type: {}", scheme);
             return;
         }
+        if crate::network::is_small_web(&url) {
+            self.status_message = String::from("Downloading from Gemini and Gopher isn't supported yet");
+            return;
+        }
 
         let sanitized_name = App::download_filename(&url);
         let target_path = download_dir.join(&sanitized_name);
@@ -480,6 +484,8 @@ pub struct App {
     pub settings: Settings,
     pub bookmarks: Bookmarks,
     pub history: History,
+    /// Certificates seen for Gemini hosts (trust on first use)
+    pub gemini_hosts: Arc<std::sync::Mutex<crate::gemini::KnownHosts>>,
     /// `x` was pressed once on the history page; a second press clears it
     pub confirm_clear_history: bool,
     /// Latest terminal width, for laying out pages the browser makes itself
@@ -520,6 +526,7 @@ impl App {
             settings,
             bookmarks: Bookmarks::default(),
             history: History::default(),
+            gemini_hosts: Arc::default(),
             confirm_clear_history: false,
             terminal_width: 100,
         })
@@ -744,6 +751,18 @@ impl App {
             );
             return true;
         }
+        // A Gopher or Gemini link sends its address to the server as a raw line of text, which a
+        // public page could aim at services on your computer or network that read text commands
+        let from_public_page = self.tabs[self.active_tab_index]
+            .page_url
+            .as_deref()
+            .is_some_and(|page| !crate::network::is_local_network_url(page));
+        if crate::network::is_small_web(url) && crate::network::is_local_network_url(url) && from_public_page {
+            self.current_tab().status_message = String::from(
+                "Blocked: a public page can't link to Gopher or Gemini on your local network. Type the address if you trust it.",
+            );
+            return true;
+        }
         false
     }
 
@@ -913,7 +932,10 @@ impl App {
         let mut target_url = tab.url_input.trim().to_string();
 
         // URL Normalization
-        if !target_url.starts_with("http://") && !target_url.starts_with("https://") {
+        if !target_url.starts_with("http://")
+            && !target_url.starts_with("https://")
+            && !crate::network::is_small_web(&target_url)
+        {
             if target_url.contains('.') && !target_url.contains(' ') {
                 target_url = if target_url.ends_with(".i2p") {
                     format!("http://{}", target_url)
@@ -942,6 +964,27 @@ impl App {
             .ok()
             .and_then(|u| u.domain().map(|s| s.to_string()))
             .unwrap_or_default();
+
+        if crate::network::is_small_web(&target_url) {
+            let gemini_hosts = Arc::clone(&self.gemini_hosts);
+            tokio::spawn(async move {
+                let _ = tx_clone.send(NetworkResponse::Loading(id)).await;
+                let result = if use_i2p {
+                    // These connections don't go through the I2P proxy, so they'd reveal the visit
+                    Err("Gemini and Gopher aren't available in I2P mode (press p to leave it)".to_string())
+                } else if target_url.starts_with("gemini://") {
+                    crate::gemini::load(&target_url, &gemini_hosts, MAX_PAGE_SIZE_BYTES).await
+                } else {
+                    crate::gopher::load(&target_url, MAX_PAGE_SIZE_BYTES).await
+                };
+                let response = match result {
+                    Ok(page) => NetworkResponse::Success(id, page.title, page.body, page.url, page.kind),
+                    Err(e) => NetworkResponse::Error(id, e),
+                };
+                let _ = tx_clone.send(response).await;
+            });
+            return;
+        }
 
         tokio::spawn(async move {
             let _ = tx_clone.send(NetworkResponse::Loading(id)).await;

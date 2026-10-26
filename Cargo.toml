@@ -23,6 +23,9 @@ unicode-width = "0.2.2"
 arboard = "3.7.0"
 futures-util = "0.3.34"
 directories = "6.0.0"
+# Gemini: TLS connections outside reqwest, and certificate fingerprints (both already used by rustls)
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
+ring = "0.17.14"
 
 # Tagging downloads with their origin (macOS quarantine, Linux xdg origin)
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
@@ -35,3 +38,4 @@ landlock = "0.4.7"
 [dev-dependencies]
 wiremock = "0.6.5"
 flate2 = "1.1.10"
+rcgen = { version = "0.14.10", default-features = false, features = ["ring", "crypto"] }

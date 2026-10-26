@@ -20,6 +20,16 @@ pub enum NetworkResponse {
     Rendered(usize, u64, Box<crate::renderer::RenderedPage>),
 }
 
+/// A fetched page, ready to show
+#[derive(Debug)]
+pub struct Page {
+    pub title: String,
+    pub body: String,
+    /// Where it was finally loaded from, after redirects
+    pub url: String,
+    pub kind: PageKind,
+}
+
 /// How a page's body is shown
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PageKind {
@@ -121,7 +131,12 @@ pub fn fragment_of(url: &str) -> Option<String> {
 /// Such links used to be treated as typed text, leaking them to unrelated hosts or search.
 pub fn unsupported_link_scheme(url: &str) -> Option<String> {
     let scheme = Url::parse(url).ok()?.scheme().to_string();
-    (scheme != "http" && scheme != "https").then_some(scheme)
+    (!matches!(scheme.as_str(), "http" | "https" | "gemini" | "gopher")).then_some(scheme)
+}
+
+/// Whether `url` uses one of the small-web protocols (Gemini or Gopher) rather than the web
+pub fn is_small_web(url: &str) -> bool {
+    url.starts_with("gemini://") || url.starts_with("gopher://")
 }
 
 /// Whether `url` is on this machine or the local network (localhost, 127.x, 10.x, 192.168.x,
@@ -306,8 +321,18 @@ impl NetworkManager {
 }
 
 /// Loopback hosts, which are reachable over plain HTTP for local development
+/// The URL's host, with IP addresses recognised for every scheme. For schemes other than the
+/// web's (gopher://, gemini://), the url crate keeps hosts like 127.0.0.1, or its disguises like
+/// 2130706433, as plain names.
+fn host_of(url: &Url) -> Option<Host<String>> {
+    match url.host()? {
+        Host::Domain(d) => Some(Host::parse(d).unwrap_or_else(|_| Host::Domain(d.to_string()))),
+        host => Some(host.to_owned()),
+    }
+}
+
 fn is_loopback_host(url: &Url) -> bool {
-    match url.host() {
+    match host_of(url) {
         Some(Host::Domain(d)) => d.eq_ignore_ascii_case("localhost") || d.ends_with(".localhost"),
         Some(Host::Ipv4(ip)) => ip.is_loopback(),
         Some(Host::Ipv6(ip)) => ip.is_loopback(),
@@ -320,7 +345,7 @@ fn is_local_network_host(url: &Url) -> bool {
     if is_loopback_host(url) {
         return true;
     }
-    match url.host() {
+    match host_of(url) {
         Some(Host::Ipv4(ip)) => {
             ip.is_private() || ip.is_link_local() || ip.is_unspecified() || ip.is_broadcast()
         }
