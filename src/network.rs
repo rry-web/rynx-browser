@@ -247,6 +247,11 @@ pub async fn get_following_redirects(
     let mut current =
         Url::parse(&enforce_https(url, i2p_mode)).map_err(|e| format!("Invalid URL: {}", e))?;
     for _ in 0..=MAX_REDIRECTS {
+        // Without the I2P proxy the name would be looked up through ordinary DNS, telling the
+        // resolver which eepsite is being visited
+        if !i2p_mode && is_i2p_host(&current) {
+            return Err("Enable I2P mode (press p) to visit .i2p sites".to_string());
+        }
         let response = client
             .get(current.clone())
             .send()

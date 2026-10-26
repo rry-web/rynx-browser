@@ -1161,3 +1161,23 @@ async fn test_non_web_links_are_refused() {
     assert_eq!(app.tabs.len(), 1, "a new tab was opened");
     assert!(!made_request(&mut app).await);
 }
+
+#[tokio::test]
+async fn test_i2p_sites_are_not_requested_outside_i2p_mode() {
+    let mut app = test_app();
+    assert!(!app.i2p_mode);
+    let resp = load_url(&mut app, "http://secret-site.i2p/").await;
+    let NetworkResponse::Error(_, msg) = resp else { panic!(".i2p site was requested") };
+    assert!(msg.contains("Enable I2P mode"), "{msg}");
+
+    // A clearweb page can't send the browser there by redirect either
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/to-i2p"))
+        .respond_with(ResponseTemplate::new(302).insert_header("Location", "http://secret-site.i2p/"))
+        .mount(&mock_server)
+        .await;
+    let resp = load_url(&mut app, &format!("{}/to-i2p", mock_server.uri())).await;
+    let NetworkResponse::Error(_, msg) = resp else { panic!("redirect to .i2p was followed") };
+    assert!(msg.contains("Enable I2P mode"), "{msg}");
+}
