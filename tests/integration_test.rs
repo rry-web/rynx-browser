@@ -1277,3 +1277,16 @@ fn test_zero_width_characters_do_not_create_empty_link_regions() {
     assert!(renderer.links.iter().all(|l| l.x_start < l.x_end));
     assert!(renderer.links.iter().any(|l| l.url == "/y"));
 }
+
+#[tokio::test]
+async fn test_error_messages_cannot_inject_markup() {
+    let mut app = test_app();
+    let id = app.current_tab().id;
+    let msg = "failed <a href='https://evil.example/'>click here</a> & <b>more</b>";
+    handle_network_event::<TestBackend>(&mut app, NetworkResponse::Error(id, msg.into()), 80).unwrap();
+
+    let tab = app.current_tab();
+    assert!(tab.link_regions.is_empty(), "error text became a link");
+    let text: String = tab.rendered_content.iter().map(|l| l.to_string()).collect();
+    assert!(text.contains("failed <a href='https://evil.example/'>click here</a> & <b>more</b>"), "{text}");
+}

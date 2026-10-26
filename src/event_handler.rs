@@ -8,6 +8,15 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::backend::Backend;
 use std::io::Result;
 
+/// Escape text for inclusion in generated HTML, so messages can't inject markup or links
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
 /// Determines if a URL likely points to a downloadable file based on extension or patterns
 fn is_downloadable_file(url: &str) -> bool {
     let u = url.to_lowercase();
@@ -568,7 +577,10 @@ pub fn handle_network_event<B: Backend>(
             NetworkResponse::Error(_, msg) => {
                 let tab = &mut app.tabs[index];
                 tab.page_title = String::from("Error");
-                tab.html_source = format!("<h1>Error</h1><hr><p style='color:red'>{}</p>", msg);
+                tab.html_source = format!(
+                    "<h1>Error</h1><hr><p style='color:red'>{}</p>",
+                    escape_html(&msg)
+                );
                 tab.reset_page_state();
                 tab.page_url = None;
                 tab.pending_fragment = None;
