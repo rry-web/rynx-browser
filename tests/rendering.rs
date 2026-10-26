@@ -197,3 +197,85 @@ fn extremely_deep_nesting_does_not_overflow_the_stack() {
     let html = format!("{}deep text{}", "<span>".repeat(20_000), "</span>".repeat(20_000));
     assert_eq!(text_lines(&html, 80), ["deep text"]);
 }
+
+const FILES_TABLE: &str = "<table><caption>Downloads</caption>\
+    <thead><tr><th>Name</th><th>Size</th><th>Notes</th></tr></thead>\
+    <tbody><tr><td><a href='/a.txt'>alpha.txt</a></td><td>12 KB</td><td>plain text file that wraps</td></tr>\
+    <tr><td>b</td><td>3 MB</td><td>short</td></tr>\
+    <tr><td colspan='2'>spans two</td><td>x</td></tr></tbody></table>";
+
+#[test]
+fn tables_line_up_in_columns_with_a_header_rule() {
+    assert_eq!(
+        text_lines(FILES_TABLE, 40),
+        [
+            "Downloads",
+            "Name      │ Size  │ Notes",
+            "──────────┼───────┼─────────────────────",
+            "alpha.txt │ 12 KB │ plain text file that",
+            "          │       │ wraps",
+            "b         │ 3 MB  │ short",
+            "spans two         │ x",
+        ]
+    );
+}
+
+#[test]
+fn links_inside_table_cells_stay_clickable() {
+    let r = render_full(FILES_TABLE, 40);
+    let link = &r.links[0];
+    assert_eq!(link.url, "/a.txt");
+    let line = r.lines[link.line_index].to_string();
+    let text: String = line.chars().skip(link.x_start).take(link.x_end - link.x_start).collect();
+    assert_eq!(text, "alpha.txt");
+}
+
+#[test]
+fn narrow_tables_are_stacked_with_header_labels() {
+    assert_eq!(
+        text_lines(FILES_TABLE, 20),
+        [
+            "Downloads",
+            "Name: alpha.txt",
+            "Size: 12 KB",
+            "Notes: plain text",
+            "file that wraps",
+            "Name: b",
+            "Size: 3 MB",
+            "Notes: short",
+            "Name: spans two",
+            "Size: x",
+        ]
+    );
+}
+
+#[test]
+fn table_cells_can_hold_lists_and_tables() {
+    assert_eq!(
+        text_lines("<table><tr><td><p>left</p></td><td><ul><li>item</li></ul></td></tr></table>", 40),
+        ["left │   • item"]
+    );
+    assert_eq!(
+        text_lines("<table><tr><td>outer</td><td><table><tr><td>in1</td><td>in2</td></tr></table></td></tr></table>", 40),
+        ["outer │ in1 │ in2"]
+    );
+}
+
+#[test]
+fn deeply_nested_tables_render_quickly() {
+    // Measuring cells by rendering them would cost 2^depth renders for nested tables
+    let html = format!("{}core{}", "<table><tr><td>x</td><td>".repeat(30), "</td></tr></table>".repeat(30));
+    let started = std::time::Instant::now();
+    let lines = text_lines(&html, 120);
+    assert!(lines.concat().contains("core"));
+    assert!(started.elapsed() < std::time::Duration::from_secs(5), "took {:?}", started.elapsed());
+}
+
+#[test]
+fn adjacent_links_are_kept_apart() {
+    // Sites often separate links with CSS margins only
+    assert_eq!(
+        text_lines("<p><a href='/a'>Home</a><a href='/b'>new</a>, <a href='/c'>past</a></p>", 80),
+        ["Home new, past"]
+    );
+}

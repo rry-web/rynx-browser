@@ -43,7 +43,8 @@ const TAGS: &[&str] = &[
     "table", "tr", "td", "th", "img", "br", "hr", "span", "section", "article", "nav", "header",
     "footer", "aside", "main", "script", "style", "head", "title", "blockquote", "unknown", "dl",
     "dt", "dd", "q", "sup", "sub", "del", "mark", "kbd", "details", "summary", "noscript", "iframe",
-    "video", "source", "menu", "figure", "figcaption", "h4", "h5", "h6", "svg",
+    "video", "source", "menu", "figure", "figcaption", "h4", "h5", "h6", "svg", "thead", "tbody",
+    "tfoot", "caption", "table", "tr", "td",
 ];
 
 const TEXT: &[&str] = &[
@@ -86,7 +87,7 @@ fn random_html_into(rng: &mut Rng, depth: usize, html: &mut String) {
                 html.push('<');
                 html.push_str(tag);
                 for _ in 0..rng.below(3) {
-                    match rng.below(9) {
+                    match rng.below(10) {
                         0 => html.push_str(&format!(" href=\"{}\"", rng.pick(HREFS))),
                         1 => html.push_str(&format!(" id=\"ch{}\"", rng.below(4))),
                         2 => html.push_str(&format!(" name=\"{}\"", rng.pick(TEXT))),
@@ -95,6 +96,7 @@ fn random_html_into(rng: &mut Rng, depth: usize, html: &mut String) {
                         5 => html.push_str(&format!(" start=\"{}\"", rng.pick(NUMBERS))),
                         6 => html.push_str(&format!(" value=\"{}\"", rng.pick(NUMBERS))),
                         7 => html.push_str(&format!(" type=\"{}\"", rng.pick(&["a", "A", "i", "I", "1", "x"]))),
+                        8 => html.push_str(&format!(" colspan=\"{}\"", rng.pick(NUMBERS))),
                         _ => html.push_str(rng.pick(&[" hidden", " reversed", " style=\"display:none\""])),
                     }
                 }
