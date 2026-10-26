@@ -3,8 +3,11 @@
 A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**, with absolutely
 **zero JavaScript**.
 
-> **Status: beta.** Version 0.2.0-beta.3 is the latest release. Please report
-> problems as [GitHub issues](https://github.com/rry-web/rynx-browser/issues).
+> **Status: beta.** Version 0.2.0-beta.3 is the latest release. rynx is under active development:
+> security protections and fixes keep arriving as issues are found, and some protections (the
+> Linux filesystem sandbox in particular) are preliminary and haven't yet been checked on a wide
+> range of systems. Please report problems, and anything that looks like a security issue, as
+> [GitHub issues](https://github.com/rry-web/rynx-browser/issues).
 
 - **Readable pages:** headings, numbered and nested lists, blockquotes, aligned table columns, and
   preformatted code, laid out for the terminal. Site menus are shown compactly on one line
@@ -223,9 +226,10 @@ that:
 - **HTTPS everywhere:** addresses, redirects, downloads and form submissions are upgraded to HTTPS
   (except `localhost` and `.i2p` sites). Certificates are checked by your operating system,
   including revocation on macOS and Windows, with TLS 1.2 or newer.
-- **Linux sandbox:** the browser restricts itself with Landlock (kernel 5.13+): it can write only
+- **Linux sandbox (preliminary):** the browser restricts itself with Landlock (kernel 5.13+): it can write only
   to your Downloads folder and its settings folder, and can't read the rest of your home directory, so a bug can't be used
-  to read SSH keys or plant files. The status line shows whether it's active.
+  to read SSH keys or plant files. The status line shows whether it's active. It hasn't yet been
+  tested across many distributions and kernels; macOS and Windows have no sandbox yet.
 - **Hostile pages are contained:** escape sequences that could take over your terminal are
   stripped; oversized, deeply nested or compressed "bomb" pages can't freeze or crash the browser;
   public pages can't redirect into your local network.
