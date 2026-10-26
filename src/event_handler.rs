@@ -148,8 +148,8 @@ fn handle_normal_mode<B: Backend>(
                 tab.scroll_to_line(line, viewport_height(terminal_height));
             }
         }
-        KeyCode::Down => app.current_tab().scroll = app.current_tab().scroll.saturating_add(1),
-        KeyCode::Up => app.current_tab().scroll = app.current_tab().scroll.saturating_sub(1),
+        KeyCode::Down => app.current_tab().scroll_by(1, viewport_height(terminal_height)),
+        KeyCode::Up => app.current_tab().scroll_by(-1, viewport_height(terminal_height)),
         KeyCode::Char('V') => {
             let active_index = app.active_tab_index;
             let tab = app.current_tab();
@@ -412,10 +412,10 @@ pub fn handle_mouse_event<B: Backend>(
     let tab = app.current_tab();
     match mouse.kind {
         MouseEventKind::ScrollDown => {
-            tab.scroll = tab.scroll.saturating_add(MOUSE_SCROLL_LINES); // Scroll down by configured amount
+            tab.scroll_by(MOUSE_SCROLL_LINES as isize, viewport_height(terminal_height));
         }
         MouseEventKind::ScrollUp => {
-            tab.scroll = tab.scroll.saturating_sub(MOUSE_SCROLL_LINES); // Scroll up by configured amount
+            tab.scroll_by(-(MOUSE_SCROLL_LINES as isize), viewport_height(terminal_height));
         }
         MouseEventKind::Down(MouseButton::Left) => {
             if let Some(prompt) = tab.download_prompt.take() {
@@ -448,7 +448,8 @@ pub fn handle_mouse_event<B: Backend>(
                 let real_line_idx = visual_line + tab.scroll;
                 let click_x = (mouse.column as usize).saturating_sub(1);
 
-                tab.cursor_line = real_line_idx;
+                // Clicking below the end of the page puts the cursor on the last line
+                tab.cursor_line = real_line_idx.min(tab.rendered_content.len().saturating_sub(1));
                 tab.cursor_char = click_x;
 
                 // 2. Search the Link Regions for a match

@@ -79,6 +79,27 @@ impl BrowserTab {
         }
     }
 
+    /// Scroll the view by `delta` lines without running past either end of the page.
+    /// Like vim, the cursor is carried along so it stays on screen and j/k continue from there.
+    pub fn scroll_by(&mut self, delta: isize, viewport_height: usize) {
+        let viewport_height = viewport_height.max(1);
+        let last_line = self.rendered_content.len().saturating_sub(1);
+        let max_scroll = self.rendered_content.len().saturating_sub(viewport_height);
+        self.scroll = self.scroll.saturating_add_signed(delta).min(max_scroll);
+
+        let bottom = (self.scroll + viewport_height - 1).min(last_line);
+        let cursor_line = self.cursor_line.max(self.scroll).min(bottom);
+        if cursor_line != self.cursor_line {
+            self.cursor_line = cursor_line;
+            if self.input_mode == InputMode::Visual
+                && let Some(ref mut sel) = self.selection
+            {
+                sel.end_line = self.cursor_line;
+                sel.end_char = self.cursor_char;
+            }
+        }
+    }
+
     /// Keep the selected link and cursor inside the current content after a re-render
     fn clamp_positions(&mut self) {
         if self.selected_link_index >= self.link_regions.len() {

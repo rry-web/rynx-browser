@@ -679,3 +679,76 @@ async fn test_cursor_movement_scrolls_in_normal_and_visual_mode() {
     }
     assert_eq!(app.current_tab().scroll, 0);
 }
+
+fn wheel(kind: crossterm::event::MouseEventKind) -> crossterm::event::MouseEvent {
+    crossterm::event::MouseEvent { kind, column: 10, row: 10, modifiers: KeyModifiers::empty() }
+}
+
+fn sixty_line_page(app: &mut App) {
+    let lines: String = (0..60).map(|i| format!("line {i}<br>")).collect();
+    load_page(app, &lines);
+}
+
+#[tokio::test]
+async fn test_scrolling_stops_at_end_of_page() {
+    use crossterm::event::MouseEventKind;
+    use rynx_browser::event_handler::handle_mouse_event;
+
+    let mut app = test_app();
+    sixty_line_page(&mut app);
+    let total = app.current_tab().rendered_content.len();
+    // 24 rows leaves 16 for content; the last line should rest at the bottom of the view
+    let max_scroll = total - 16;
+
+    for _ in 0..100 {
+        handle_mouse_event::<TestBackend>(&mut app, wheel(MouseEventKind::ScrollDown), 80, 24).unwrap();
+    }
+    assert_eq!(app.current_tab().scroll, max_scroll);
+
+    for _ in 0..100 {
+        handle_key_event::<TestBackend>(&mut app, key(KeyCode::Down), 80, 24).unwrap();
+    }
+    assert_eq!(app.current_tab().scroll, max_scroll);
+
+    // Scrolling back up takes effect immediately instead of unwinding overshoot first
+    handle_mouse_event::<TestBackend>(&mut app, wheel(MouseEventKind::ScrollUp), 80, 24).unwrap();
+    assert_eq!(app.current_tab().scroll, max_scroll - 3);
+}
+
+#[tokio::test]
+async fn test_cursor_follows_wheel_scroll_so_j_does_not_jump_to_top() {
+    use crossterm::event::MouseEventKind;
+    use rynx_browser::event_handler::handle_mouse_event;
+
+    let mut app = test_app();
+    sixty_line_page(&mut app);
+    for _ in 0..10 {
+        handle_mouse_event::<TestBackend>(&mut app, wheel(MouseEventKind::ScrollDown), 80, 24).unwrap();
+    }
+    assert_eq!(app.current_tab().scroll, 30);
+    assert_eq!(app.current_tab().cursor_line, 30, "cursor should be pulled onto the screen");
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('j')), 80, 24).unwrap();
+    assert_eq!(app.current_tab().cursor_line, 31);
+    assert_eq!(app.current_tab().scroll, 30, "j jumped the view");
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('k')), 80, 24).unwrap();
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('k')), 80, 24).unwrap();
+    assert_eq!(app.current_tab().cursor_line, 29);
+    assert_eq!(app.current_tab().scroll, 29, "k should scroll by one line, not to the top");
+}
+
+#[tokio::test]
+async fn test_wheel_scroll_in_visual_mode_extends_selection() {
+    use crossterm::event::MouseEventKind;
+    use rynx_browser::event_handler::handle_mouse_event;
+
+    let mut app = test_app();
+    sixty_line_page(&mut app);
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('v')), 80, 24).unwrap();
+    for _ in 0..10 {
+        handle_mouse_event::<TestBackend>(&mut app, wheel(MouseEventKind::ScrollDown), 80, 24).unwrap();
+    }
+    let sel = app.current_tab().selection.as_ref().unwrap();
+    assert_eq!((sel.start_line, sel.end_line), (0, 30));
+}
