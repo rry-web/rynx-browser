@@ -163,6 +163,7 @@ impl NetworkManager {
         user_agent: &str,
         timeout: Duration,
         use_proxy: bool,
+        proxy_url: &str,
     ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
         let mut builder = Client::builder().user_agent(user_agent).timeout(timeout);
 
@@ -171,7 +172,7 @@ impl NetworkManager {
         builder = builder.use_preconfigured_tls(Self::tls_config(!use_proxy)?);
 
         if use_proxy {
-            let proxy = reqwest::Proxy::http(I2P_PROXY_URL)?;
+            let proxy = reqwest::Proxy::http(proxy_url)?;
             builder = builder.proxy(proxy);
         }
 
@@ -204,6 +205,11 @@ impl NetworkManager {
     }
 
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Self::with_i2p_proxy(I2P_PROXY_URL)
+    }
+
+    /// Clients for browsing and downloading, with I2P traffic sent through `i2p_proxy`
+    pub fn with_i2p_proxy(i2p_proxy: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         // Our clients carry their own TLS config, but a reqwest Client built without one panics
         // when no process-wide crypto provider is installed. Already-installed is fine.
         let _ = rustls::crypto::ring::default_provider().install_default();
@@ -213,21 +219,25 @@ impl NetworkManager {
             USER_AGENT,
             Duration::from_secs(BROWSING_TIMEOUT_SECS),
             false,
+            i2p_proxy,
         )?;
         let i2p_client = Self::build_client(
             USER_AGENT,
             Duration::from_secs(BROWSING_TIMEOUT_SECS),
             true,
+            i2p_proxy,
         )?;
         let download_client = Self::build_client(
             USER_AGENT,
             Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
             false,
+            i2p_proxy,
         )?;
         let i2p_download_client = Self::build_client(
             USER_AGENT,
             Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
             true,
+            i2p_proxy,
         )?;
 
         Ok(Self {

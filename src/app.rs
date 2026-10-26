@@ -1,5 +1,5 @@
 use crate::constants::{
-    DEFAULT_TAB_INDEX, INITIAL_ID_COUNTER, INITIAL_TAB_ID, MARGINALIA_SEARCH_URL,
+    DEFAULT_TAB_INDEX, INITIAL_ID_COUNTER, INITIAL_TAB_ID,
     DOWNLOAD_PROGRESS_INTERVAL_MS, MAX_PAGE_SIZE_BYTES,
 };
 use crate::models::{HistoryEntry, InputMode, LinkRegion, SearchState, Selection};
@@ -7,7 +7,9 @@ use crate::network::{
     ContentClass, NetworkManager, NetworkResponse, PageKind, attempt_jump, classify_content_type,
     fragment_of, should_attempt_jump,
 };
+use crate::bookmarks::{BOOKMARKS_PAGE, Bookmarks};
 use crate::forms::{ControlKind, ControlValue, Form, FormControl, FormMethod};
+use crate::settings::Settings;
 use crate::renderer::{RenderJob, RenderedPage, render_page};
 use crate::renderer::DomRenderer;
 
@@ -463,16 +465,32 @@ pub struct App {
     /// Lay pages out on a background thread (the default), so slow pages never freeze the UI.
     /// When false, rendering happens inline, which tests use for deterministic results.
     pub render_in_background: bool,
+    pub settings: Settings,
+    pub bookmarks: Bookmarks,
+    /// Latest terminal width, for laying out pages the browser makes itself
+    pub terminal_width: u16,
 }
+
+/// The start page with the key bindings
+pub const HELP_PAGE: &str = "about:help";
 
 impl App {
     pub fn new(
         tx: mpsc::Sender<NetworkResponse>,
         rx: mpsc::Receiver<NetworkResponse>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Self::with_settings(tx, rx, Settings::default())
+    }
+
+    pub fn with_settings(
+        tx: mpsc::Sender<NetworkResponse>,
+        rx: mpsc::Receiver<NetworkResponse>,
+        settings: Settings,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let initial_tab =
             BrowserTab::new(INITIAL_TAB_ID, String::from("https://www.rust-lang.org"));
-        let network_manager = Arc::new(NetworkManager::new()?);
+        let network_manager = Arc::new(NetworkManager::with_i2p_proxy(&settings.i2p_proxy)?);
+        let download_dir = settings.download_dir.clone().unwrap_or_else(Self::default_download_dir);
         Ok(Self {
             tabs: vec![initial_tab],
             active_tab_index: DEFAULT_TAB_INDEX,
@@ -482,9 +500,57 @@ impl App {
             i2p_mode: false,
             clipboard: arboard::Clipboard::new().ok(),
             network_manager,
-            download_dir: Self::default_download_dir(),
+            download_dir,
             render_in_background: true,
+            settings,
+            bookmarks: Bookmarks::default(),
+            terminal_width: 100,
         })
+    }
+
+    /// Load the configured home page in the current tab, if one is set
+    pub fn open_home_page(&mut self) {
+        if let Some(home) = self.settings.home_page.clone() {
+            self.current_tab().url_input = home;
+            self.submit_request();
+        }
+    }
+
+    /// Show a page the browser makes itself (about:bookmarks, about:help)
+    fn show_internal_page(&mut self, address: &str) -> bool {
+        let (title, html) = match address {
+            BOOKMARKS_PAGE => ("Bookmarks", self.bookmarks.page_html()),
+            HELP_PAGE | "about:home" => ("Start", include_str!("../assets/help.html").to_string()),
+            _ => return false,
+        };
+        let width = self.terminal_width;
+        let index = self.active_tab_index;
+        let tab = self.current_tab();
+        tab.url_input = address.to_string();
+        tab.page_title = title.to_string();
+        tab.page_url = None;
+        tab.set_content(html, PageKind::Html);
+        tab.reset_page_state();
+        tab.restore_position_after_render();
+        tab.status_message = String::from("Ready");
+        self.render_tab(index, width);
+        true
+    }
+
+    /// Bookmark the current page, or remove its bookmark
+    pub fn toggle_bookmark(&mut self) {
+        let tab = &self.tabs[self.active_tab_index];
+        let Some(url) = tab.page_url.clone() else {
+            self.current_tab().status_message = String::from("Only web pages can be bookmarked");
+            return;
+        };
+        let title = tab.page_title.clone();
+        let message = match self.bookmarks.toggle(&url, &title) {
+            Ok(true) => String::from("Bookmarked (B shows bookmarks)"),
+            Ok(false) => String::from("Bookmark removed"),
+            Err(e) => e,
+        };
+        self.current_tab().status_message = message;
     }
 
     pub fn copy_to_clipboard(&mut self, text: String) -> Result<(), String> {
@@ -513,6 +579,7 @@ impl App {
 
     /// Lay out a tab's content for a terminal `width` columns wide
     pub fn render_tab(&mut self, tab_index: usize, width: u16) {
+        self.terminal_width = width;
         let background = self.render_in_background;
         let tx = self.tx.clone();
         let Some(tab) = self.tabs.get_mut(tab_index) else {
@@ -582,6 +649,8 @@ impl App {
         self.tabs.push(new_tab);
         self.active_tab_index = self.tabs.len() - 1;
         self.id_counter += 1;
+        self.render_tab(self.active_tab_index, self.terminal_width);
+        self.open_home_page();
     }
 
     pub fn close_tab(&mut self) {
@@ -617,7 +686,8 @@ impl App {
 
     /// Follow a link in the current tab, recording the current page in history
     pub fn follow_link(&mut self, url: String) {
-        if self.reject_unsupported_link(&url) {
+        let internal = url == BOOKMARKS_PAGE || url == HELP_PAGE;
+        if !internal && self.reject_unsupported_link(&url) {
             return;
         }
         let tab = self.current_tab();
@@ -751,8 +821,11 @@ impl App {
     /// #fragment differs. A link to the same page without a fragment reloads it, but going
     /// back through history to it does not.
     pub fn load_url_input(&mut self, from_history: bool) {
+        let url = self.current_tab().url_input.trim().to_string();
+        if self.show_internal_page(&url) {
+            return;
+        }
         let tab = self.current_tab();
-        let url = tab.url_input.clone();
         if tab.is_current_document(&url) {
             let fragment = fragment_of(&url);
             if from_history || fragment.is_some() {
@@ -772,8 +845,9 @@ impl App {
 
     pub fn submit_request(&mut self) {
         let use_i2p = self.i2p_mode;
+        let search = self.settings.clone();
         let tab = self.current_tab();
-        let mut target_url = tab.url_input.clone();
+        let mut target_url = tab.url_input.trim().to_string();
 
         // URL Normalization
         if !target_url.starts_with("http://") && !target_url.starts_with("https://") {
@@ -784,10 +858,7 @@ impl App {
                     format!("https://{}", target_url)
                 };
             } else {
-                let safe_query = url::form_urlencoded::Serializer::new(String::new())
-                    .append_pair("query", &target_url)
-                    .finish();
-                target_url = format!("{}{}", MARGINALIA_SEARCH_URL, safe_query);
+                target_url = search.search_address(&target_url);
             }
         }
 

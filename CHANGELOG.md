@@ -32,6 +32,11 @@ GitHub issues; [TESTING.md](https://github.com/rry-web/rynx-browser/blob/main/TE
 - Scrolling stops at the end of the page, and the cursor follows the view.
 - Touchpad scrolling keeps up, and quitting is instant.
 
+### Settings and bookmarks
+- `settings.conf` in the config folder: home page, search engine, I2P proxy, downloads folder.
+  A commented template is written on first run.
+- Bookmarks: `b` bookmarks the page (or removes it), `B` lists them (`about:bookmarks`).
+
 ### Downloads
 - Much faster; filenames come from the URL without query strings.
 - 404 error pages aren't saved; existing files aren't overwritten silently.

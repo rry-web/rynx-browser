@@ -1,7 +1,8 @@
 //! Restricts what the browser can touch on disk once it's running.
 //!
 //! On Linux this uses Landlock: the browser may read system files (libraries, DNS settings,
-//! certificates) and use the terminal, but may only write inside the Downloads folder, and can't
+//! certificates) and use the terminal, but may only write inside the Downloads folder and its own
+//! settings folder (settings and bookmarks), and can't
 //! read the rest of the home directory (SSH keys, other programs' data). A bug in page parsing or
 //! the network stack can't be used to steal files or plant e.g. ~/.bashrc.
 //!
@@ -66,9 +67,10 @@ const READ_ONLY_PATHS: &[&str] = &[
 #[cfg(target_os = "linux")]
 const DEVICE_PATHS: &[&str] = &["/dev/tty", "/dev/null"];
 
-/// Restrict filesystem access to what the browser needs, allowing writes only in `download_dir`
+/// Restrict filesystem access to what the browser needs, allowing writes only in `writable`
+/// folders (Downloads and the settings folder)
 #[cfg(target_os = "linux")]
-pub fn restrict_filesystem(download_dir: &Path) -> SandboxStatus {
+pub fn restrict_filesystem(writable: &[&Path]) -> SandboxStatus {
     use landlock::{
         ABI, Access, AccessFs, Ruleset, RulesetAttr, RulesetCreatedAttr, RulesetStatus,
         path_beneath_rules,
@@ -100,7 +102,7 @@ pub fn restrict_filesystem(download_dir: &Path) -> SandboxStatus {
         .and_then(|ruleset| ruleset.add_rules(path_beneath_rules(READ_ONLY_PATHS, read)))
         .and_then(|ruleset| ruleset.add_rules(path_beneath_rules(&extra_read, read)))
         .and_then(|ruleset| ruleset.add_rules(path_beneath_rules(DEVICE_PATHS, all)))
-        .and_then(|ruleset| ruleset.add_rules(path_beneath_rules([download_dir], all)))
+        .and_then(|ruleset| ruleset.add_rules(path_beneath_rules(writable, all)))
         .and_then(|ruleset| ruleset.restrict_self());
 
     match result {
@@ -114,6 +116,6 @@ pub fn restrict_filesystem(download_dir: &Path) -> SandboxStatus {
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn restrict_filesystem(_download_dir: &Path) -> SandboxStatus {
+pub fn restrict_filesystem(_writable: &[&Path]) -> SandboxStatus {
     SandboxStatus::Unsupported
 }

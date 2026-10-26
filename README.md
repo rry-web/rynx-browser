@@ -41,7 +41,7 @@ Command-line options:
 Press **`e`**, type an address (or search words) and press Enter. Words that aren't an address are
 searched with [Marginalia](https://marginalia-search.com), a search engine for the
 non-commercial web. Marginalia sometimes shows a "wait a moment" page to slow down bots; select its
-"proceed manually" link to continue.
+"proceed manually" link to continue, or set a different search engine in [settings](#settings).
 
 Press **`Tab`** to step through the links and form fields on a page. The bottom border always shows
 where the selected link goes, or what a form field is and where its form sends what you type.
@@ -51,6 +51,23 @@ To use a form, select a field and press **Enter** to start typing, then **Enter*
 you signed in.
 
 Downloads (**`d`** on a link) are saved to your Downloads folder after you confirm.
+
+Press **`b`** to bookmark a page (again to remove it) and **`B`** to see your bookmarks.
+
+## Settings
+
+The first run creates `settings.conf` in your config folder (`~/.config/rynx-browser` on Linux,
+`~/Library/Application Support/rynx-browser` on macOS, `%APPDATA%\rynx-browser\config` on Windows),
+with every option commented out. Remove the `#` to use one:
+
+```ini
+home_page = https://en.wikipedia.org/
+search_url = https://html.duckduckgo.com/html/?q={query}
+i2p_proxy = http://127.0.0.1:4444
+download_dir = /path/to/folder
+```
+
+Bookmarks are kept next to it in `bookmarks.txt`.
 
 ## Key bindings
 
@@ -73,6 +90,7 @@ The same list is on the start page.
 | **`Backspace`**, **`Left`**, **`H`** | Back, to where you were on the page |
 | **`Right`**, **`L`** | Forward |
 | **`r`** | Reload, keeping your place |
+| **`b`** / **`B`** | Bookmark the page (or remove it) / show bookmarks |
 | **`d`** | Download the selected link |
 | **`Esc`** | Clear a finished or failed download |
 
@@ -121,7 +139,7 @@ that:
   (except `localhost` and `.i2p` sites). Certificates are checked by your operating system,
   including revocation on macOS and Windows, with TLS 1.2 or newer.
 - **Linux sandbox:** the browser restricts itself with Landlock (kernel 5.13+): it can write only
-  to your Downloads folder and can't read the rest of your home directory, so a bug can't be used
+  to your Downloads folder and its settings folder, and can't read the rest of your home directory, so a bug can't be used
   to read SSH keys or plant files. The status line shows whether it's active.
 - **Hostile pages are contained:** escape sequences that could take over your terminal are
   stripped; oversized, deeply nested or compressed "bomb" pages can't freeze or crash the browser;
@@ -156,8 +174,9 @@ with results recorded in [TEST_LOG.md](TEST_LOG.md). Changes are listed in
 - [x] **Rendering** of tables, lists, quotes, code and plain-text files
 - [x] **Forms** for searching and other text input
 - [ ] **Images** with `ratatui-image` (Sixel/Kitty)
-- [ ] **Bookmarks** and persistent history
-- [ ] **Settings file** (home page, search engine, I2P proxy)
+- [x] **Bookmarks**
+- [x] **Settings file** (home page, search engine, I2P proxy, downloads folder)
+- [ ] **Persistent history** (opt-in)
 - [ ] **Gopher, Gemini and RSS** support
 - [ ] **MCP support** as an alternative to JavaScript
 

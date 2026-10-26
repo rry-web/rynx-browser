@@ -127,6 +127,8 @@ fn handle_normal_mode<B: Backend>(
         KeyCode::Right | KeyCode::Char('L') => app.go_forward(),
         KeyCode::Char('H') => app.go_back(),
         KeyCode::Char('r') => app.reload(),
+        KeyCode::Char('b') => app.toggle_bookmark(),
+        KeyCode::Char('B') => app.follow_link(crate::bookmarks::BOOKMARKS_PAGE.to_string()),
 
         // --- VISUAL MODE ---
         KeyCode::Char('v') => app.current_tab().enter_visual_mode(),

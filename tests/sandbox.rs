@@ -18,7 +18,7 @@ fn outcome<T>(result: std::io::Result<T>) -> &'static str {
 
 /// Runs inside the sandboxed child: try each kind of access and print the results
 fn child(downloads: &Path, secret: &Path, outside: &Path) {
-    let status = restrict_filesystem(downloads);
+    let status = restrict_filesystem(&[downloads]);
     println!("status={:?}", status);
     println!("read_secret={}", outcome(std::fs::read(secret)));
     println!("write_outside={}", outcome(std::fs::write(outside, b"x")));

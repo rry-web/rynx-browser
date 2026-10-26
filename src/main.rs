@@ -1,5 +1,7 @@
 use rynx_browser::app::App;
+use rynx_browser::bookmarks::Bookmarks;
 use rynx_browser::sandbox::SandboxStatus;
+use rynx_browser::settings::Settings;
 use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, process_network_events};
 use rynx_browser::ui::ui;
 
@@ -74,15 +76,25 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         }
     }
 
+    // Settings are read (and the settings folder created) before sandboxing
+    let config_dir = rynx_browser::settings::config_dir();
+    let (settings, problems) = match &config_dir {
+        Some(dir) => Settings::load_or_create(dir),
+        None => (Settings::default(), Vec::new()),
+    };
+    let download_dir = settings.download_dir.clone().unwrap_or_else(App::default_download_dir);
+
     // Sandbox while this is still the only thread: every thread started afterwards (the async
-    // runtime, clipboard, background rendering) inherits the restrictions. Downloads must exist
-    // first, since nothing outside it can be created later.
-    let download_dir = App::default_download_dir();
+    // runtime, clipboard, background rendering) inherits the restrictions. The writable folders
+    // must exist first, since nothing outside them can be created later.
     let sandbox = if sandbox_enabled {
-        if !download_dir.as_os_str().is_empty() {
-            let _ = std::fs::create_dir_all(&download_dir);
+        let mut writable: Vec<&std::path::Path> = Vec::new();
+        for dir in [Some(&download_dir), config_dir.as_ref()].into_iter().flatten() {
+            if !dir.as_os_str().is_empty() && std::fs::create_dir_all(dir).is_ok() {
+                writable.push(dir);
+            }
         }
-        rynx_browser::sandbox::restrict_filesystem(&download_dir)
+        rynx_browser::sandbox::restrict_filesystem(&writable)
     } else {
         SandboxStatus::Disabled
     };
@@ -90,11 +102,13 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?
-        .block_on(run(download_dir, sandbox))
+        .block_on(run(settings, problems, config_dir, sandbox))
 }
 
 async fn run(
-    download_dir: std::path::PathBuf,
+    settings: Settings,
+    settings_problems: Vec<String>,
+    config_dir: Option<std::path::PathBuf>,
     sandbox: SandboxStatus,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // This hook catches panics and restores the terminal before printing the error
@@ -113,12 +127,19 @@ async fn run(
 
     // Setup Channel
     let (tx, rx) = tokio::sync::mpsc::channel(rynx_browser::constants::CHANNEL_CAPACITY);
-    let mut app = App::new(tx, rx)?;
-    app.download_dir = download_dir;
+    let mut app = App::with_settings(tx, rx, settings)?;
+    if let Some(dir) = &config_dir {
+        app.bookmarks = Bookmarks::load(dir.join(rynx_browser::bookmarks::BOOKMARKS_FILE));
+    }
     let sandbox_note = sandbox.describe();
     if !sandbox_note.is_empty() {
         app.current_tab().status_message = format!("Ready ({})", sandbox_note);
     }
+    if let Some(problem) = settings_problems.first() {
+        let more = if settings_problems.len() > 1 { " (and more)" } else { "" };
+        app.current_tab().status_message = format!("Problem in settings.conf, {}{}", problem, more);
+    }
+    app.open_home_page();
 
     // Initialize MCP
     //app.init_mcp().await;

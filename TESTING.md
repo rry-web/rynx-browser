@@ -208,6 +208,25 @@ Worth repeating after any dependency upgrade.
       *Expected:* the page opens (no download prompt). Links ending in `.zip`, `.pdf` etc. still go
       to the download prompt.
 
+## Settings and bookmarks
+
+- [ ] **SET-01 Settings template.** After the first run, open `settings.conf` in your config
+      folder (see the README).
+      *Expected:* it exists with every option commented out.
+- [ ] **SET-02 Search engine.** Set `search_url = https://html.duckduckgo.com/html/?q={query}`,
+      restart, press `e`, type some words and press Enter.
+      *Expected:* DuckDuckGo results appear directly.
+- [ ] **SET-03 Home page.** Set `home_page`, restart, and press `n`.
+      *Expected:* the browser and new tabs open the home page.
+- [ ] **SET-04 Bad settings.** Add a line `colour = blue` and restart.
+      *Expected:* the status line reports the problem; everything else works.
+- [ ] **SET-05 Bookmarks.** Press `b` on a page, then `B`.
+      *Expected:* the bookmarks page lists it; selecting it opens the page. Restart and press `B`:
+      it's still there. Pressing `b` on that page again removes it.
+- [ ] **SET-06 (priority) Bookmarks under the Linux sandbox.** On Linux with the sandbox active,
+      add a bookmark and restart.
+      *Expected:* the bookmark was saved (the settings folder is writable in the sandbox).
+
 ## Scrolling and input
 
 - [ ] **SCROLL-01 (priority) Touchpad scrolling keeps up.** On the Moby Dick page, scroll

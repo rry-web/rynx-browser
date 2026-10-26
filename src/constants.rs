@@ -43,6 +43,8 @@ pub const MAX_REDIRECTS: usize = 10;
 
 // Search URLs
 pub const MARGINALIA_SEARCH_URL: &str = "https://search.marginalia.nu/search?";
+/// Default search engine; {query} is replaced by the search words. Changeable in settings.conf.
+pub const DEFAULT_SEARCH_URL: &str = "https://search.marginalia.nu/search?query={query}";
 
 pub const DOWNLOAD_PROMPT_WIDTH_DIVISOR: u16 = 2; // 50% of terminal width
 pub const DOWNLOAD_PROMPT_X_DIVISOR: u16 = 4;     // Centered at 25% offset

@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 88 (16 priority).
+Total checks: 94 (17 priority).
 
 
 ## Automated checks
@@ -87,6 +87,17 @@ Total checks: 88 (16 priority).
 | HIST-02 | Forward and reload |  |  |  |  |
 | HIST-03 | Paging keys |  |  |  |  |
 | HIST-04 | Links to /files/ pages |  |  |  |  |
+
+## Settings and bookmarks
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| SET-01 | Settings template |  |  |  |  |
+| SET-02 | Search engine |  |  |  |  |
+| SET-03 | Home page |  |  |  |  |
+| SET-04 | Bad settings |  |  |  |  |
+| SET-05 | Bookmarks |  |  |  |  |
+| SET-06 | Bookmarks under the Linux sandbox | Yes |  |  |  |
 
 ## Scrolling and input
 
