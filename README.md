@@ -18,6 +18,8 @@ To run the test suite:
 cargo test
 ```
 
+For hands-on checks of terminal, touchpad, download and I2P behaviour, see [TESTING.md](TESTING.md).
+
 ## Key Bindings & Controls
 
 ### Navigation (Normal Mode)
