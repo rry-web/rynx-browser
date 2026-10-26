@@ -4,6 +4,7 @@ pub mod app;
 pub mod bookmarks;
 pub mod constants;
 pub mod event_handler;
+pub mod feeds;
 pub mod forms;
 pub mod gemini;
 pub mod gopher;

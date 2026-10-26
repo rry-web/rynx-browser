@@ -26,6 +26,7 @@ directories = "6.0.0"
 # Gemini: TLS connections outside reqwest, and certificate fingerprints (both already used by rustls)
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
 ring = "0.17.14"
+quick-xml = "0.42.0"
 
 # Tagging downloads with their origin (macOS quarantine, Linux xdg origin)
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]

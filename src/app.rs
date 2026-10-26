@@ -1036,6 +1036,12 @@ impl App {
                     }
 
                     match crate::network::read_text_limited(resp, MAX_PAGE_SIZE_BYTES).await {
+                        Ok(body) if crate::feeds::is_feed(content_type.as_deref(), &body) => {
+                            let (title, html) = crate::feeds::feed_to_html(&body);
+                            let _ = tx_clone
+                                .send(NetworkResponse::Success(id, title, html, final_url, PageKind::Html))
+                                .await;
+                        }
                         Ok(body) => {
                             // The page isn't parsed here; an HTML page's <title> replaces this
                             // name once the page has been laid out

@@ -704,11 +704,44 @@ impl DomRenderer {
     }
 
     pub fn render(&mut self, document: &Html) {
+        self.render_feed_links(document);
         for node in document.tree.root().children() {
             self.walk(node);
         }
         self.marker_pending = false;
         self.flush_line();
+    }
+
+    /// RSS and Atom feeds the page announces in its <head>, as links above the page
+    fn render_feed_links(&mut self, document: &Html) {
+        static FEEDS: OnceLock<Selector> = OnceLock::new();
+        let selector =
+            FEEDS.get_or_init(|| Selector::parse(r#"link[rel~="alternate"][href]"#).expect("valid selector"));
+        let feeds: Vec<(&str, &str)> = document
+            .select(selector)
+            .filter_map(|link| {
+                let kind = match link.value().attr("type")?.trim().to_ascii_lowercase().as_str() {
+                    "application/rss+xml" => "RSS",
+                    "application/atom+xml" => "Atom",
+                    _ => return None,
+                };
+                let title = link.value().attr("title").map(str::trim).filter(|t| !t.is_empty()).unwrap_or(kind);
+                Some((link.value().attr("href")?, title))
+            })
+            .take(5)
+            .collect();
+        if feeds.is_empty() {
+            return;
+        }
+        self.push_text("Feeds: ");
+        for (i, (href, title)) in feeds.into_iter().enumerate() {
+            if i > 0 {
+                self.push_text(" · ");
+            }
+            self.push_link_text(title, href);
+        }
+        self.flush_line();
+        self.push_blank_line();
     }
 
     /// Render plain text (text/plain, JSON, source code...). Lines and indentation are kept, long

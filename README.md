@@ -19,6 +19,8 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
   screen.
 - **Private and hardened:** no cookies, no JavaScript, HTTPS everywhere, and on Linux a filesystem
   sandbox. See [Security and privacy](#security-and-privacy).
+- **The small web:** [Gemini](https://geminiprotocol.net) and Gopher sites, and RSS/Atom feeds
+  shown as readable pages.
 - **I2P:** browse `.i2p` sites through a local I2P router.
 
 ## Installation
@@ -70,6 +72,11 @@ To use a form, select a field and press **Enter** to start typing, then **Enter*
 (or **Esc** to stop typing). There are no cookies, so sites that need you to log in won't keep
 you signed in.
 
+Type `gemini://` or `gopher://` addresses as you would a web address. Gemini input prompts and
+Gopher searches appear as a form with one text field. Opening an RSS or Atom feed shows its posts
+as a page, and pages that announce a feed show a `Feeds:` link above the page. Gemini and Gopher
+aren't available in I2P mode, and downloading from them isn't supported yet.
+
 Downloads (**`d`** on a link) are saved to your Downloads folder after you confirm.
 
 Press **`b`** to bookmark a page (again to remove it) and **`B`** to see your bookmarks. Press
@@ -90,8 +97,8 @@ download_dir = /path/to/folder
 history = on
 ```
 
-Bookmarks are kept next to it in `bookmarks.txt`, and history (when `history = on`) in
-`history.txt`. Pages visited in I2P mode are never saved to the history file.
+Bookmarks are kept next to it in `bookmarks.txt`, history (when `history = on`) in
+`history.txt`, and the certificates of Gemini sites you've visited in `gemini_known_hosts.txt`. Pages visited in I2P mode are never saved to the history file.
 
 ## Key bindings
 
@@ -179,6 +186,12 @@ that:
 - **Safe downloads:** files are tagged as coming from the internet (macOS quarantine, Windows Mark
   of the Web, Linux `user.xdg.origin.url`) so your OS checks them before they run; filenames are
   made safe on every OS, and existing files are never overwritten silently.
+- **Gemini and Gopher:** Gemini sites usually have self-signed certificates, so the first one
+  seen for each site is remembered, and a different one later is refused unless it's signed by a
+  certificate authority. Gopher is unencrypted, like plain HTTP. A public page can't link to Gopher
+  or Gemini on your local network (where a crafted Gopher link could send commands to services
+  like Redis), and Gopher addresses containing line breaks are refused. Feeds are read without
+  expanding XML entities, so entity bombs can't exhaust memory.
 - **I2P:** in I2P mode all traffic goes through the I2P proxy, and `.i2p` addresses are never looked
   up outside it.
 - **Maintained dependencies:** `cargo audit` runs in CI on every change and weekly.
@@ -188,6 +201,7 @@ that:
 ```sh
 cargo test                                   # unit, integration and randomised renderer tests
 cargo test --test live_tls -- --ignored      # TLS checks against public test servers
+cargo test --test smallweb --test feeds -- --ignored   # real Gemini, Gopher and feed sites
 FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render
 ```
 
@@ -211,7 +225,7 @@ builds every platform and publishes the release. Tags containing `-` become pre-
 - [x] **Bookmarks**
 - [x] **Settings file** (home page, search engine, I2P proxy, downloads folder)
 - [x] **Persistent history** (opt-in)
-- [ ] **Gopher, Gemini and RSS** support
+- [x] **Gopher, Gemini and RSS** support
 - [ ] **MCP support** as an alternative to JavaScript
 
 If you want to contribute, open an issue or pull request on GitHub.

@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 102 (18 priority).
+Total checks: 110 (19 priority).
 
 
 ## Automated checks
@@ -17,6 +17,7 @@ Total checks: 102 (18 priority).
 | AUTO-02 | Dependency audit |  |  |  |  |
 | AUTO-03 | Live TLS checks |  |  |  |  |
 | AUTO-06 | I2P TLS settings |  |  |  |  |
+| AUTO-07 | Live Gemini, Gopher and feeds |  |  |  |  |
 | AUTO-04 | Extended fuzzing |  |  |  |  |
 | AUTO-05 | CI runs on GitHub | Yes |  |  |  |
 
@@ -181,6 +182,18 @@ Total checks: 102 (18 priority).
 | REL-01 | First beta release | Yes |  |  |  |
 | REL-02 | Verify a downloaded build | Yes |  |  |  |
 | REL-03 | Run each platform's build | Yes |  |  |  |
+
+## Gemini, Gopher and feeds
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| SMALL-01 | Gemini |  |  |  |  |
+| SMALL-02 | Gemini input | Yes |  |  |  |
+| SMALL-03 | Gemini certificates |  |  |  |  |
+| SMALL-04 | Gopher |  |  |  |  |
+| SMALL-05 | Not in I2P mode |  |  |  |  |
+| SMALL-06 | Feeds |  |  |  |  |
+| SMALL-07 | Bookmarks and history |  |  |  |  |
 
 ## I2P (needs a local I2P router on 127.0.0.1:4444)
 

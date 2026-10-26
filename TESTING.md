@@ -22,6 +22,9 @@ These run in CI (`.github/workflows/ci.yml`) on every push and weekly, but can b
 - [ ] **AUTO-06 I2P TLS settings.** `cargo test --lib -- --ignored` (needs internet): the TLS
       configuration used for I2P connections (bundled root certificates) connects over HTTP/2
       and rejects bad certificates and TLS 1.1, checked without needing an I2P router.
+- [ ] **AUTO-07 Live Gemini, Gopher and feeds.** `cargo test --test smallweb --test feeds -- --ignored`
+      (needs internet): geminiprotocol.net, gopher.floodgap.com and the Rust blog's feed load and
+      convert.
 - [ ] **AUTO-04 Extended fuzzing.** `FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render`: randomised
       renderer and UI cases (about 4 minutes). Reproduce a failure with `FUZZ_SEED=<seed>`.
 - [ ] **AUTO-05 (priority) CI runs on GitHub.** After pushing to GitHub, open the repository's **Actions** tab.
@@ -410,6 +413,32 @@ Worth repeating after any dependency upgrade.
 - [ ] **REL-03 (priority) Run each platform's build.** On each OS you have, extract and run the
       binary, following the release notes for the unsigned-binary warning.
       *Expected:* it starts and browses normally.
+
+## Gemini, Gopher and feeds
+
+- [ ] **SMALL-01 Gemini.** Press `e`, type `gemini://geminiprotocol.net/` and press Enter.
+      *Expected:* the page shows with `⇒` before each link, one per line; `Tab` and Enter follow
+      them, and Back returns.
+- [ ] **SMALL-02 (priority) Gemini input.** Open a Gemini search engine such as
+      `gemini://geminispace.info/search`.
+      *Expected:* a page with the prompt and a text field. Press Enter, type some words, press
+      Enter: the results appear, and the address ends in `?your%20words`.
+- [ ] **SMALL-03 Gemini certificates.** After SMALL-01, open `gemini_known_hosts.txt` in the
+      config folder. Change the fingerprint after `geminiprotocol.net:1965` to zeros, save,
+      and reload the page (`r`).
+      *Expected:* the host was listed. With the changed fingerprint the page is refused with
+      "certificate has changed" (unless the site's certificate is CA-signed, in which case it
+      loads and the fingerprint is corrected). Delete the line to visit it normally again.
+- [ ] **SMALL-04 Gopher.** Open `gopher://gopher.floodgap.com/`.
+      *Expected:* the menu's text art lines up, items are marked `[DIR]`, `[TXT]`, `[ ? ]`;
+      a `[TXT]` item opens as text; a `[ ? ]` search item asks for words and shows results.
+- [ ] **SMALL-05 Not in I2P mode.** Press `p`, then open a `gemini://` or `gopher://` address.
+      *Expected:* "Gemini and Gopher aren't available in I2P mode", and nothing is fetched.
+- [ ] **SMALL-06 Feeds.** Open `https://blog.rust-lang.org/feed.xml`.
+      *Expected:* the blog's title, "Feed with N items", then each post with its date and text.
+      Open `https://blog.rust-lang.org/`: the first line reads `Feeds:` with a link to the feed.
+- [ ] **SMALL-07 Bookmarks and history.** Bookmark a Gemini page (`b`), then check `B` and `s`.
+      *Expected:* both list the page by its first heading, and selecting it opens it again.
 
 ## I2P (needs a local I2P router on 127.0.0.1:4444)
 

@@ -6,6 +6,21 @@
 - History: `s` lists the pages you've visited, newest first by day. It's kept in memory unless
   `history = on` is set in settings.conf, which saves it to `history.txt`. Visits in I2P mode
   and passwords in addresses are never saved. `x` twice on the history page clears it.
+- Gemini: `gemini://` addresses, with links, headings, lists, quotes and preformatted text;
+  input prompts become a form. Certificates are trusted on first use and remembered in
+  `gemini_known_hosts.txt`; a changed certificate is refused unless CA-signed.
+- Gopher: `gopher://` menus (kept as fixed-width text, with item types marked), text documents,
+  and searches.
+- RSS and Atom feeds open as a page listing each post with its date and content, and pages that
+  announce a feed show a `Feeds:` link at the top.
+
+### Security
+- Public pages can't link to Gopher or Gemini on the local network, and Gopher addresses with
+  line breaks are refused, so a link can't send commands to local services like Redis.
+- IP addresses are recognised in every kind of address: `gopher://127.0.0.1/` (or disguises like
+  `2130706433`) counts as local, which the URL parser left as a plain name for non-web schemes.
+- Gemini and Gopher are refused in I2P mode, since they don't go through the I2P proxy.
+- Feeds are parsed without expanding XML entities, so entity bombs can't exhaust memory.
 
 ## [0.2.0-beta.1]
 
