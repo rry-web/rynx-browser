@@ -276,6 +276,10 @@ impl BrowserTab {
             self.status_message = String::from("A download is already in progress in this tab");
             return;
         }
+        if let Some(scheme) = crate::network::unsupported_link_scheme(&url) {
+            self.status_message = format!("Unsupported link type: {}", scheme);
+            return;
+        }
 
         let sanitized_name = App::download_filename(&url);
         let target_path = download_dir.join(&sanitized_name);
@@ -388,6 +392,9 @@ impl App {
     }
 
     pub fn open_link_in_new_tab(&mut self, url: String) {
+        if self.reject_unsupported_link(&url) {
+            return;
+        }
         let new_tab = BrowserTab::new(self.id_counter, url);
         self.tabs.push(new_tab);
         self.active_tab_index = self.tabs.len() - 1;
@@ -395,8 +402,22 @@ impl App {
         self.submit_request();
     }
 
+    /// Refuse links the browser can't open, explaining why in the status line
+    fn reject_unsupported_link(&mut self, url: &str) -> bool {
+        match crate::network::unsupported_link_scheme(url) {
+            Some(scheme) => {
+                self.current_tab().status_message = format!("Unsupported link type: {}", scheme);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Follow a link in the current tab, recording the current address in history
     pub fn follow_link(&mut self, url: String) {
+        if self.reject_unsupported_link(&url) {
+            return;
+        }
         let tab = self.current_tab();
         if !tab.url_input.is_empty() {
             tab.history.push(tab.url_input.clone());

@@ -1131,3 +1131,33 @@ async fn test_page_charset_is_honoured() {
     let NetworkResponse::Success(_, _, body, _) = resp else { panic!("page failed") };
     assert!(body.contains("café"), "{body}");
 }
+
+#[tokio::test]
+async fn test_non_web_links_are_refused() {
+    let links = [
+        ("mailto:someone@example.com", "mailto"),
+        ("javascript:alert(document.cookie)", "javascript"),
+        ("file:///etc/passwd", "file"),
+        ("data:text/html,<p>hi</p>", "data"),
+    ];
+    let html: String = links.iter().map(|(href, _)| format!("<p><a href=\"{href}\">x</a></p>")).collect();
+    let mut app = test_app();
+    load_page(&mut app, &html);
+
+    for (i, (_, scheme)) in links.iter().enumerate() {
+        app.current_tab().selected_link_index = i;
+        for code in [KeyCode::Enter, KeyCode::Char('t'), KeyCode::Char('d')] {
+            handle_key_event::<TestBackend>(&mut app, key(code), 80, 24).unwrap();
+            let tab = app.current_tab();
+            assert_eq!(tab.status_message, format!("Unsupported link type: {scheme}"), "{code:?}");
+            tab.status_message.clear();
+        }
+    }
+
+    let tab = app.current_tab();
+    assert_eq!(tab.url_input, TEST_PAGE_URL);
+    assert!(tab.history.is_empty());
+    assert!(tab.download_prompt.is_none());
+    assert_eq!(app.tabs.len(), 1, "a new tab was opened");
+    assert!(!made_request(&mut app).await);
+}

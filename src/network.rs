@@ -26,6 +26,13 @@ pub fn fragment_of(url: &str) -> Option<String> {
     Url::parse(url).ok()?.fragment().map(str::to_string)
 }
 
+/// The scheme of a link the browser can't open (mailto:, javascript:, file:, data:, ...).
+/// Such links used to be treated as typed text, leaking them to unrelated hosts or search.
+pub fn unsupported_link_scheme(url: &str) -> Option<String> {
+    let scheme = Url::parse(url).ok()?.scheme().to_string();
+    (scheme != "http" && scheme != "https").then_some(scheme)
+}
+
 /// Resolve relative URLs against a base URL
 pub fn resolve_url(base: &str, target: &str) -> String {
     // If target is already a full URL (e.g. https://google.com), return it immediately
