@@ -52,6 +52,10 @@ const SKIPPED_TAGS: &[&str] = &[
 
 const BULLETS: &[&str] = &["•", "◦", "▪"];
 
+/// Elements nested deeper than this are rendered as plain text. Rendering recurses once per
+/// level, and ~10,000 nested <div>s (60KB of HTML) used to overflow the stack and crash.
+const MAX_NESTING: usize = 256;
+
 /// Drawn at the start of every line inside a block: list indentation, quote bars
 #[derive(Clone, Copy)]
 enum LinePrefix {
@@ -157,6 +161,8 @@ pub struct DomRenderer {
     preserve_whitespace: bool,
     prefix_stack: Vec<LinePrefix>,
     list_stack: Vec<ListKind>,
+    /// How many elements deep the walk currently is
+    depth: usize,
 }
 
 impl DomRenderer {
@@ -183,6 +189,7 @@ impl DomRenderer {
             preserve_whitespace: false,
             prefix_stack: Vec::new(),
             list_stack: Vec::new(),
+            depth: 0,
         }
     }
 
@@ -474,6 +481,11 @@ impl DomRenderer {
         if SKIPPED_TAGS.contains(&tag) || is_hidden(elem) {
             return;
         }
+        if self.depth >= MAX_NESTING {
+            // ElementRef::text walks the subtree iteratively, so this can't overflow the stack
+            let text: String = element.text().collect();
+            return self.push_text(&text);
+        }
 
         // Elements drawn without walking their children
         match tag {
@@ -545,9 +557,11 @@ impl DomRenderer {
             self.anchors.entry(name.to_string()).or_insert(self.lines.len());
         }
 
+        self.depth += 1;
         for child in element.children() {
             self.walk(child);
         }
+        self.depth -= 1;
 
         let after = self.close_element(tag);
         if after != AfterElement::Nothing {

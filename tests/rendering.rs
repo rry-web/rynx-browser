@@ -189,3 +189,11 @@ fn details_show_their_summary_and_content() {
         ["▸ More info", "Hidden by default"]
     );
 }
+
+#[test]
+fn extremely_deep_nesting_does_not_overflow_the_stack() {
+    // Rendering recursed once per element; ~10,000 levels overflowed the stack and crashed.
+    // Test threads have smaller stacks than the main thread, so this is a stricter check.
+    let html = format!("{}deep text{}", "<span>".repeat(20_000), "</span>".repeat(20_000));
+    assert_eq!(text_lines(&html, 80), ["deep text"]);
+}
