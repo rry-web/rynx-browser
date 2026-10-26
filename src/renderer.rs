@@ -127,6 +127,12 @@ impl DomRenderer {
                     }
                 }
 
+                // A zero-width character (combining mark, zero-width space) can't start a
+                // clickable region on its own
+                if width == 0 {
+                    continue;
+                }
+
                 // Create a new link region for this character
                 self.links.push(crate::models::LinkRegion {
                     url: url.clone(),
@@ -139,9 +145,15 @@ impl DomRenderer {
     }
 
     /// Ensures indentation is applied at the start of a wrapped line
+    /// Indentation for a list nesting depth, capped at half the width so deeply nested lists
+    /// still leave room for their text
+    fn indent_for_depth(&self, depth: usize) -> String {
+        " ".repeat((2 * depth).min(self.max_width / 2))
+    }
+
     fn apply_indentation(&mut self) {
         if self.current_line_width == 0 && self.list_depth > 0 {
-            let indent = "  ".repeat(self.list_depth);
+            let indent = self.indent_for_depth(self.list_depth);
             self.push_span_to_line(indent);
         }
     }
@@ -177,11 +189,12 @@ impl DomRenderer {
             while !remaining.is_empty() {
                 self.apply_indentation();
 
-                let available_space = self.max_width.saturating_sub(self.current_line_width);
-                if available_space == 0 {
-                    self.flush_line();
-                    continue;
-                }
+                // Place at least one character per line, so the loop always makes progress even
+                // when indentation fills the line or the content area is 0 columns wide
+                let available_space = self
+                    .max_width
+                    .saturating_sub(self.current_line_width)
+                    .max(1);
 
                 let mut current_width = 0;
                 let mut split_idx = 0;
@@ -291,8 +304,12 @@ impl DomRenderer {
                     }
                     "li" => {
                         self.flush_line();
-                        let bullet =
-                            format!("{}• ", "  ".repeat(self.list_depth.saturating_sub(1)));
+                        // The bullet's padding comes on top of the list indent; keep the two
+                        // together within the same half-width cap
+                        let indent = self.indent_for_depth(self.list_depth).len();
+                        let padding = (2 * self.list_depth.saturating_sub(1))
+                            .min((self.max_width / 2).saturating_sub(indent));
+                        let bullet = format!("{}• ", " ".repeat(padding));
                         self.push_word(&bullet);
                     }
                     "img" => {

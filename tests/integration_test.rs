@@ -1236,3 +1236,44 @@ async fn test_downloads_are_quarantined_for_gatekeeper() {
     assert!(output.status.success(), "no quarantine attribute on {saved}");
     assert!(value.starts_with("0081;") && value.contains(";rynx_browser;"), "{value}");
 }
+
+/// Render on another thread so a regression into an infinite loop fails instead of hanging
+fn render_within_time_limit(html: String, width: usize) -> Vec<String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let document = scraper::Html::parse_document(&html);
+        let mut renderer = rynx_browser::renderer::DomRenderer::new(width);
+        renderer.render(&document);
+        let _ = tx.send(renderer.lines.iter().map(|l| l.to_string()).collect());
+    });
+    rx.recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap_or_else(|_| panic!("rendering at width {width} did not finish (infinite loop?)"))
+}
+
+#[test]
+fn test_deeply_nested_lists_do_not_hang_renderer() {
+    // ~200 bytes of HTML used to freeze the browser at a normal terminal width
+    let html = format!("{}<li>deep item{}", "<ul>".repeat(60), "</ul>".repeat(60));
+    let lines = render_within_time_limit(html, 80);
+    assert!(lines.iter().any(|l| l.contains("deep item")), "{lines:?}");
+    // Indentation is capped so the text stays on screen
+    assert!(lines.iter().all(|l| unicode_width::UnicodeWidthStr::width(l.as_str()) <= 80 - 2 + 1));
+}
+
+#[test]
+fn test_zero_width_content_area_does_not_hang_renderer() {
+    // A terminal 2 columns wide leaves 0 columns for content
+    for width in 0..=3 {
+        let lines = render_within_time_limit("<p>hello world</p><ul><li>x</li></ul>".into(), width);
+        assert!(lines.concat().contains("hello"), "width {width}: {lines:?}");
+    }
+}
+
+#[test]
+fn test_zero_width_characters_do_not_create_empty_link_regions() {
+    let document = scraper::Html::parse_document("<a href='/x'>\u{200b}</a><a href='/y'>e\u{301}</a>");
+    let mut renderer = rynx_browser::renderer::DomRenderer::new(80);
+    renderer.render(&document);
+    assert!(renderer.links.iter().all(|l| l.x_start < l.x_end));
+    assert!(renderer.links.iter().any(|l| l.url == "/y"));
+}
