@@ -8,22 +8,22 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
 use ratatui::backend::Backend;
 use std::io::Result;
 
-/// Determines if a URL likely points to a downloadable file based on extension or patterns
+/// Whether a clicked link should go straight to the download prompt: its file name has an
+/// extension for something that can't be shown as a page. Other links are opened, and a file that
+/// turns out not to be displayable gets a download page anyway.
 fn is_downloadable_file(url: &str) -> bool {
-    let u = url.to_lowercase();
-    // Restored common types that users expect to download via click
-    let binary_exts = [
-        "zip", "pdf", "exe", "dmg", "pkg", "deb", "iso", "mp4", "mp3",
-        "png", "jpg", "jpeg", "gif", "docx", "xlsx", "tar", "gz", "ogg", "txt"
+    const BINARY_EXTENSIONS: &[&str] = &[
+        "zip", "pdf", "exe", "dmg", "pkg", "deb", "iso", "mp4", "mp3", "png", "jpg", "jpeg", "gif",
+        "docx", "xlsx", "tar", "gz", "ogg",
     ];
-
-    if let Some(dot) = u.rfind('.') {
-        let ext = u[dot + 1..].split('?').next().unwrap_or("");
-        if binary_exts.contains(&ext) { return true; }
-    }
-
-    // Catch common dynamic download paths
-    ["/download/", "/files/", "/assets/", "/attachments/"].iter().any(|p| u.contains(p))
+    // Only the path's file name counts, not the host or a query like ?file=a.zip
+    let Ok(parsed) = url::Url::parse(url) else {
+        return false;
+    };
+    let file_name = parsed.path_segments().and_then(|mut s| s.next_back()).unwrap_or("");
+    file_name
+        .rsplit_once('.')
+        .is_some_and(|(_, ext)| BINARY_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
 }
 
 /// Rows available for page content: tab bar (3) + URL bar (3) + content borders (2) are subtracted
@@ -53,7 +53,24 @@ fn handle_normal_mode<B: Backend>(
     terminal_width: u16,
     terminal_height: u16,
 ) -> Result<bool> {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let page = viewport_height(terminal_height) as isize;
     match key.code {
+        // --- PAGING ---
+        KeyCode::PageDown => app.current_tab().scroll_by(page, viewport_height(terminal_height)),
+        KeyCode::PageUp => app.current_tab().scroll_by(-page, viewport_height(terminal_height)),
+        KeyCode::Char('f') if ctrl => app.current_tab().scroll_by(page, viewport_height(terminal_height)),
+        KeyCode::Char('b') if ctrl => app.current_tab().scroll_by(-page, viewport_height(terminal_height)),
+        KeyCode::Char('d') if ctrl => app.current_tab().scroll_by(page / 2, viewport_height(terminal_height)),
+        KeyCode::Char('u') if ctrl => app.current_tab().scroll_by(-page / 2, viewport_height(terminal_height)),
+        KeyCode::Char('g') | KeyCode::Home => app.current_tab().scroll_to_top(),
+        KeyCode::Char('G') | KeyCode::End => app.current_tab().scroll_to_bottom(viewport_height(terminal_height)),
+
+        // --- HISTORY ---
+        KeyCode::Right | KeyCode::Char('L') => app.go_forward(),
+        KeyCode::Char('H') => app.go_back(),
+        KeyCode::Char('r') => app.reload(),
+
         // --- VISUAL MODE ---
         KeyCode::Char('v') => app.current_tab().enter_visual_mode(),
 
@@ -240,8 +257,11 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
             let tab = app.current_tab();
             // Save the page we're leaving, not the address that was just typed
             if let Some(previous_url) = tab.url_before_edit.take().filter(|u| !u.is_empty()) {
-                tab.history.push(previous_url);
+                let entry = tab.history_entry(previous_url);
+                tab.history.push(entry);
             }
+            tab.forward_history.clear();
+            tab.cancel_restore();
 
             app.load_url_input(false);
             app.current_tab().input_mode = InputMode::Normal;
@@ -546,6 +566,7 @@ pub fn handle_network_event<B: Backend>(
                 tab.page_url = Some(page_url);
 
                 tab.jump_after_render(fragment);
+                tab.restore_position_after_render();
                 app.render_tab(index, terminal_width);
                 if app.is_rendering(index) {
                     app.tabs[index].status_message = String::from(crate::app::RENDERING_STATUS);
@@ -584,6 +605,7 @@ pub fn handle_network_event<B: Backend>(
                 tab.reset_page_state();
                 tab.page_url = None;
                 tab.pending_fragment = None;
+                tab.cancel_restore();
                 tab.status_message = String::from("Error");
                 app.render_tab(index, terminal_width);
             }

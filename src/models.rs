@@ -1,5 +1,13 @@
 use ratatui::text::Line;
 
+/// A page in a tab's history, with where it was scrolled to
+#[derive(Clone, Debug, PartialEq)]
+pub struct HistoryEntry {
+    pub url: String,
+    pub scroll: usize,
+    pub cursor_line: usize,
+}
+
 #[derive(Clone)]
 pub struct LinkRegion {
     pub url: String,

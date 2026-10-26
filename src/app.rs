@@ -2,7 +2,7 @@ use crate::constants::{
     DEFAULT_TAB_INDEX, INITIAL_ID_COUNTER, INITIAL_TAB_ID, MARGINALIA_SEARCH_URL,
     DOWNLOAD_PROGRESS_INTERVAL_MS, MAX_PAGE_SIZE_BYTES,
 };
-use crate::models::{InputMode, LinkRegion, SearchState, Selection};
+use crate::models::{HistoryEntry, InputMode, LinkRegion, SearchState, Selection};
 use crate::network::{
     ContentClass, NetworkManager, NetworkResponse, PageKind, attempt_jump, classify_content_type,
     fragment_of, should_attempt_jump,
@@ -33,7 +33,9 @@ pub struct BrowserTab {
     pub link_regions: Vec<LinkRegion>,
     pub page_title: String,
     pub scroll: usize,
-    pub history: Vec<String>,
+    pub history: Vec<HistoryEntry>,
+    /// Pages left by going back, for going forward again
+    pub forward_history: Vec<HistoryEntry>,
     pub selected_link_index: usize,
     pub input_mode: InputMode,
     pub status_message: String,
@@ -64,6 +66,11 @@ pub struct BrowserTab {
     render_pending_width: Option<u16>,
     /// #fragment to jump to once the page has been laid out
     jump_after_render: Option<String>,
+    /// Scroll and cursor position to return to when the page being loaded arrives (going back,
+    /// forward or reloading)
+    pending_restore: Option<(usize, usize)>,
+    /// That position, once the page has arrived and is waiting to be laid out
+    restore_after_render: Option<(usize, usize)>,
 }
 
 impl BrowserTab {
@@ -179,9 +186,45 @@ impl BrowserTab {
         self.anchors.clear();
     }
 
+    /// The current page as a history entry, at `url`
+    pub fn history_entry(&self, url: String) -> HistoryEntry {
+        HistoryEntry { url, scroll: self.scroll, cursor_line: self.cursor_line }
+    }
+
     /// Jump to `fragment` once the page being laid out is ready
     pub fn jump_after_render(&mut self, fragment: Option<String>) {
         self.jump_after_render = fragment;
+    }
+
+    /// A new page has arrived: if it was loaded by going back, forward or reloading, return to
+    /// the saved position once it's laid out (instead of any #fragment)
+    pub fn restore_position_after_render(&mut self) {
+        self.restore_after_render = self.pending_restore.take();
+    }
+
+    /// Forget a saved position, e.g. when the load failed
+    pub fn cancel_restore(&mut self) {
+        self.pending_restore = None;
+        self.restore_after_render = None;
+    }
+
+    fn restore_position(&mut self, (scroll, cursor_line): (usize, usize)) {
+        let last_line = self.rendered_content.len().saturating_sub(1);
+        self.scroll = scroll.min(last_line);
+        self.cursor_line = cursor_line.min(last_line);
+        self.cursor_char = 0;
+    }
+
+    pub fn scroll_to_top(&mut self) {
+        self.scroll = 0;
+        self.cursor_line = 0;
+        self.cursor_char = 0;
+    }
+
+    pub fn scroll_to_bottom(&mut self, viewport_height: usize) {
+        self.scroll = self.rendered_content.len().saturating_sub(viewport_height.max(1));
+        self.cursor_line = self.rendered_content.len().saturating_sub(1);
+        self.cursor_char = 0;
     }
 
     fn apply_render(&mut self, page: RenderedPage) {
@@ -192,7 +235,10 @@ impl BrowserTab {
             self.page_title = title;
         }
         self.clamp_positions();
-        if let Some(fragment) = self.jump_after_render.take() {
+        let fragment = self.jump_after_render.take();
+        if let Some(position) = self.restore_after_render.take() {
+            self.restore_position(position);
+        } else if let Some(fragment) = fragment {
             self.jump_to_fragment(&fragment);
         }
     }
@@ -227,6 +273,7 @@ impl BrowserTab {
             page_title: String::from("New Tab"),
             scroll: 0,
             history: Vec::new(),
+            forward_history: Vec::new(),
             selected_link_index: 0,
             input_mode: InputMode::Normal,
             status_message: String::from("Ready"),
@@ -248,6 +295,8 @@ impl BrowserTab {
             render_in_flight: None,
             render_pending_width: None,
             jump_after_render: None,
+            pending_restore: None,
+            restore_after_render: None,
         }
     }
 
@@ -515,26 +564,58 @@ impl App {
         }
     }
 
-    /// Follow a link in the current tab, recording the current address in history
+    /// Follow a link in the current tab, recording the current page in history
     pub fn follow_link(&mut self, url: String) {
         if self.reject_unsupported_link(&url) {
             return;
         }
         let tab = self.current_tab();
         if !tab.url_input.is_empty() {
-            tab.history.push(tab.url_input.clone());
+            let entry = tab.history_entry(tab.url_input.clone());
+            tab.history.push(entry);
         }
+        tab.forward_history.clear();
+        tab.pending_restore = None;
         tab.url_input = url;
         self.load_url_input(false);
     }
 
-    /// Return to the previous history entry
+    /// Return to the previous page, where it was scrolled to
     pub fn go_back(&mut self) {
         let tab = self.current_tab();
-        if let Some(previous_url) = tab.history.pop() {
-            tab.url_input = previous_url;
-            self.load_url_input(true);
+        if let Some(entry) = tab.history.pop() {
+            let current = tab.history_entry(tab.url_input.clone());
+            tab.forward_history.push(current);
+            self.revisit(entry);
         }
+    }
+
+    /// Return to the page left by going back
+    pub fn go_forward(&mut self) {
+        let tab = self.current_tab();
+        if let Some(entry) = tab.forward_history.pop() {
+            let current = tab.history_entry(tab.url_input.clone());
+            tab.history.push(current);
+            self.revisit(entry);
+        }
+    }
+
+    fn revisit(&mut self, entry: HistoryEntry) {
+        let tab = self.current_tab();
+        tab.url_input = entry.url;
+        tab.pending_restore = Some((entry.scroll, entry.cursor_line));
+        self.load_url_input(true);
+    }
+
+    /// Fetch the current page again, keeping the scroll position
+    pub fn reload(&mut self) {
+        let tab = self.current_tab();
+        if tab.page_url.is_none() {
+            // The start page or an error page; nothing to fetch
+            return;
+        }
+        tab.pending_restore = Some((tab.scroll, tab.cursor_line));
+        self.submit_request();
     }
 
     /// Load the address in url_input, or jump within the displayed page when only the
@@ -544,18 +625,17 @@ impl App {
         let tab = self.current_tab();
         let url = tab.url_input.clone();
         if tab.is_current_document(&url) {
-            match fragment_of(&url) {
-                Some(fragment) => {
-                    tab.page_url = Some(url);
-                    tab.jump_to_fragment(&fragment);
-                    return;
+            let fragment = fragment_of(&url);
+            if from_history || fragment.is_some() {
+                tab.page_url = Some(url);
+                match (tab.pending_restore.take(), fragment) {
+                    (Some(position), _) => tab.restore_position(position),
+                    (None, Some(fragment)) => {
+                        tab.jump_to_fragment(&fragment);
+                    }
+                    (None, None) => tab.scroll_to_top(),
                 }
-                None if from_history => {
-                    tab.page_url = Some(url);
-                    tab.jump_to_fragment("");
-                    return;
-                }
-                None => {}
+                return;
             }
         }
         self.submit_request();

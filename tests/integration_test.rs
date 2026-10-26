@@ -216,6 +216,10 @@ fn start_download(app: &mut App, url: &str) {
     app.trigger_download(prompt);
 }
 
+fn history_urls(tab: &rynx_browser::app::BrowserTab) -> Vec<&str> {
+    tab.history.iter().map(|entry| entry.url.as_str()).collect()
+}
+
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent {
         code,
@@ -329,7 +333,7 @@ async fn test_typed_url_records_previous_page_in_history() {
     type_text(&mut app, "http://127.0.0.1:1/second");
     handle_key_event::<TestBackend>(&mut app, key(KeyCode::Enter), 80, 24).unwrap();
 
-    assert_eq!(app.current_tab().history, vec!["http://127.0.0.1:1/first"]);
+    assert_eq!(history_urls(&app.tabs[0]), ["http://127.0.0.1:1/first"]);
     assert_eq!(app.current_tab().url_input, "http://127.0.0.1:1/second");
 }
 
@@ -799,7 +803,7 @@ async fn test_fragment_link_jumps_within_page_without_reloading() {
     assert_eq!(tab.scroll, anchor_line);
     assert_eq!(tab.cursor_line, anchor_line);
     assert_eq!(tab.url_input, format!("{TEST_PAGE_URL}#ch2"));
-    assert_eq!(tab.history, vec![TEST_PAGE_URL]);
+    assert_eq!(history_urls(tab), [TEST_PAGE_URL]);
     // Tab continues from the chapter, not from the top of the page
     assert_eq!(tab.link_regions[tab.selected_link_index].url, "next.html");
     assert!(!made_request(&mut app).await, "fragment link refetched the page");
@@ -1571,4 +1575,123 @@ async fn test_downloads_record_their_origin() {
     let (saved, origin) = download_sample(&mut app, "tool.zip").await;
     let recorded = xattr::get(&saved, "user.xdg.origin.url").unwrap().expect("no origin attribute");
     assert_eq!(String::from_utf8(recorded).unwrap(), origin);
+}
+
+
+/// Load a page at a URL the way a finished network request would
+fn arrive(app: &mut App, url: &str, html: &str) {
+    let id = app.current_tab().id;
+    handle_network_event::<TestBackend>(
+        app,
+        NetworkResponse::Success(id, "Page".into(), html.into(), url.into(), PageKind::Html),
+        80,
+    )
+    .unwrap();
+}
+
+fn long_page(label: &str) -> String {
+    (0..100).map(|i| format!("<p>{label} line {i}</p>")).collect()
+}
+
+#[tokio::test]
+async fn test_back_and_forward_restore_scroll_positions() {
+    let mut app = test_app();
+    let first = "http://127.0.0.1:1/first";
+    let second = "http://127.0.0.1:1/second";
+    app.current_tab().url_input = first.into();
+    arrive(&mut app, first, &format!("{}<a href='/second'>next</a>", long_page("first")));
+    app.current_tab().scroll = 40;
+    app.current_tab().cursor_line = 45;
+
+    // Follow a link, scroll the second page, then go back
+    app.follow_link(second.into());
+    arrive(&mut app, second, &long_page("second"));
+    assert_eq!(app.current_tab().scroll, 0);
+    app.current_tab().scroll = 12;
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
+    assert_eq!(app.current_tab().url_input, first);
+    arrive(&mut app, first, &long_page("first"));
+    assert_eq!((app.current_tab().scroll, app.current_tab().cursor_line), (40, 45));
+    assert_eq!(app.current_tab().forward_history.len(), 1);
+
+    // Forward returns to the second page where it was left
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Right), 80, 24).unwrap();
+    assert_eq!(app.current_tab().url_input, second);
+    arrive(&mut app, second, &long_page("second"));
+    assert_eq!(app.current_tab().scroll, 12);
+
+    // Following a new link clears the forward history
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('H')), 80, 24).unwrap();
+    arrive(&mut app, first, &long_page("first"));
+    app.follow_link("http://127.0.0.1:1/third".into());
+    assert!(app.current_tab().forward_history.is_empty());
+}
+
+#[tokio::test]
+async fn test_back_within_a_page_restores_position_without_reloading() {
+    let mut app = test_app();
+    app.current_tab().url_input = TEST_PAGE_URL.into();
+    arrive(&mut app, TEST_PAGE_URL, &book_page());
+    app.current_tab().scroll = 7;
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Enter), 80, 24).unwrap(); // #ch2
+    assert!(app.current_tab().scroll > 7);
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
+    assert_eq!(app.current_tab().scroll, 7);
+    assert!(!made_request(&mut app).await);
+}
+
+#[tokio::test]
+async fn test_reload_keeps_the_scroll_position() {
+    let mut app = test_app();
+    app.current_tab().url_input = TEST_PAGE_URL.into();
+    arrive(&mut app, TEST_PAGE_URL, &long_page("page"));
+    app.current_tab().scroll = 30;
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('r')), 80, 24).unwrap();
+    assert!(made_request(&mut app).await, "reload didn't fetch the page");
+    arrive(&mut app, TEST_PAGE_URL, &long_page("page"));
+    assert_eq!(app.current_tab().scroll, 30);
+}
+
+#[tokio::test]
+async fn test_paging_keys() {
+    let mut app = test_app();
+    arrive(&mut app, TEST_PAGE_URL, &long_page("page"));
+    let total = app.current_tab().rendered_content.len();
+    let ctrl = |c| KeyEvent { code: KeyCode::Char(c), modifiers: KeyModifiers::CONTROL, kind: KeyEventKind::Press, state: KeyEventState::empty() };
+    // 24 rows leaves 16 visible
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::PageDown), 80, 24).unwrap();
+    assert_eq!(app.current_tab().scroll, 16);
+    handle_key_event::<TestBackend>(&mut app, ctrl('d'), 80, 24).unwrap();
+    assert_eq!(app.current_tab().scroll, 24);
+    assert!(app.current_tab().download_prompt.is_none(), "Ctrl+d must not start a download");
+    handle_key_event::<TestBackend>(&mut app, ctrl('u'), 80, 24).unwrap();
+    assert_eq!(app.current_tab().scroll, 16);
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('G')), 80, 24).unwrap();
+    assert_eq!(app.current_tab().scroll, total - 16);
+    assert_eq!(app.current_tab().cursor_line, total - 1);
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('g')), 80, 24).unwrap();
+    assert_eq!((app.current_tab().scroll, app.current_tab().cursor_line), (0, 0));
+}
+
+#[tokio::test]
+async fn test_only_binary_file_links_skip_straight_to_downloading() {
+    use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    use rynx_browser::event_handler::handle_mouse_event;
+
+    let click = |row| MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: 2, row, modifiers: KeyModifiers::empty() };
+    for (href, prompts) in [
+        ("/files/report.zip", true),
+        ("/files/index.html", false), // /files/ is an ordinary page path on many sites
+        ("/download/", false),
+        ("/notes.txt", false),         // shown as text now
+        ("/page?file=a.zip", false),   // the query doesn't make it a download
+    ] {
+        let mut app = test_app();
+        arrive(&mut app, TEST_PAGE_URL, &format!("<a href='{href}'>link</a>"));
+        // The page's first line is drawn at row 7 (below the tab bar and address bar)
+        handle_mouse_event::<TestBackend>(&mut app, click(7), 80, 24).unwrap();
+        assert_eq!(app.current_tab().download_prompt.is_some(), prompts, "{href}");
+    }
 }
