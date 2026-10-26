@@ -590,6 +590,23 @@ impl App {
         }
     }
     /// Start downloading a confirmed prompt into exactly the path that was shown to the user
+    /// Tag a download as coming from the internet, as Safari and Chrome do, so macOS Gatekeeper
+    /// checks it before it is first opened. Value format: flags;hex timestamp;agent;event id.
+    #[cfg(target_os = "macos")]
+    fn mark_quarantined(path: &Path) -> std::io::Result<()> {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let value = format!("0081;{:08x};rynx_browser;", timestamp);
+        xattr::set(path, "com.apple.quarantine", value.as_bytes())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn mark_quarantined(_path: &Path) -> std::io::Result<()> {
+        Ok(())
+    }
+
     /// Return `path`, or `name_1.ext`, `name_2.ext`, ... if it already exists
     fn unused_path(path: &Path) -> PathBuf {
         if !path.exists() {
@@ -686,6 +703,9 @@ impl App {
                             return;
                         }
                     };
+                    // Tag before writing, so even a partial download is checked on first open.
+                    // Best effort: some filesystems (e.g. FAT USB drives) have no extended attributes.
+                    let _ = Self::mark_quarantined(&file_path);
                     file_handle = Some((file, file_path.display().to_string()));
                 }
 

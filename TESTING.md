@@ -111,6 +111,11 @@ Stop them afterwards with `kill %1 %2` (or `pkill -f http.server; pkill -f bomb_
 - [ ] **One download per tab.** Start a large download, then press `d` on another link in the
       same tab.
       *Expected:* "A download is already in progress in this tab".
+- [ ] **(priority) Gatekeeper checks downloads (macOS).** Download a small unsigned app or
+      script (e.g. a `.zip` containing a `.app` from a GitHub release), then open it from
+      Finder.
+      *Expected:* macOS shows its "downloaded from the internet" warning.
+      `xattr -l ~/Downloads/<file>` shows `com.apple.quarantine: 0081;...;rynx_browser;`.
 - [ ] **HTTP download links are upgraded.** Download a file from an `http://` link to a
       public site.
       *Expected:* it's fetched over `https://`. If the site has no HTTPS, it fails instead of

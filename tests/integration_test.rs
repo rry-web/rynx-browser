@@ -1210,3 +1210,29 @@ async fn test_selected_link_destination_is_shown() {
     terminal.draw(|f| ui(f, &app)).unwrap();
     assert!(screen_text(&terminal).contains("Link: https://xn--pple-43d.com/"), "{}", screen_text(&terminal));
 }
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn test_downloads_are_quarantined_for_gatekeeper() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/tool.zip"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(b"PK\x03\x04zip".to_vec()))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let dir = app.download_dir.clone();
+    start_download(&mut app, &format!("{}/tool.zip", mock_server.uri()));
+    let (resp, _) = finish_download(&mut app).await;
+    let NetworkResponse::DownloadFinished(_, saved) = resp else { panic!("download failed") };
+
+    let output = std::process::Command::new("/usr/bin/xattr")
+        .args(["-p", "com.apple.quarantine", &saved])
+        .output()
+        .unwrap();
+    let value = String::from_utf8_lossy(&output.stdout);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(output.status.success(), "no quarantine attribute on {saved}");
+    assert!(value.starts_with("0081;") && value.contains(";rynx_browser;"), "{value}");
+}
