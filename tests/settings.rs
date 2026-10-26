@@ -225,3 +225,57 @@ async fn visits_are_listed_on_the_history_page_and_can_be_cleared() {
     assert!(app.history.entries.is_empty());
     assert!(text(&mut app).contains("No pages visited yet"));
 }
+
+#[test]
+fn user_agent_setting_is_checked() {
+    assert!(Settings::default().user_agent.starts_with("rynx/"), "honest by default");
+    assert!(!Settings::default().user_agent.contains("Mozilla"));
+    let (settings, problems) = Settings::parse("user_agent = Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0");
+    assert!(problems.is_empty());
+    assert_eq!(settings.user_agent, "Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0");
+    // Anything that could break the header is refused
+    for bad in ["user_agent = a\u{7f}b", "user_agent = caf\u{e9}", &format!("user_agent = {}", "x".repeat(300))] {
+        let (settings, problems) = Settings::parse(bad);
+        assert_eq!(problems.len(), 1, "{bad}");
+        assert_eq!(settings.user_agent, Settings::default().user_agent);
+    }
+}
+
+/// The User-Agent each request to a local server carried
+async fn user_agents_sent(settings: Settings, i2p: bool) -> Vec<String> {
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+    let server = MockServer::start().await;
+    Mock::given(wiremock::matchers::any())
+        .respond_with(ResponseTemplate::new(200).set_body_raw("<p>hi</p>", "text/html"))
+        .mount(&server)
+        .await;
+    let mut settings = settings;
+    // In I2P mode the local server stands in for the I2P proxy
+    settings.i2p_proxy = server.uri();
+    let mut app = test_app(settings);
+    app.i2p_mode = i2p;
+    app.current_tab().url_input = if i2p { "http://site.i2p/".into() } else { format!("{}/", server.uri()) };
+    app.submit_request();
+    loop {
+        let resp = app.rx.recv().await.unwrap();
+        let done = matches!(resp, NetworkResponse::Success(..) | NetworkResponse::Error(..));
+        handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+        if done {
+            break;
+        }
+    }
+    let requests = server.received_requests().await.unwrap();
+    requests.iter().map(|r| r.headers.get("user-agent").unwrap().to_str().unwrap().to_string()).collect()
+}
+
+#[tokio::test]
+async fn the_user_agent_is_sent() {
+    let default = user_agents_sent(Settings::default(), false).await;
+    assert_eq!(default, [rynx_browser::constants::USER_AGENT]);
+
+    let (custom, _) = Settings::parse("user_agent = Custom/1.0");
+    assert_eq!(user_agents_sent(custom.clone(), false).await, ["Custom/1.0"]);
+
+    // I2P mode always sends the generic one, whatever the setting
+    assert_eq!(user_agents_sent(custom, true).await, [rynx_browser::constants::I2P_USER_AGENT]);
+}

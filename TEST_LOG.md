@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 116 (20 priority).
+Total checks: 117 (20 priority).
 
 
 ## Automated checks
@@ -104,6 +104,7 @@ Total checks: 116 (20 priority).
 | SET-04 | Bad settings |  |  |  |  |
 | SET-05 | Bookmarks |  |  |  |  |
 | SET-06 | Bookmarks under the Linux sandbox | Yes |  |  |  |
+| SET-11 | User-Agent |  |  |  |  |
 | SET-07 | Session history |  |  |  |  |
 | SET-08 | Saved history |  |  |  |  |
 | SET-09 | Clearing history |  |  |  |  |

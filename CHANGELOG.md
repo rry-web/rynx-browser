@@ -19,6 +19,13 @@
   Streamable HTTP transport (JSON or event-stream answers), including `about:tools?server=...`
   typed by hand. Opening an MCP server's address as a page says what it is and links to its tools.
 
+### Changed
+- rynx now introduces itself honestly as `rynx/<version> (+<project page>)` instead of
+  pretending to be Safari. Bot walls like Anubis challenge "Mozilla" browsers with JavaScript
+  but let text browsers through: git.kernel.org, for one, now opens directly instead of showing
+  a challenge. The `user_agent` setting changes it; I2P mode always sends the generic
+  `MYOB/6.66 (AN/ON)`.
+
 ### Fixed
 - The download confirmation box now takes every key until answered: other keys (even `q`) used
   to act on the page underneath while it was open.

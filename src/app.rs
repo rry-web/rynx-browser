@@ -519,7 +519,7 @@ impl App {
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let initial_tab =
             BrowserTab::new(INITIAL_TAB_ID, String::from("https://www.rust-lang.org"));
-        let network_manager = Arc::new(NetworkManager::with_i2p_proxy(&settings.i2p_proxy)?);
+        let network_manager = Arc::new(NetworkManager::with_settings(&settings.i2p_proxy, &settings.user_agent)?);
         let download_dir = settings.download_dir.clone().unwrap_or_else(Self::default_download_dir);
         Ok(Self {
             tabs: vec![initial_tab],

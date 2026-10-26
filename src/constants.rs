@@ -1,5 +1,10 @@
-// User Agent constant
-pub const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
+/// How rynx introduces itself to websites. Honest, like Lynx and w3m: bot walls such as Anubis
+/// challenge browsers that claim to be "Mozilla", and let text browsers that don't straight through.
+/// Changeable with `user_agent` in settings.conf.
+pub const USER_AGENT: &str = concat!("rynx/", env!("CARGO_PKG_VERSION"), " (+https://github.com/rry-web/rynx-browser)");
+/// Sent in I2P mode whatever the setting, so I2P visits don't stand out: it's what the I2P router's
+/// HTTP proxy puts in requests it can see, and HTTPS requests through an outproxy it can't rewrite.
+pub const I2P_USER_AGENT: &str = "MYOB/6.66 (AN/ON)";
 
 // Network configuration
 pub const I2P_PROXY_URL: &str = "http://127.0.0.1:4444";

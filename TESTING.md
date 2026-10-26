@@ -249,6 +249,10 @@ Worth repeating after any dependency upgrade.
 - [ ] **SET-06 (priority) Bookmarks under the Linux sandbox.** On Linux with the sandbox active,
       add a bookmark and restart.
       *Expected:* the bookmark was saved (the settings folder is writable in the sandbox).
+- [ ] **SET-11 User-Agent.** Open `https://git.kernel.org/`.
+      *Expected:* the repository list, not an Anubis "Making sure you're not a bot" page. Then set
+      `user_agent` to a browser's string (see the template in settings.conf), restart, and open
+      it again: now the challenge page appears. Remove the setting afterwards.
 - [ ] **SET-07 Session history.** With no `history` setting, visit a few pages and press `s`.
       *Expected:* the history page lists them newest first, under a date heading, with their
       titles; selecting one opens it. Restart and press `s`: it's empty, and no `history.txt`

@@ -1,6 +1,6 @@
 use crate::constants::{
-    BROWSING_TIMEOUT_SECS, DOWNLOAD_TIMEOUT_SECS, I2P_PROXY_URL, JUMP_SERVICES, MAX_REDIRECTS,
-    USER_AGENT,
+    BROWSING_TIMEOUT_SECS, DOWNLOAD_TIMEOUT_SECS, I2P_PROXY_URL, I2P_USER_AGENT, JUMP_SERVICES,
+    MAX_REDIRECTS, USER_AGENT,
 };
 use reqwest::{Client, StatusCode};
 use std::time::Duration;
@@ -269,31 +269,37 @@ impl NetworkManager {
 
     /// Clients for browsing and downloading, with I2P traffic sent through `i2p_proxy`
     pub fn with_i2p_proxy(i2p_proxy: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Self::with_settings(i2p_proxy, USER_AGENT)
+    }
+
+    /// Clients introducing themselves as `user_agent` on the clearweb, with I2P traffic sent
+    /// through `i2p_proxy`
+    pub fn with_settings(i2p_proxy: &str, user_agent: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         // Our clients carry their own TLS config, but a reqwest Client built without one panics
         // when no process-wide crypto provider is installed. Already-installed is fine.
         let _ = rustls::crypto::ring::default_provider().install_default();
 
         // Create all four clients using the build_client helper method
         let client = Self::build_client(
-            USER_AGENT,
+            user_agent,
             Duration::from_secs(BROWSING_TIMEOUT_SECS),
             false,
             i2p_proxy,
         )?;
         let i2p_client = Self::build_client(
-            USER_AGENT,
+            I2P_USER_AGENT,
             Duration::from_secs(BROWSING_TIMEOUT_SECS),
             true,
             i2p_proxy,
         )?;
         let download_client = Self::build_client(
-            USER_AGENT,
+            user_agent,
             Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
             false,
             i2p_proxy,
         )?;
         let i2p_download_client = Self::build_client(
-            USER_AGENT,
+            I2P_USER_AGENT,
             Duration::from_secs(DOWNLOAD_TIMEOUT_SECS),
             true,
             i2p_proxy,
