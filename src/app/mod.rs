@@ -29,9 +29,11 @@ use tokio::io::AsyncWriteExt; // Required for streaming to file
 mod downloads;
 mod fetch;
 mod pages;
+mod settings_page;
 mod tab;
 mod tools;
 
+pub use settings_page::SETTINGS_PAGE;
 pub use tab::BrowserTab;
 
 /// Status shown while a new page is laid out in the background
@@ -44,6 +46,8 @@ pub struct App {
     pub tx: mpsc::Sender<NetworkResponse>,
     pub rx: mpsc::Receiver<NetworkResponse>,
     pub i2p_mode: bool,
+    /// Where settings, bookmarks and history are saved; None if the system has no such folder
+    pub config_dir: Option<PathBuf>,
     /// None when no system clipboard is available (e.g. SSH or a headless session)
     pub clipboard: Option<arboard::Clipboard>,
     pub network_manager: Arc<NetworkManager>,
@@ -94,7 +98,9 @@ impl App {
             id_counter: INITIAL_ID_COUNTER,
             tx,
             rx,
-            i2p_mode: false,
+            // Locked to I2P in the settings: start there
+            i2p_mode: settings.network == crate::settings::NetworkMode::I2p,
+            config_dir: None,
             clipboard: arboard::Clipboard::new().ok(),
             network_manager,
             download_dir,
@@ -290,8 +296,11 @@ impl App {
         } else {
             url
         };
-        let internal =
-            url == BOOKMARKS_PAGE || url == HISTORY_PAGE || url == HELP_PAGE || url.starts_with(crate::mcp::TOOLS_PAGE);
+        let internal = url == BOOKMARKS_PAGE
+            || url == HISTORY_PAGE
+            || url == HELP_PAGE
+            || url == SETTINGS_PAGE
+            || url.starts_with(crate::mcp::TOOLS_PAGE);
         if !internal && self.reject_unsupported_link(&url) {
             return;
         }
@@ -385,6 +394,12 @@ impl App {
         let tab = self.current_tab();
         tab.stop_editing();
         let base = tab.link_base().to_string();
+        // The settings page's form saves settings; like the tools page below, only the browser's
+        // own page can do this, never a web page's form
+        if tab.page_url.is_none() && tab.url_input == SETTINGS_PAGE {
+            self.save_settings_form(form);
+            return;
+        }
         // Forms on the browser's tools page run tools; a web page's forms can never reach them
         if tab.page_url.is_none() && tab.url_input.starts_with(crate::mcp::TOOLS_PAGE) {
             let tool = tab

@@ -128,12 +128,18 @@ Press **`b`** to bookmark a page (again to remove it) and **`B`** to see your bo
 
 ## Settings
 
-The first run creates `settings.conf` in your config folder (`~/.config/rynx-browser` on Linux,
+Press **`S`** for the settings page: every setting as a form, applied as soon as you save (except
+the downloads folder, which changes when rynx next starts), with links to your history and
+bookmarks. The **Network** choice locks rynx to the clearweb or to I2P: locked to I2P, it starts
+in I2P mode and `p` can't leave it, so a stray key press can't send a page outside I2P.
+
+Settings are kept in `settings.conf`. The first run creates it in your config folder (`~/.config/rynx-browser` on Linux,
 `~/Library/Application Support/rynx-browser` on macOS, `%APPDATA%\rynx-browser\config` on Windows),
 with every option commented out. Remove the `#` to use one:
 
 ```ini
 home_page = https://en.wikipedia.org/
+network = i2p
 search_url = https://html.duckduckgo.com/html/?q={query}
 i2p_proxy = http://127.0.0.1:4444
 download_dir = /path/to/folder
@@ -217,7 +223,8 @@ The same list is on the start page.
 | **`v`** | Copy mode: select text with `h` `j` `k` `l` or the arrow keys, **`y`** copies it, **`Esc`** cancels |
 | **`R`** | Reader mode: only the page's main text (stays on as you follow links; `R` again for the whole page) |
 | **`Shift+V`** | Show the page source |
-| **`p`** | Toggle I2P mode (through the proxy at `127.0.0.1:4444`) |
+| **`p`** | Switch I2P mode on or off (through the proxy at `127.0.0.1:4444`), unless settings lock it |
+| **`S`** | Settings |
 | **`q`** | Quit |
 
 ## Security and privacy

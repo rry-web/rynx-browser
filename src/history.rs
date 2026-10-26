@@ -71,6 +71,25 @@ impl History {
         self.path.is_some()
     }
 
+    /// Start saving to `path` (keeping what's already there, then this session's visits), or stop
+    /// saving with None. Stopping leaves the file as it is; clearing the history empties it.
+    pub fn save_to(&mut self, path: Option<PathBuf>) -> Result<(), String> {
+        let Some(path) = path else {
+            self.path = None;
+            return Ok(());
+        };
+        let mut saved = History::load(path);
+        for visit in std::mem::take(&mut self.entries) {
+            saved.entries.retain(|v| v.url != visit.url);
+            saved.entries.push(visit);
+        }
+        if saved.entries.len() > MAX_HISTORY {
+            saved.entries.drain(..saved.entries.len() - MAX_HISTORY);
+        }
+        *self = saved;
+        self.save()
+    }
+
     /// Record a visit to `url`, moving an earlier visit to the same page to the end. `private`
     /// visits are listed for this session but never saved.
     pub fn record(&mut self, url: &str, title: &str, private: bool) -> Result<(), String> {

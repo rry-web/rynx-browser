@@ -129,6 +129,7 @@ async fn run(
     // Setup Channel
     let (tx, rx) = tokio::sync::mpsc::channel(rynx::constants::CHANNEL_CAPACITY);
     let mut app = App::with_settings(tx, rx, settings)?;
+    app.config_dir = config_dir.clone();
     if let Some(dir) = &config_dir {
         app.bookmarks = Bookmarks::load(dir.join(rynx::bookmarks::BOOKMARKS_FILE));
         app.gemini_hosts = std::sync::Arc::new(std::sync::Mutex::new(rynx::gemini::KnownHosts::load(

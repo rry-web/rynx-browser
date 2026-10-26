@@ -1,0 +1,193 @@
+//! The settings page (about:settings): every setting as a form, saved to settings.conf and applied
+//! straight away. Only this browser-made page can change settings; web pages' forms can't.
+
+use super::*;
+use crate::network::escape_html;
+use crate::settings::NetworkMode;
+
+/// The address of the settings page
+pub const SETTINGS_PAGE: &str = "about:settings";
+
+/// Text fields on the page: (setting key, label, explanation)
+const TEXT_FIELDS: &[(&str, &str, &str)] = &[
+    ("home_page", "Home page", "Opened in new tabs. Empty: the start page with the key bindings."),
+    ("search_url", "Search engine", "Words typed in the address bar are searched here; {query} is replaced by them."),
+    (
+        "user_agent",
+        "Browser identity (User-Agent)",
+        "How rynx introduces itself on the clearweb. I2P mode always sends a generic one.",
+    ),
+    ("i2p_proxy", "I2P proxy", "The I2P router's HTTP proxy, used in I2P mode."),
+    (
+        "download_dir",
+        "Downloads folder",
+        "Empty: your Downloads folder. Takes effect when rynx next starts, since the sandbox fixes it then.",
+    ),
+];
+
+impl App {
+    /// The settings page, filled in with the current settings
+    pub(super) fn settings_page_html(&self) -> String {
+        let s = &self.settings;
+        let mut html = String::from(
+            "<title>Settings</title><h1>Settings</h1>\
+             <p><a href=\"about:history\">History</a> · <a href=\"about:bookmarks\">Bookmarks</a> · \
+             <a href=\"about:help\">Keys and help</a></p><form action=\"about:settings-save\">",
+        );
+        // The network lock first: it's the one that matters for privacy
+        let network = s.network;
+        let option = |value: &str, label: &str, mode: NetworkMode| {
+            let selected = if network == mode { " selected" } else { "" };
+            format!("<option value=\"{value}\"{selected}>{label}</option>")
+        };
+        html.push_str(&format!(
+            "<h2>Network</h2><p>{}{}{}</p>\
+             <p>Locking to I2P starts rynx in I2P mode and stops p from leaving it, so a stray key press \
+             can't send a page outside I2P.</p>",
+            "<select name=\"network\">",
+            [
+                option("switchable", "Clearweb, switch to I2P with p", NetworkMode::Switchable),
+                option("clearweb", "Always the clearweb", NetworkMode::Clearweb),
+                option("i2p", "Always I2P", NetworkMode::I2p),
+            ]
+            .concat(),
+            "</select>",
+        ));
+
+        html.push_str("<h2>Browsing</h2>");
+        for (key, label, about) in TEXT_FIELDS {
+            let value = match *key {
+                "home_page" => s.home_page.clone().unwrap_or_default(),
+                "search_url" => s.search_url.clone(),
+                "user_agent" => s.user_agent.clone(),
+                "i2p_proxy" => s.i2p_proxy.clone(),
+                _ => s.download_dir.as_ref().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default(),
+            };
+            html.push_str(&format!(
+                "<p><b>{}</b>: {}<br><input type=\"text\" name=\"{}\" size=\"70\" value=\"{}\"></p>",
+                escape_html(label),
+                escape_html(about),
+                key,
+                escape_html(&value)
+            ));
+        }
+        let checkbox = |name: &str, on: bool, label: &str| {
+            let checked = if on { " checked" } else { "" };
+            format!("<p><input type=\"checkbox\" name=\"{name}\" value=\"on\"{checked}> {label}</p>")
+        };
+        html.push_str("<h2>Privacy</h2>");
+        html.push_str(&checkbox(
+            "history",
+            s.save_history,
+            "Save history to disk (otherwise it's kept until you quit; I2P visits are never saved)",
+        ));
+        html.push_str(&checkbox(
+            "anubis",
+            s.solve_anubis,
+            "Pass Anubis bot checks by doing their proof of work, without JavaScript",
+        ));
+        html.push_str("<p><input type=\"submit\" value=\"Save settings\"></p></form>");
+        match &self.config_dir {
+            Some(dir) => html.push_str(&format!(
+                "<p>Saved to {}, which can also be edited by hand (saving here rewrites it).</p>",
+                escape_html(&dir.join(crate::settings::SETTINGS_FILE).to_string_lossy())
+            )),
+            None => html.push_str("<p>There's no settings folder on this system, so changes last until you quit.</p>"),
+        }
+        html
+    }
+
+    /// Save the settings page's form: check it as the settings file would be, write the file and
+    /// apply the new settings
+    pub(super) fn save_settings_form(&mut self, form: usize) {
+        let tab = &self.tabs[self.active_tab_index];
+        let mut lines = Vec::new();
+        let mut history = false;
+        let mut anubis = false;
+        for (control, value) in tab.controls.iter().zip(&tab.control_values) {
+            if control.form != Some(form) {
+                continue;
+            }
+            match (control.name.as_str(), value) {
+                ("history", ControlValue::Checked(on)) => history = *on,
+                ("anubis", ControlValue::Checked(on)) => anubis = *on,
+                (key, ControlValue::Text(text)) if !text.trim().is_empty() => {
+                    // One line per setting: a line break typed in can't add a setting
+                    lines.push(format!("{} = {}", key, text.replace(['\r', '\n'], " ").trim()))
+                }
+                (key, ControlValue::Selected(i)) => {
+                    if let ControlKind::Select { options } = &control.kind
+                        && let Some(option) = options.get(*i)
+                    {
+                        lines.push(format!("{} = {}", key, option.value));
+                    }
+                }
+                _ => {}
+            }
+        }
+        lines.push(format!("history = {}", if history { "on" } else { "off" }));
+        lines.push(format!("anubis = {}", if anubis { "on" } else { "off" }));
+
+        let (settings, problems) = crate::settings::Settings::parse(&lines.join("\n"));
+        if let Some(problem) = problems.first() {
+            // "line 3: invalid home_page ..." means nothing on this page; the rest does
+            let problem = problem.split_once(": ").map(|(_, p)| p).unwrap_or(problem);
+            self.current_tab().status_message = format!("Not saved: {}", problem);
+            return;
+        }
+        let saved = match &self.config_dir {
+            Some(dir) => settings.save(dir).map(|_| "Settings saved"),
+            None => Ok("Settings applied (no settings folder to save them in)"),
+        };
+        match saved {
+            Ok(message) => {
+                let restart = settings.download_dir != self.settings.download_dir;
+                let message = match self.apply_settings(settings) {
+                    Err(e) => e,
+                    Ok(()) if restart => format!("{}; the downloads folder changes when rynx next starts", message),
+                    Ok(()) => message.to_string(),
+                };
+                self.show_internal_page(SETTINGS_PAGE);
+                self.current_tab().status_message = message;
+            }
+            Err(e) => self.current_tab().status_message = e,
+        }
+    }
+
+    /// Put new settings into effect without restarting (except the downloads folder, which the
+    /// sandbox fixes at startup)
+    fn apply_settings(&mut self, new: crate::settings::Settings) -> Result<(), String> {
+        if new.user_agent != self.settings.user_agent || new.i2p_proxy != self.settings.i2p_proxy {
+            let network = NetworkManager::with_settings(&new.i2p_proxy, &new.user_agent)
+                .map_err(|e| format!("Settings saved, but they couldn't be applied: {}", e))?;
+            self.network_manager = Arc::new(network);
+        }
+        match new.network {
+            NetworkMode::I2p => self.i2p_mode = true,
+            NetworkMode::Clearweb => self.i2p_mode = false,
+            NetworkMode::Switchable => {}
+        }
+        if new.save_history != self.settings.save_history {
+            let path = new
+                .save_history
+                .then(|| self.config_dir.as_ref().map(|d| d.join(crate::history::HISTORY_FILE)))
+                .flatten();
+            self.history.save_to(path)?;
+        }
+        self.settings = new;
+        Ok(())
+    }
+
+    /// p: switch between the clearweb and I2P, unless the settings lock it
+    pub fn toggle_i2p_mode(&mut self) {
+        let message = match self.settings.network {
+            NetworkMode::Switchable => {
+                self.i2p_mode = !self.i2p_mode;
+                if self.i2p_mode { "I2P mode on" } else { "I2P mode off: clearweb" }
+            }
+            NetworkMode::I2p => "I2P mode is locked on in settings (S)",
+            NetworkMode::Clearweb => "I2P mode is turned off in settings (S)",
+        };
+        self.current_tab().status_message = message.to_string();
+    }
+}

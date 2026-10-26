@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- A settings page (`S`, or `about:settings`): every setting as a form, checked like the settings
+  file and applied as soon as it's saved (the downloads folder when rynx next starts), with links
+  to history and bookmarks. Only the browser's own page can change settings, never a web page's
+  form.
+- `network = switchable | clearweb | i2p`: lock rynx to the clearweb or to I2P. Locked to I2P it
+  starts in I2P mode and `p` can't leave it.
+- Turning history saving on keeps the session's history so far.
+
+### Changed
+- `settings.conf` is written from one description of every setting, so the first-run file and one
+  saved from the settings page document the same options.
+
 ## [0.2.0-beta.4]
 
 Reader mode, and a filesystem sandbox on macOS.

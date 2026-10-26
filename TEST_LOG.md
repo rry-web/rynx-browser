@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 124 (23 priority).
+Total checks: 126 (24 priority).
 
 
 ## Automated checks
@@ -107,6 +107,8 @@ Total checks: 124 (23 priority).
 | SET-11 | User-Agent |  |  |  |  |
 | SET-12 | Anubis | Yes |  |  |  |
 | SET-13 | Copy mode |  |  |  |  |
+| SET-14 | Settings page |  |  |  |  |
+| SET-15 | I2P lock | Yes |  |  |  |
 | SET-07 | Session history |  |  |  |  |
 | SET-08 | Saved history |  |  |  |  |
 | SET-09 | Clearing history |  |  |  |  |

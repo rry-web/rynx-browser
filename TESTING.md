@@ -262,6 +262,15 @@ Worth repeating after any dependency upgrade.
       *Expected:* the address bar's title reads COPY MODE (black on cyan) with the number of
       characters selected, the bar explains the keys, and the selection is black on cyan and easy
       to read. `y` reports "Copied N characters to the clipboard"; the address comes back.
+- [ ] **SET-14 Settings page.** Press `S`, change the home page and search engine, tick "Save
+      history", and choose Save settings.
+      *Expected:* "Settings saved"; settings.conf now has those lines; `n` opens the new home
+      page; a search uses the new engine. A home page like `javascript:x` is refused with "Not
+      saved: invalid home_page".
+- [ ] **SET-15 (priority) I2P lock.** On the settings page choose "Always I2P" and save, then press
+      `p`, restart rynx, and press `p` again.
+      *Expected:* I2P mode turns on at once; `p` says it's locked; after restarting, rynx starts
+      in I2P mode. "Always the clearweb" makes `p` do nothing the other way.
 - [ ] **SET-07 Session history.** With no `history` setting, visit a few pages and press `s`.
       *Expected:* the history page lists them newest first, under a date heading, with their
       titles; selecting one opens it. Restart and press `s`: it's empty, and no `history.txt`

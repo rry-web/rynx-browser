@@ -23,6 +23,7 @@ impl App {
         let (title, html) = match address {
             BOOKMARKS_PAGE => ("Bookmarks", self.bookmarks.page_html()),
             HISTORY_PAGE => ("History", self.history.page_html()),
+            SETTINGS_PAGE => ("Settings", self.settings_page_html()),
             HELP_PAGE | "about:home" => ("Start", include_str!("../../assets/help.html").to_string()),
             _ => return false,
         };

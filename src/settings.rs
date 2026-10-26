@@ -4,36 +4,87 @@ use std::path::{Path, PathBuf};
 
 pub const SETTINGS_FILE: &str = "settings.conf";
 
-/// Written on first run so the options are easy to discover
-const TEMPLATE: &str = "\
-# rynx-browser settings. Lines starting with # are comments; remove the # to use a setting.
+/// One setting as the file documents it: its key, the comment above it, and examples shown
+/// commented out while the setting is left at its default
+struct Documented {
+    key: &'static str,
+    about: &'static str,
+    examples: &'static [&'static str],
+}
 
-# Page opened in new tabs (by default, the start page with the key bindings)
-# home_page = https://en.wikipedia.org/
+const HEADER: &str = "# rynx-browser settings. Lines starting with # are comments; remove the # to use a setting.\n\
+                      # They can also be changed in the browser: press S. Saving there rewrites this file.\n";
 
-# Search engine for words typed in the address bar. {query} is replaced by the search words.
-# search_url = https://html.duckduckgo.com/html/?q={query}
-# search_url = https://search.marginalia.nu/search?query={query}
+const DOCUMENTED: &[Documented] = &[
+    Documented {
+        key: "home_page",
+        about: "Page opened in new tabs (by default, the start page with the key bindings)",
+        examples: &["https://en.wikipedia.org/"],
+    },
+    Documented {
+        key: "network",
+        about: "Clearweb or I2P: \"switchable\" (the default) switches with p; \"clearweb\" or \"i2p\" stays\n\
+                there, so a stray p can't leave I2P (or enter it). i2p also starts in I2P mode.",
+        examples: &["i2p"],
+    },
+    Documented {
+        key: "search_url",
+        about: "Search engine for words typed in the address bar. {query} is replaced by the search words.",
+        examples: &["https://html.duckduckgo.com/html/?q={query}", "https://search.marginalia.nu/search?query={query}"],
+    },
+    Documented {
+        key: "i2p_proxy",
+        about: "Address of the I2P router's HTTP proxy, used in I2P mode",
+        examples: &["http://127.0.0.1:4444"],
+    },
+    Documented {
+        key: "download_dir",
+        about: "Where downloads are saved (by default, your Downloads folder). Takes effect when rynx starts.",
+        examples: &["/path/to/folder"],
+    },
+    Documented {
+        key: "user_agent",
+        about: "How rynx introduces itself to websites (by default rynx/<version> (+<project page>)).\n\
+                Sites that refuse unknown browsers may work with a common browser's, but bot walls like Anubis\n\
+                then demand JavaScript. I2P mode always sends a generic one instead, so visits don't stand out.",
+        examples: &[
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+        ],
+    },
+    Documented {
+        key: "anubis",
+        about: "Anubis bot checks (\"Making sure you're not a bot\") are passed by doing their proof of work\n\
+                natively, without JavaScript. Turn it off to see the check's page instead.",
+        examples: &["off"],
+    },
+    Documented {
+        key: "history",
+        about: "Save the pages you visit to history.txt, so the history page (s) keeps them after you quit.\n\
+                Off by default: history is then kept only until you quit. Pages visited in I2P mode are never saved.",
+        examples: &["on"],
+    },
+];
 
-# Address of the I2P router's HTTP proxy, used in I2P mode
-# i2p_proxy = http://127.0.0.1:4444
+/// Whether the browser may switch between the clearweb and I2P
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum NetworkMode {
+    /// `p` switches; starts on the clearweb
+    Switchable,
+    /// Always the clearweb; `p` does nothing
+    Clearweb,
+    /// Always through I2P, from the start; `p` does nothing
+    I2p,
+}
 
-# Where downloads are saved (by default, your Downloads folder)
-# download_dir = /path/to/folder
-
-# How rynx introduces itself to websites (by default rynx/<version> (+<project page>)).
-# Sites that refuse unknown browsers may work with a common browser's, but bot walls like Anubis
-# then demand JavaScript. I2P mode always sends a generic one instead, so visits don't stand out.
-# user_agent = Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15
-
-# Anubis bot checks (\"Making sure you're not a bot\") are passed by doing their proof of work
-# natively, without JavaScript. Turn it off to see the check's page instead.
-# anubis = off
-
-# Save the pages you visit to history.txt, so the history page (s) keeps them after you quit.
-# Off by default: history is then kept only until you quit. Pages visited in I2P mode are never saved.
-# history = on
-";
+impl NetworkMode {
+    fn name(self) -> &'static str {
+        match self {
+            NetworkMode::Switchable => "switchable",
+            NetworkMode::Clearweb => "clearweb",
+            NetworkMode::I2p => "i2p",
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
@@ -48,6 +99,7 @@ pub struct Settings {
     pub user_agent: String,
     /// Pass Anubis bot checks by doing their proof of work
     pub solve_anubis: bool,
+    pub network: NetworkMode,
 }
 
 impl Default for Settings {
@@ -60,6 +112,7 @@ impl Default for Settings {
             save_history: false,
             user_agent: crate::constants::USER_AGENT.to_string(),
             solve_anubis: true,
+            network: NetworkMode::Switchable,
         }
     }
 }
@@ -99,6 +152,16 @@ impl Settings {
                 "download_dir" if !value.is_empty() => settings.download_dir = Some(PathBuf::from(value)),
                 "history" if matches!(value, "on" | "off") => settings.save_history = value == "on",
                 "anubis" if matches!(value, "on" | "off") => settings.solve_anubis = value == "on",
+                "network" => match value {
+                    "switchable" => settings.network = NetworkMode::Switchable,
+                    "clearweb" => settings.network = NetworkMode::Clearweb,
+                    "i2p" => settings.network = NetworkMode::I2p,
+                    _ => problems.push(format!(
+                        "line {}: invalid network \"{}\" (switchable, clearweb or i2p)",
+                        number + 1,
+                        value
+                    )),
+                },
                 // Sent as a header: printable ASCII only, so it can't add headers or break requests
                 "user_agent"
                     if !value.is_empty() && value.len() <= 256 && value.bytes().all(|b| (0x20..0x7f).contains(&b)) =>
@@ -120,11 +183,60 @@ impl Settings {
         match std::fs::read_to_string(&path) {
             Ok(text) => Settings::parse(&text),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                let _ = std::fs::create_dir_all(dir).and_then(|_| std::fs::write(&path, TEMPLATE));
+                let _ = std::fs::create_dir_all(dir)
+                    .and_then(|_| std::fs::write(&path, Settings::default().to_file_text()));
                 (Settings::default(), Vec::new())
             }
             Err(e) => (Settings::default(), vec![format!("couldn't read {}: {}", path.display(), e)]),
         }
+    }
+
+    /// The value written to the file for `key`, if it isn't the default
+    fn file_value(&self, key: &str) -> Option<String> {
+        let default = Settings::default();
+        let changed = |value: String, default_value: String| (value != default_value).then_some(value);
+        match key {
+            "home_page" => self.home_page.clone(),
+            "network" => changed(self.network.name().into(), default.network.name().into()),
+            "search_url" => changed(self.search_url.clone(), default.search_url),
+            "i2p_proxy" => changed(self.i2p_proxy.clone(), default.i2p_proxy),
+            "download_dir" => self.download_dir.as_ref().map(|d| d.to_string_lossy().into_owned()),
+            "user_agent" => changed(self.user_agent.clone(), default.user_agent),
+            "anubis" => (!self.solve_anubis).then(|| "off".to_string()),
+            "history" => self.save_history.then(|| "on".to_string()),
+            _ => None,
+        }
+    }
+
+    /// The settings file's text: every setting documented, with those that differ from the
+    /// defaults set and the rest shown as commented-out examples
+    pub fn to_file_text(&self) -> String {
+        let mut text = String::from(HEADER);
+        for setting in DOCUMENTED {
+            text.push('\n');
+            for line in setting.about.lines() {
+                text.push_str(&format!("# {}\n", line.trim()));
+            }
+            match self.file_value(setting.key) {
+                Some(value) => text.push_str(&format!("{} = {}\n", setting.key, value)),
+                None => {
+                    for example in setting.examples {
+                        text.push_str(&format!("# {} = {}\n", setting.key, example));
+                    }
+                }
+            }
+        }
+        text
+    }
+
+    /// Write these settings to the settings file in `dir`, atomically
+    pub fn save(&self, dir: &Path) -> Result<(), String> {
+        let path = dir.join(SETTINGS_FILE);
+        let temporary = path.with_extension("conf.tmp");
+        std::fs::create_dir_all(dir)
+            .and_then(|_| std::fs::write(&temporary, self.to_file_text()))
+            .and_then(|_| std::fs::rename(&temporary, &path))
+            .map_err(|e| format!("Couldn't save settings: {}", e))
     }
 
     /// The address that searches for `words`

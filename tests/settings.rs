@@ -285,3 +285,119 @@ async fn the_user_agent_is_sent() {
     // I2P mode always sends the generic one, whatever the setting
     assert_eq!(user_agents_sent(custom, true).await, [rynx::constants::I2P_USER_AGENT]);
 }
+
+// --- The settings file written back, and the settings page ---
+
+#[test]
+fn settings_files_round_trip() {
+    // Every setting documented; defaults left as commented examples
+    let template = Settings::default().to_file_text();
+    assert!(template.contains("# network = i2p") && template.contains("# history = on"), "{template}");
+    assert_eq!(Settings::parse(&template), (Settings::default(), Vec::new()));
+
+    let (changed, problems) = Settings::parse(
+        "home_page = https://example.org/\nnetwork = i2p\nhistory = on\nanubis = off\nuser_agent = Custom/1.0\n",
+    );
+    assert!(problems.is_empty(), "{problems:?}");
+    let text = changed.to_file_text();
+    assert!(text.contains("\nnetwork = i2p\n") && text.contains("\nhome_page = https://example.org/\n"), "{text}");
+    assert_eq!(Settings::parse(&text), (changed, Vec::new()));
+    assert_eq!(Settings::parse("network = sideways").1.len(), 1);
+}
+
+fn set_field(app: &mut App, name: &str, value: &str) {
+    let tab = app.current_tab();
+    let i = tab.controls.iter().position(|c| c.name == name).unwrap_or_else(|| panic!("no field {name}"));
+    tab.control_values[i] = rynx::forms::ControlValue::Text(value.to_string());
+}
+
+fn choose(app: &mut App, name: &str, option: &str) {
+    let tab = app.current_tab();
+    let i = tab.controls.iter().position(|c| c.name == name).unwrap();
+    let rynx::forms::ControlKind::Select { options } = &tab.controls[i].kind else { panic!("{name} isn't a choice") };
+    let selected = options.iter().position(|o| o.value == option).unwrap();
+    tab.control_values[i] = rynx::forms::ControlValue::Selected(selected);
+}
+
+fn tick(app: &mut App, name: &str, on: bool) {
+    let tab = app.current_tab();
+    let i = tab.controls.iter().position(|c| c.name == name).unwrap();
+    tab.control_values[i] = rynx::forms::ControlValue::Checked(on);
+}
+
+#[tokio::test]
+async fn the_settings_page_saves_and_applies_settings() {
+    let dir = temp_dir("page");
+    let mut app = test_app(Settings::default());
+    app.config_dir = Some(dir.clone());
+    app.history.record("https://visited.example/", "Visited", false).unwrap();
+
+    press(&mut app, KeyCode::Char('S'));
+    assert_eq!(app.current_tab().url_input, rynx::app::SETTINGS_PAGE);
+    let page = text(&mut app);
+    assert!(
+        page.contains("Clearweb, switch to I2P") && page.contains("History") && page.contains("Save settings"),
+        "{page}"
+    );
+
+    // A bad value is reported, and nothing is saved or changed
+    set_field(&mut app, "home_page", "javascript:alert(1)");
+    app.submit_form(0, None);
+    assert!(
+        app.current_tab().status_message.starts_with("Not saved: invalid home_page"),
+        "{}",
+        app.current_tab().status_message
+    );
+    assert!(!dir.join(SETTINGS_FILE).exists());
+
+    set_field(&mut app, "home_page", "https://example.org/");
+    choose(&mut app, "network", "i2p");
+    tick(&mut app, "history", true);
+    app.submit_form(0, None);
+    assert_eq!(app.current_tab().status_message, "Settings saved");
+    let saved = std::fs::read_to_string(dir.join(SETTINGS_FILE)).unwrap();
+    assert!(saved.contains("\nnetwork = i2p\n") && saved.contains("\nhistory = on\n"), "{saved}");
+    assert_eq!(app.settings.home_page.as_deref(), Some("https://example.org/"));
+
+    // Locked to I2P: on now, and p can't leave it
+    assert!(app.i2p_mode);
+    press(&mut app, KeyCode::Char('p'));
+    assert!(app.i2p_mode, "p must not leave a locked I2P mode");
+    assert!(app.current_tab().status_message.contains("locked"));
+
+    // History saving turned on keeps this session's visits
+    let history = std::fs::read_to_string(dir.join(rynx::history::HISTORY_FILE)).unwrap();
+    assert!(history.contains("https://visited.example/"), "{history}");
+
+    // The page shows what was saved
+    assert!(text(&mut app).contains("https://example.org/"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn web_pages_cannot_change_settings() {
+    let mut app = test_app(Settings::default());
+    let id = app.current_tab().id;
+    let html =
+        r#"<form action="about:settings-save"><input name="network" value="clearweb"><input type="submit"></form>"#;
+    app.current_tab().url_input = "https://evil.example/".into();
+    let resp = NetworkResponse::Success(id, "t".into(), html.into(), "https://evil.example/".into(), PageKind::Html);
+    handle_network_event(&mut app, resp, 80).unwrap();
+    app.submit_form(0, None);
+    assert!(app.current_tab().status_message.starts_with("Not sent"), "{}", app.current_tab().status_message);
+    assert_eq!(app.settings, Settings::default());
+}
+
+#[tokio::test]
+async fn a_clearweb_lock_disables_i2p_and_i2p_lock_starts_there() {
+    let (clearweb, _) = Settings::parse("network = clearweb");
+    let mut app = test_app(clearweb);
+    press(&mut app, KeyCode::Char('p'));
+    assert!(!app.i2p_mode);
+    let (i2p, _) = Settings::parse("network = i2p");
+    assert!(test_app(i2p).i2p_mode, "starts in I2P mode");
+    // Switchable is the default and switches as before
+    let mut app = test_app(Settings::default());
+    press(&mut app, KeyCode::Char('p'));
+    assert!(app.i2p_mode);
+}
