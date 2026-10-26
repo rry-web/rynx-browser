@@ -177,8 +177,27 @@ pub fn strict_redirect_policy() -> reqwest::redirect::Policy {
     })
 }
 
+/// Jump services only know I2P addresses, so only consult them for .i2p sites in I2P mode
+pub fn should_attempt_jump(use_i2p: bool, domain: &str, status: StatusCode) -> bool {
+    use_i2p
+        && domain.ends_with(".i2p")
+        && (status == StatusCode::INTERNAL_SERVER_ERROR
+            || status == StatusCode::SERVICE_UNAVAILABLE)
+}
+
 pub async fn attempt_jump(
     client: &Client,
+    target_domain: &str,
+    tx: mpsc::Sender<NetworkResponse>,
+    id: usize,
+) -> Result<reqwest::Response, Box<dyn std::error::Error + Send + Sync>> {
+    attempt_jump_with(client, JUMP_SERVICES, target_domain, tx, id).await
+}
+
+/// Try each jump service in order, moving on when one is unreachable or has no entry
+pub async fn attempt_jump_with(
+    client: &Client,
+    services: &[&str],
     target_domain: &str,
     tx: mpsc::Sender<NetworkResponse>,
     id: usize,
@@ -189,7 +208,7 @@ pub async fn attempt_jump(
             "Address not found. Requesting Jump Helper...".to_string(),
         ))
         .await;
-    for service_base in JUMP_SERVICES {
+    for service_base in services {
         let jump_url = format!("{}{}", service_base, target_domain);
         let _ = tx
             .send(NetworkResponse::Info(
@@ -197,9 +216,10 @@ pub async fn attempt_jump(
                 format!("Contacting jump service: {}", service_base),
             ))
             .await;
-        let response = client.get(&jump_url).send().await?;
-        if response.status() == StatusCode::OK {
-            return Ok(response);
+        match client.get(&jump_url).send().await {
+            Ok(response) if response.status() == StatusCode::OK => return Ok(response),
+            // Unreachable or no entry; try the next service
+            Ok(_) | Err(_) => continue,
         }
     }
     Err("All jump services failed.".into())

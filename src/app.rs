@@ -3,11 +3,12 @@ use crate::constants::{
     DOWNLOAD_PROGRESS_INTERVAL_MS, MAX_PAGE_SIZE_BYTES,
 };
 use crate::models::{InputMode, LinkRegion, SearchState, Selection};
-use crate::network::{NetworkManager, NetworkResponse, attempt_jump, parse_html_metadata};
+use crate::network::{
+    NetworkManager, NetworkResponse, attempt_jump, parse_html_metadata, should_attempt_jump,
+};
 use crate::renderer::DomRenderer;
 
 use ratatui::text::Line;
-use reqwest::StatusCode;
 use scraper::Html;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -361,9 +362,7 @@ impl App {
             let mut resp_result = client.get(&target_url).send().await;
 
             if let Ok(ref resp) = resp_result {
-                if resp.status() == StatusCode::INTERNAL_SERVER_ERROR
-                    || resp.status() == StatusCode::SERVICE_UNAVAILABLE
-                {
+                if should_attempt_jump(use_i2p, &domain_for_jump, resp.status()) {
                     if let Ok(jump_resp) =
                         attempt_jump(&client, &domain_for_jump, tx_clone.clone(), id).await
                     {

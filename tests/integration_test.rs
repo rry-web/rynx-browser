@@ -580,3 +580,46 @@ async fn test_second_download_in_same_tab_is_refused() {
     assert!(app.current_tab().download_prompt.is_none());
     assert!(app.current_tab().status_message.contains("already in progress"));
 }
+
+#[test]
+fn test_jump_only_for_i2p_sites_in_i2p_mode() {
+    use reqwest::StatusCode;
+    use rynx_browser::network::should_attempt_jump;
+
+    assert!(should_attempt_jump(true, "example.i2p", StatusCode::INTERNAL_SERVER_ERROR));
+    assert!(should_attempt_jump(true, "example.i2p", StatusCode::SERVICE_UNAVAILABLE));
+    // A clearweb server error must not leak the domain to I2P jump services
+    assert!(!should_attempt_jump(false, "example.com", StatusCode::INTERNAL_SERVER_ERROR));
+    assert!(!should_attempt_jump(true, "example.com", StatusCode::INTERNAL_SERVER_ERROR));
+    assert!(!should_attempt_jump(false, "example.i2p", StatusCode::INTERNAL_SERVER_ERROR));
+    assert!(!should_attempt_jump(true, "example.i2p", StatusCode::NOT_FOUND));
+}
+
+#[tokio::test]
+async fn test_jump_tries_next_service_after_failure() {
+    use rynx_browser::network::attempt_jump_with;
+
+    let no_entry = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&no_entry)
+        .await;
+    let working = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/jump/example.i2p"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw("<p>found</p>", "text/html"))
+        .mount(&working)
+        .await;
+
+    let unreachable = "http://127.0.0.1:1/jump/".to_string();
+    let no_entry_base = format!("{}/jump/", no_entry.uri());
+    let working_base = format!("{}/jump/", working.uri());
+    let services = [unreachable.as_str(), no_entry_base.as_str(), working_base.as_str()];
+
+    let (tx, _rx) = mpsc::channel(20);
+    let client = reqwest::Client::new();
+    let resp = attempt_jump_with(&client, &services, "example.i2p", tx, 0)
+        .await
+        .expect("should fall through to the working service");
+    assert_eq!(resp.text().await.unwrap(), "<p>found</p>");
+}
