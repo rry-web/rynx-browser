@@ -72,7 +72,9 @@ you signed in.
 
 Downloads (**`d`** on a link) are saved to your Downloads folder after you confirm.
 
-Press **`b`** to bookmark a page (again to remove it) and **`B`** to see your bookmarks.
+Press **`b`** to bookmark a page (again to remove it) and **`B`** to see your bookmarks. Press
+**`s`** to see the pages you've visited. History is kept only until you quit, unless you turn on
+`history = on` in [settings](#settings).
 
 ## Settings
 
@@ -85,9 +87,11 @@ home_page = https://en.wikipedia.org/
 search_url = https://html.duckduckgo.com/html/?q={query}
 i2p_proxy = http://127.0.0.1:4444
 download_dir = /path/to/folder
+history = on
 ```
 
-Bookmarks are kept next to it in `bookmarks.txt`.
+Bookmarks are kept next to it in `bookmarks.txt`, and history (when `history = on`) in
+`history.txt`. Pages visited in I2P mode are never saved to the history file.
 
 ## Key bindings
 
@@ -111,6 +115,7 @@ The same list is on the start page.
 | **`Right`**, **`L`** | Forward |
 | **`r`** | Reload, keeping your place |
 | **`b`** / **`B`** | Bookmark the page (or remove it) / show bookmarks |
+| **`s`** | Show the pages you've visited (there, **`x`** twice clears them) |
 | **`d`** | Download the selected link |
 | **`Esc`** | Clear a finished or failed download |
 
@@ -154,7 +159,8 @@ The same list is on the start page.
 A text browser without JavaScript already avoids the biggest source of browser exploits. On top of
 that:
 
-- **No tracking:** no cookies, no storage, no `Referer` header, no JavaScript.
+- **No tracking:** no cookies, no storage, no `Referer` header, no JavaScript. History is saved
+  only if you turn it on, and never for I2P sites.
 - **HTTPS everywhere:** addresses, redirects, downloads and form submissions are upgraded to HTTPS
   (except `localhost` and `.i2p` sites). Certificates are checked by your operating system,
   including revocation on macOS and Windows, with TLS 1.2 or newer.
@@ -204,7 +210,7 @@ builds every platform and publishes the release. Tags containing `-` become pre-
 - [ ] **Images** with `ratatui-image` (Sixel/Kitty)
 - [x] **Bookmarks**
 - [x] **Settings file** (home page, search engine, I2P proxy, downloads folder)
-- [ ] **Persistent history** (opt-in)
+- [x] **Persistent history** (opt-in)
 - [ ] **Gopher, Gemini and RSS** support
 - [ ] **MCP support** as an alternative to JavaScript
 

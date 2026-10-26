@@ -5,6 +5,7 @@ use ratatui::backend::TestBackend;
 use rynx_browser::app::App;
 use rynx_browser::bookmarks::{BOOKMARKS_FILE, BOOKMARKS_PAGE, Bookmarks};
 use rynx_browser::event_handler::{handle_key_event, handle_network_event};
+use rynx_browser::history::{HISTORY_FILE, HISTORY_PAGE, History, MAX_HISTORY};
 use rynx_browser::network::{NetworkResponse, PageKind};
 use rynx_browser::settings::{SETTINGS_FILE, Settings};
 use std::path::PathBuf;
@@ -145,4 +146,82 @@ async fn the_configured_search_engine_is_used() {
     app.current_tab().url_input = "terminal browsers".into();
     app.submit_request();
     assert_eq!(app.current_tab().url_input, "https://html.duckduckgo.com/html/?q=terminal+browsers");
+}
+
+#[test]
+fn history_setting_is_parsed() {
+    assert!(!Settings::default().save_history, "history must be opt-in");
+    assert!(Settings::parse("history = on").0.save_history);
+    assert!(!Settings::parse("history = off").0.save_history);
+    assert_eq!(Settings::parse("history = yes please").1.len(), 1);
+}
+
+#[test]
+fn history_is_saved_deduplicated_and_cleared() {
+    let dir = temp_dir("history");
+    let path = dir.join(HISTORY_FILE);
+    let mut history = History::load(path.clone());
+    history.record("https://a.example/", "A", false).unwrap();
+    history.record("https://b.example/", "B\tline\nbreak", false).unwrap();
+    history.record("http://site.i2p/", "Secret", true).unwrap();
+    history.record("https://a.example/", "A again", false).unwrap();
+    let urls: Vec<_> = history.entries.iter().map(|v| v.url.as_str()).collect();
+    assert_eq!(urls, ["https://b.example/", "http://site.i2p/", "https://a.example/"]);
+
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(!saved.contains(".i2p"), "I2P visits must never be written: {saved}");
+    let reloaded = History::load(path.clone());
+    let urls: Vec<_> = reloaded.entries.iter().map(|v| v.url.as_str()).collect();
+    assert_eq!(urls, ["https://b.example/", "https://a.example/"]);
+    assert_eq!(reloaded.entries[0].title, "B line break");
+
+    let html = reloaded.page_html();
+    assert!(html.find("A again").unwrap() < html.find("B line").unwrap(), "newest first: {html}");
+
+    let mut history = reloaded;
+    history.clear().unwrap();
+    assert!(History::load(path).entries.is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn history_is_capped() {
+    let mut history = History::default();
+    for i in 0..MAX_HISTORY + 5 {
+        history.record(&format!("https://e.example/{i}"), "", false).unwrap();
+    }
+    assert_eq!(history.entries.len(), MAX_HISTORY);
+    assert_eq!(history.entries[0].url, "https://e.example/5");
+}
+
+#[tokio::test]
+async fn visits_are_listed_on_the_history_page_and_can_be_cleared() {
+    let mut app = test_app(Settings::default());
+    let url = "https://user:hunter2@example.com/page";
+    let id = app.current_tab().id;
+    app.current_tab().url_input = url.into();
+    let resp = NetworkResponse::Success(id, "x".into(), "<title>A Page</title><p>text</p>".into(), url.into(), PageKind::Html);
+    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    assert_eq!(app.history.entries.len(), 1);
+    assert_eq!(app.history.entries[0].url, "https://example.com/page", "credentials are stripped");
+
+    // x does nothing away from the history page
+    press(&mut app, KeyCode::Char('x'));
+    assert_eq!(app.history.entries.len(), 1);
+
+    press(&mut app, KeyCode::Char('s'));
+    assert_eq!(app.current_tab().url_input, HISTORY_PAGE);
+    assert!(text(&mut app).contains("A Page"));
+    assert!(text(&mut app).contains("kept only until you quit"));
+    assert_eq!(app.current_tab().link_regions[0].url, "https://example.com/page");
+
+    // One x asks; another key cancels; two in a row clear
+    press(&mut app, KeyCode::Char('x'));
+    assert!(app.current_tab().status_message.contains("again"));
+    press(&mut app, KeyCode::Char('j'));
+    press(&mut app, KeyCode::Char('x'));
+    assert_eq!(app.history.entries.len(), 1);
+    press(&mut app, KeyCode::Char('x'));
+    assert!(app.history.entries.is_empty());
+    assert!(text(&mut app).contains("No pages visited yet"));
 }

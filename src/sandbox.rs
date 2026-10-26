@@ -2,7 +2,7 @@
 //!
 //! On Linux this uses Landlock: the browser may read system files (libraries, DNS settings,
 //! certificates) and use the terminal, but may only write inside the Downloads folder and its own
-//! settings folder (settings and bookmarks), and can't
+//! settings folder (settings, bookmarks and history), and can't
 //! read the rest of the home directory (SSH keys, other programs' data). A bug in page parsing or
 //! the network stack can't be used to steal files or plant e.g. ~/.bashrc.
 //!

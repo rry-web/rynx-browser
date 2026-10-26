@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- History: `s` lists the pages you've visited, newest first by day. It's kept in memory unless
+  `history = on` is set in settings.conf, which saves it to `history.txt`. Visits in I2P mode
+  and passwords in addresses are never saved. `x` twice on the history page clears it.
+
 ## [0.2.0-beta.1]
 
 First beta build, with pre-built binaries for Linux, macOS and Windows. Please report problems as

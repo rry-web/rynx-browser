@@ -134,3 +134,18 @@ async fn the_help_page_survives_a_resize() {
     settle(&mut app).await;
     assert!(text(&mut app).contains("Moving around"), "help page was blanked by a resize");
 }
+
+#[tokio::test]
+async fn history_gets_the_title_from_a_background_render() {
+    let mut app = background_app();
+    deliver(&mut app, "<title>Laid out later</title><p>text</p>".into());
+    assert!(app.history.entries.is_empty(), "recorded before the title was known");
+    settle(&mut app).await;
+    assert_eq!(app.history.entries.len(), 1);
+    assert_eq!(app.history.entries[0].title, "Laid out later");
+
+    // Re-laying out the same page (a resize) doesn't record it again
+    app.render_tab(0, 60);
+    settle(&mut app).await;
+    assert_eq!(app.history.entries.len(), 1);
+}

@@ -244,6 +244,20 @@ Worth repeating after any dependency upgrade.
 - [ ] **SET-06 (priority) Bookmarks under the Linux sandbox.** On Linux with the sandbox active,
       add a bookmark and restart.
       *Expected:* the bookmark was saved (the settings folder is writable in the sandbox).
+- [ ] **SET-07 Session history.** With no `history` setting, visit a few pages and press `s`.
+      *Expected:* the history page lists them newest first, under a date heading, with their
+      titles; selecting one opens it. Restart and press `s`: it's empty, and no `history.txt`
+      exists in the config folder.
+- [ ] **SET-08 Saved history.** Set `history = on`, restart, visit a few pages, quit and restart.
+      *Expected:* `s` still lists them. Visit one in I2P mode too: it's listed until you quit,
+      but never appears in `history.txt`.
+- [ ] **SET-09 Clearing history.** On the history page press `x`, then another key, then `x`
+      twice.
+      *Expected:* the first `x` asks to press again; the other key cancels; two `x` presses in a
+      row empty the page and `history.txt`.
+- [ ] **SET-10 (priority) History under the Linux sandbox.** On Linux with the sandbox active and
+      `history = on`, visit a page and restart.
+      *Expected:* the page is still in the history.
 
 ## Scrolling and input
 

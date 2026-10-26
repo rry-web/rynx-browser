@@ -8,6 +8,7 @@ use crate::network::{
     fragment_of, should_attempt_jump,
 };
 use crate::bookmarks::{BOOKMARKS_PAGE, Bookmarks};
+use crate::history::{HISTORY_PAGE, History};
 use crate::forms::{ControlKind, ControlValue, Form, FormControl, FormMethod};
 use crate::settings::Settings;
 use crate::renderer::{RenderJob, RenderedPage, render_page};
@@ -67,6 +68,8 @@ pub struct BrowserTab {
     render_in_flight: Option<u64>,
     /// Width for one more render once the running one finishes (coalesces rapid resizes)
     render_pending_width: Option<u16>,
+    /// The page just loaded goes into the history once laid out, when its <title> is known
+    pub record_visit_after_render: bool,
     /// #fragment to jump to once the page has been laid out
     jump_after_render: Option<String>,
     /// Scroll and cursor position to return to when the page being loaded arrives (going back,
@@ -109,6 +112,7 @@ impl BrowserTab {
             self.input_mode = InputMode::Normal;
         }
         self.editing_control = None;
+        self.record_visit_after_render = false;
     }
 
     /// Scroll the minimum amount needed to bring `line` into a viewport of `viewport_height` rows
@@ -342,6 +346,7 @@ impl BrowserTab {
             content_version: 0,
             render_in_flight: None,
             render_pending_width: None,
+            record_visit_after_render: false,
             jump_after_render: None,
             pending_restore: None,
             restore_after_render: None,
@@ -474,6 +479,9 @@ pub struct App {
     pub render_in_background: bool,
     pub settings: Settings,
     pub bookmarks: Bookmarks,
+    pub history: History,
+    /// `x` was pressed once on the history page; a second press clears it
+    pub confirm_clear_history: bool,
     /// Latest terminal width, for laying out pages the browser makes itself
     pub terminal_width: u16,
 }
@@ -511,6 +519,8 @@ impl App {
             render_in_background: true,
             settings,
             bookmarks: Bookmarks::default(),
+            history: History::default(),
+            confirm_clear_history: false,
             terminal_width: 100,
         })
     }
@@ -523,10 +533,11 @@ impl App {
         }
     }
 
-    /// Show a page the browser makes itself (about:bookmarks, about:help)
+    /// Show a page the browser makes itself (about:bookmarks, about:history, about:help)
     fn show_internal_page(&mut self, address: &str) -> bool {
         let (title, html) = match address {
             BOOKMARKS_PAGE => ("Bookmarks", self.bookmarks.page_html()),
+            HISTORY_PAGE => ("History", self.history.page_html()),
             HELP_PAGE | "about:home" => ("Start", include_str!("../assets/help.html").to_string()),
             _ => return false,
         };
@@ -558,6 +569,41 @@ impl App {
             Ok(false) => String::from("Bookmark removed"),
             Err(e) => e,
         };
+        self.current_tab().status_message = message;
+    }
+
+    /// Add the page a tab just loaded to the history, once it's laid out
+    fn record_visit_if_pending(&mut self, tab_index: usize) {
+        let tab = &mut self.tabs[tab_index];
+        if !std::mem::take(&mut tab.record_visit_after_render) {
+            return;
+        }
+        // A user name or password typed into the address must never be written to disk
+        let Some(url) = tab.page_url.as_deref().map(crate::network::without_credentials) else {
+            return;
+        };
+        let title = tab.page_title.clone();
+        if let Err(e) = self.history.record(&url, &title, self.i2p_mode) {
+            self.tabs[tab_index].status_message = e;
+        }
+    }
+
+    /// On the history page, `x` asks for confirmation and a second `x` clears the history
+    pub fn clear_history_key(&mut self) {
+        if self.current_tab().url_input != HISTORY_PAGE {
+            return;
+        }
+        if !self.confirm_clear_history {
+            self.confirm_clear_history = true;
+            self.current_tab().status_message = String::from("Press x again to clear all history");
+            return;
+        }
+        self.confirm_clear_history = false;
+        let message = match self.history.clear() {
+            Ok(()) => String::from("History cleared"),
+            Err(e) => e,
+        };
+        self.show_internal_page(HISTORY_PAGE);
         self.current_tab().status_message = message;
     }
 
@@ -601,6 +647,7 @@ impl App {
         };
         if !background {
             tab.apply_render(render_page(&job));
+            self.record_visit_if_pending(tab_index);
             return;
         }
 
@@ -631,7 +678,9 @@ impl App {
             if tab.status_message == RENDERING_STATUS {
                 tab.status_message = String::from("Loaded");
             }
+            self.record_visit_if_pending(tab_index);
         }
+        let tab = &mut self.tabs[tab_index];
         if tab.render_in_flight == Some(version) {
             tab.render_in_flight = None;
             if let Some(width) = tab.render_pending_width.take() {
@@ -700,7 +749,7 @@ impl App {
 
     /// Follow a link in the current tab, recording the current page in history
     pub fn follow_link(&mut self, url: String) {
-        let internal = url == BOOKMARKS_PAGE || url == HELP_PAGE;
+        let internal = url == BOOKMARKS_PAGE || url == HISTORY_PAGE || url == HELP_PAGE;
         if !internal && self.reject_unsupported_link(&url) {
             return;
         }

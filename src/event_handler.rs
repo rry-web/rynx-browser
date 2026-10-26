@@ -112,6 +112,10 @@ fn handle_normal_mode<B: Backend>(
 ) -> Result<bool> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let page = viewport_height(terminal_height) as isize;
+    // Clearing the history needs two x presses in a row
+    if key.code != KeyCode::Char('x') {
+        app.confirm_clear_history = false;
+    }
     match key.code {
         // --- PAGING ---
         KeyCode::PageDown => app.current_tab().scroll_by(page, viewport_height(terminal_height)),
@@ -129,6 +133,8 @@ fn handle_normal_mode<B: Backend>(
         KeyCode::Char('r') => app.reload(),
         KeyCode::Char('b') => app.toggle_bookmark(),
         KeyCode::Char('B') => app.follow_link(crate::bookmarks::BOOKMARKS_PAGE.to_string()),
+        KeyCode::Char('s') => app.follow_link(crate::history::HISTORY_PAGE.to_string()),
+        KeyCode::Char('x') => app.clear_history_key(),
 
         // --- VISUAL MODE ---
         KeyCode::Char('v') => app.current_tab().enter_visual_mode(),
@@ -631,6 +637,7 @@ pub fn handle_network_event<B: Backend>(
                     tab.url_input = page_url.clone();
                 }
                 tab.page_url = Some(page_url);
+                tab.record_visit_after_render = true;
 
                 tab.jump_after_render(fragment);
                 tab.restore_position_after_render();

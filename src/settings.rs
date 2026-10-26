@@ -20,6 +20,10 @@ const TEMPLATE: &str = "\
 
 # Where downloads are saved (by default, your Downloads folder)
 # download_dir = /path/to/folder
+
+# Save the pages you visit to history.txt, so the history page (s) keeps them after you quit.
+# Off by default: history is then kept only until you quit. Pages visited in I2P mode are never saved.
+# history = on
 ";
 
 #[derive(Clone, Debug, PartialEq)]
@@ -29,6 +33,8 @@ pub struct Settings {
     pub search_url: String,
     pub i2p_proxy: String,
     pub download_dir: Option<PathBuf>,
+    /// Save visited pages to disk
+    pub save_history: bool,
 }
 
 impl Default for Settings {
@@ -38,6 +44,7 @@ impl Default for Settings {
             search_url: crate::constants::DEFAULT_SEARCH_URL.to_string(),
             i2p_proxy: crate::constants::I2P_PROXY_URL.to_string(),
             download_dir: None,
+            save_history: false,
         }
     }
 }
@@ -77,7 +84,8 @@ impl Settings {
                     settings.i2p_proxy = value.to_string()
                 }
                 "download_dir" if !value.is_empty() => settings.download_dir = Some(PathBuf::from(value)),
-                "home_page" | "search_url" | "i2p_proxy" | "download_dir" => {
+                "history" if matches!(value, "on" | "off") => settings.save_history = value == "on",
+                "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" => {
                     problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
                 }
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),
