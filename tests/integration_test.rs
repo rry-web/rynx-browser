@@ -253,3 +253,29 @@ async fn test_visual_mode_on_empty_page_does_not_panic() {
         handle_key_event::<TestBackend>(&mut app, key(code), 80, 24).unwrap();
     }
 }
+
+#[tokio::test]
+async fn test_download_popups_render_in_tiny_terminal() {
+    use rynx_browser::models::{Download, DownloadPrompt, DownloadStatus};
+
+    let mut app = test_app();
+    app.current_tab().download_state = Some(Download {
+        _id: 0,
+        filename: "file.zip".to_string(),
+        bytes_downloaded: 10,
+        total_size: Some(100),
+        status: DownloadStatus::Active,
+    });
+    app.current_tab().download_prompt = Some(DownloadPrompt {
+        url: "https://example.com/file.zip".to_string(),
+        filename: "file.zip".to_string(),
+        target_path: std::path::PathBuf::from("file.zip"),
+        file_exists: false,
+    });
+
+    // Heights below the tab bar + URL bar + popup sizes
+    for height in [1, 4, 6, 8, 10] {
+        let mut terminal = Terminal::new(TestBackend::new(20, height)).unwrap();
+        terminal.draw(|f| ui(f, &app)).unwrap();
+    }
+}

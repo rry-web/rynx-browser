@@ -341,12 +341,14 @@ pub fn ui(f: &mut Frame, app: &App) {
 
 fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
     if let Some(state) = &app.tabs[app.active_tab_index].download_state {
+        // Clip to the frame so small terminals don't underflow or draw out of bounds
         let popup_area = Rect {
             x: area.width / 4,
-            y: area.height / 2 - 2,
+            y: (area.height / 2).saturating_sub(2),
             width: area.width / 2,
             height: 5,
-        };
+        }
+        .intersection(f.area());
 
         // Clear the background to prevent content bleed
         f.render_widget(Clear, popup_area);
@@ -430,7 +432,8 @@ fn render_download_prompt(f: &mut Frame, app: &App) {
             y: (area.height / DOWNLOAD_PROMPT_Y_DIVISOR).saturating_sub(DOWNLOAD_PROMPT_Y_OFFSET),
             width: area.width / DOWNLOAD_PROMPT_WIDTH_DIVISOR,
             height: DOWNLOAD_PROMPT_HEIGHT,
-        };
+        }
+        .intersection(area);
 
         f.render_widget(Clear, popup_area);
 
