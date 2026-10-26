@@ -353,34 +353,41 @@ impl BrowserTab {
         }
     }
 
+    /// Find `query` on the page. Smart case: matching ignores case unless the query has a capital
+    /// letter. Matches are stored as screen columns, which is how they're highlighted.
     pub fn perform_search(&mut self, query: &str) {
         if query.is_empty() {
             self.search_state = None;
             return;
         }
 
+        let ignore_case = !query.chars().any(char::is_uppercase);
+        let fold = |c: char| if ignore_case { c.to_lowercase().next().unwrap_or(c) } else { c };
+        let query_chars: Vec<char> = query.chars().map(fold).collect();
         let mut matches = Vec::new();
-        let query_chars: Vec<char> = query.chars().collect();
 
         for (line_idx, line) in self.rendered_content.iter().enumerate() {
-            let line_str = line.to_string();
-            let line_chars: Vec<char> = line_str.chars().collect();
+            let line_chars: Vec<char> = line.to_string().chars().collect();
+            // Column where each character starts (wide characters take two columns)
+            let mut columns = Vec::with_capacity(line_chars.len() + 1);
+            let mut column = 0;
+            for ch in &line_chars {
+                columns.push(column);
+                column += unicode_width::UnicodeWidthChar::width(*ch).unwrap_or(0);
+            }
+            columns.push(column);
 
             let mut char_idx = 0;
-            while char_idx <= line_chars.len().saturating_sub(query_chars.len()) {
-                let mut found = true;
-                for (i, &query_char) in query_chars.iter().enumerate() {
-                    if char_idx + i >= line_chars.len() || line_chars[char_idx + i] != query_char {
-                        found = false;
-                        break;
-                    }
-                }
-
+            while char_idx + query_chars.len() <= line_chars.len() {
+                let found = query_chars
+                    .iter()
+                    .enumerate()
+                    .all(|(i, q)| fold(line_chars[char_idx + i]) == *q);
                 if found {
                     matches.push(crate::models::SearchMatch {
                         line_index: line_idx,
-                        start_char: char_idx,
-                        end_char: char_idx + query_chars.len(),
+                        start_char: columns[char_idx],
+                        end_char: columns[char_idx + query_chars.len()],
                     });
                     // Move past this match to avoid overlapping matches
                     char_idx += query_chars.len();

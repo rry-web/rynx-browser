@@ -38,6 +38,7 @@ pub struct Selection {
 
 pub struct SearchMatch {
     pub line_index: usize,
+    /// Screen columns of the match on its line
     pub start_char: usize,
     pub end_char: usize,
 }

@@ -1695,3 +1695,35 @@ async fn test_only_binary_file_links_skip_straight_to_downloading() {
         assert_eq!(app.current_tab().download_prompt.is_some(), prompts, "{href}");
     }
 }
+
+#[tokio::test]
+async fn test_find_on_page_is_smart_case() {
+    let mut app = test_app();
+    load_page(&mut app, "<p>Rust and rust and RUST</p>");
+    app.current_tab().perform_search("rust");
+    assert_eq!(app.current_tab().search_state.as_ref().unwrap().matches.len(), 3);
+    // A capital letter makes the search exact
+    app.current_tab().perform_search("Rust");
+    assert_eq!(app.current_tab().search_state.as_ref().unwrap().matches.len(), 1);
+}
+
+#[tokio::test]
+async fn test_find_highlights_line_up_after_wide_characters() {
+    let mut app = test_app();
+    // Each of the two CJK characters is two columns wide
+    load_page(&mut app, "<p>漢字 target</p>");
+    app.current_tab().perform_search("target");
+    let m = &app.current_tab().search_state.as_ref().unwrap().matches[0];
+    assert_eq!((m.start_char, m.end_char), (5, 11));
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal.draw(|f| ui(f, &app)).unwrap();
+    // The page starts at column 1 (after the border), row 7
+    let buffer = terminal.backend().buffer();
+    let highlighted: String = (0..80)
+        .map(|x| &buffer[(x, 7)])
+        .filter(|cell| cell.bg == ratatui::style::Color::Green)
+        .map(|cell| cell.symbol())
+        .collect();
+    assert_eq!(highlighted, "target");
+}
