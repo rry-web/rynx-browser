@@ -30,7 +30,10 @@ const DOCUMENTED: &[Documented] = &[
     Documented {
         key: "search_url",
         about: "Search engine for words typed in the address bar. {query} is replaced by the search words.",
-        examples: &["https://html.duckduckgo.com/html/?q={query}", "https://search.marginalia.nu/search?query={query}"],
+        examples: &[
+            "https://html.duckduckgo.com/html/?q={query}",
+            "https://old-search.marginalia.nu/search?query={query}",
+        ],
     },
     Documented {
         key: "i2p_proxy",

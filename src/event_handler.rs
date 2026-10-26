@@ -124,6 +124,10 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
     if key.code != KeyCode::Char('x') {
         app.confirm_clear_history = false;
     }
+    // Restoring default settings needs the button pressed twice in a row
+    if key.code != KeyCode::Enter {
+        app.confirm_reset_settings = false;
+    }
     match key.code {
         // --- PAGING ---
         KeyCode::PageDown => app.current_tab().scroll_by(page, viewport_height(terminal_height)),

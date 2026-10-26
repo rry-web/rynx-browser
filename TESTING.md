@@ -236,9 +236,10 @@ Worth repeating after any dependency upgrade.
 - [ ] **SET-01 Settings template.** After the first run, open `settings.conf` in your config
       folder (see the README).
       *Expected:* it exists with every option commented out.
-- [ ] **SET-02 Search engine.** Set `search_url = https://html.duckduckgo.com/html/?q={query}`,
-      restart, press `e`, type some words and press Enter.
-      *Expected:* DuckDuckGo results appear directly.
+- [ ] **SET-02 Search engine.** Press `e`, type some words and press Enter; then on the settings
+      page (`S`) choose DuckDuckGo, save, and search again.
+      *Expected:* Marginalia's results appear at the top of the page, then DuckDuckGo's. "Restore
+      defaults" asks to be pressed again, then puts Marginalia back.
 - [ ] **SET-03 Home page.** Set `home_page`, restart, and press `n`.
       *Expected:* the browser and new tabs open the home page.
 - [ ] **SET-04 Bad settings.** Add a line `colour = blue` and restart.

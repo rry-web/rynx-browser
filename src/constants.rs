@@ -43,9 +43,16 @@ pub const EXIT_DRAIN_TIMEOUT_MS: u64 = 20;
 pub const MAX_REDIRECTS: usize = 10;
 
 // Search URLs
-pub const MARGINALIA_SEARCH_URL: &str = "https://search.marginalia.nu/search?";
+pub const MARGINALIA_SEARCH_URL: &str = "https://old-search.marginalia.nu/search?";
 /// Default search engine; {query} is replaced by the search words. Changeable in settings.conf.
-pub const DEFAULT_SEARCH_URL: &str = "https://search.marginalia.nu/search?query={query}";
+pub const DEFAULT_SEARCH_URL: &str = "https://old-search.marginalia.nu/search?query={query}";
+
+/// Search engines offered on the settings page: (name, label, search URL). Both work without
+/// JavaScript; Marginalia's older interface is the one it recommends for text browsers.
+pub const SEARCH_ENGINES: &[(&str, &str, &str)] = &[
+    ("marginalia", "Marginalia: independent, finds the non-commercial web", DEFAULT_SEARCH_URL),
+    ("duckduckgo", "DuckDuckGo (its HTML version): the wider web", "https://html.duckduckgo.com/html/?q={query}"),
+];
 
 pub const DOWNLOAD_PROMPT_WIDTH_DIVISOR: u16 = 2; // 50% of terminal width
 pub const DOWNLOAD_PROMPT_X_DIVISOR: u16 = 4; // Centered at 25% offset

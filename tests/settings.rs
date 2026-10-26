@@ -45,7 +45,7 @@ fn search_urls_without_a_placeholder_get_the_query_appended() {
     let (settings, _) = Settings::parse("search_url = https://example.com/search?q=");
     assert_eq!(settings.search_address("a b"), "https://example.com/search?q=a+b");
     // The default still searches Marginalia
-    assert_eq!(Settings::default().search_address("rust"), "https://search.marginalia.nu/search?query=rust");
+    assert_eq!(Settings::default().search_address("rust"), "https://old-search.marginalia.nu/search?query=rust");
 }
 
 #[test]
@@ -438,4 +438,39 @@ async fn new_tabs_show_the_start_page_address_and_back_returns_to_it() {
     assert!(text(&mut app).contains("Moving around"));
     press(&mut app, KeyCode::Char('n'));
     assert_eq!(app.current_tab().url_input, "about:help");
+}
+
+#[tokio::test]
+async fn search_engines_are_chosen_or_custom_and_defaults_can_be_restored() {
+    let dir = temp_dir("engines");
+    let mut app = test_app(Settings::default());
+    app.config_dir = Some(dir.clone());
+    app.terminal_width = 100;
+    press(&mut app, KeyCode::Char('S'));
+    // Fields are wide enough to show a whole address
+    assert!(text(&mut app).contains(&format!("[{}", rynx::constants::USER_AGENT)), "{}", text(&mut app));
+
+    choose(&mut app, "search_engine", "duckduckgo");
+    app.submit_form(0, None);
+    assert_eq!(app.settings.search_url, "https://html.duckduckgo.com/html/?q={query}");
+    assert!(text(&mut app).contains("DuckDuckGo"), "the page shows the choice");
+
+    choose(&mut app, "search_engine", "custom");
+    set_field(&mut app, "search_url", "https://search.example/?q={query}");
+    app.submit_form(0, None);
+    assert_eq!(app.settings.search_url, "https://search.example/?q={query}");
+    assert!(text(&mut app).contains("https://search.example/?q={query}"));
+
+    // Restore defaults asks first; another key in between cancels
+    let reset = app.current_tab().controls.iter().position(|c| c.name == "reset").unwrap();
+    app.submit_form(0, Some(reset));
+    assert!(app.current_tab().status_message.contains("again"));
+    press(&mut app, KeyCode::Char('j'));
+    app.submit_form(0, Some(reset));
+    assert_eq!(app.settings.search_url, "https://search.example/?q={query}", "not restored yet");
+    app.submit_form(0, Some(reset));
+    assert_eq!(app.settings, Settings::default());
+    assert_eq!(app.current_tab().status_message, "Settings restored to defaults");
+    assert_eq!(std::fs::read_to_string(dir.join(SETTINGS_FILE)).unwrap(), Settings::default().to_file_text());
+    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -79,9 +79,10 @@ Command-line options:
 ## Using it
 
 Press **`e`**, type an address (or search words) and press Enter. Words that aren't an address are
-searched with [Marginalia](https://marginalia-search.com), a search engine for the
-non-commercial web. Marginalia sometimes shows a "wait a moment" page to slow down bots; select its
-"proceed manually" link to continue, or set a different search engine in [settings](#settings).
+searched with [Marginalia](https://marginalia-search.com), an independent search engine for the
+non-commercial web, through its simpler interface meant for text browsers. On the settings page
+(**`S`**) you can switch to DuckDuckGo's HTML version for the wider web, or enter any search
+address.
 
 Press **`R`** for reader mode, which shows only an article's text: its headline, byline,
 paragraphs, pictures' descriptions and tables, without the site's menus, sidebars, share buttons,

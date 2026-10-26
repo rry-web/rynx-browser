@@ -42,7 +42,7 @@ impl DomRenderer {
     /// to fit on a line with its brackets
     fn field_width(&self, requested: Option<&str>, default: usize) -> usize {
         let wanted = requested.and_then(|n| n.trim().parse::<usize>().ok()).unwrap_or(default);
-        wanted.clamp(4, 40).min(self.max_width.saturating_sub(2).max(4))
+        wanted.clamp(4, 80).min(self.max_width.saturating_sub(2).max(4))
     }
 
     pub(super) fn render_input(&mut self, elem: &scraper::node::Element) {
@@ -124,7 +124,7 @@ impl DomRenderer {
             options.push(SelectOption { value, label: sanitize_for_terminal(&label).into_owned() });
         }
         let widest = options.iter().map(|o| o.label.chars().map(char_width).sum::<usize>()).max().unwrap_or(0);
-        let width = (widest + 2).clamp(4, 40).min(self.max_width.saturating_sub(2).max(4));
+        let width = (widest + 2).clamp(4, 80).min(self.max_width.saturating_sub(2).max(4));
         let control = FormControl {
             form: None,
             kind: ControlKind::Select { options },

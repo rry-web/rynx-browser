@@ -67,6 +67,8 @@ pub struct App {
     /// Recent tool results, shown at about:tool-result?id=<n>: (n, title, page)
     pub tool_results: std::collections::VecDeque<(u64, String, String)>,
     next_result_id: u64,
+    /// Restore defaults was pressed once on the settings page; a second press restores them
+    pub confirm_reset_settings: bool,
     /// `x` was pressed once on the history page; a second press clears it
     pub confirm_clear_history: bool,
     /// Latest terminal width, for laying out pages the browser makes itself
@@ -110,6 +112,7 @@ impl App {
             history: History::default(),
             gemini_hosts: Arc::default(),
             confirm_clear_history: false,
+            confirm_reset_settings: false,
             mcp: Arc::default(),
             mcp_tools: HashMap::new(),
             tool_results: std::collections::VecDeque::new(),
@@ -397,7 +400,7 @@ impl App {
         // The settings page's form saves settings; like the tools page below, only the browser's
         // own page can do this, never a web page's form
         if tab.page_url.is_none() && tab.url_input == SETTINGS_PAGE {
-            self.save_settings_form(form);
+            self.save_settings_form(form, submitter);
             return;
         }
         // Forms on the browser's tools page run tools; a web page's forms can never reach them

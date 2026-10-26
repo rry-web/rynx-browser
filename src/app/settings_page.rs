@@ -11,7 +11,6 @@ pub const SETTINGS_PAGE: &str = "about:settings";
 /// Text fields on the page: (setting key, label, explanation)
 const TEXT_FIELDS: &[(&str, &str, &str)] = &[
     ("home_page", "Home page", "Opened in new tabs. Empty: the start page with the key bindings."),
-    ("search_url", "Search engine", "Words typed in the address bar are searched here; {query} is replaced by them."),
     (
         "user_agent",
         "Browser identity (User-Agent)",
@@ -55,16 +54,32 @@ impl App {
         ));
 
         html.push_str("<h2>Browsing</h2>");
+        // Search: a choice of engines that work without JavaScript, or an address of your own
+        let preset = crate::constants::SEARCH_ENGINES.iter().find(|(_, _, url)| *url == s.search_url);
+        let mut engines: String = crate::constants::SEARCH_ENGINES
+            .iter()
+            .map(|(name, label, _)| {
+                let selected = if preset.is_some_and(|(n, ..)| n == name) { " selected" } else { "" };
+                format!("<option value=\"{name}\"{selected}>{}</option>", escape_html(label))
+            })
+            .collect();
+        let custom = if preset.is_none() { " selected" } else { "" };
+        engines.push_str(&format!("<option value=\"custom\"{custom}>Custom: the address below</option>"));
+        html.push_str(&format!(
+            "<p><b>Search engine</b>: for words typed in the address bar.<br><select name=\"search_engine\">{engines}</select></p>\
+             <p><b>Custom search address</b>: used when Custom is chosen; {{query}} is replaced by the search words.<br>\
+             <input type=\"text\" name=\"search_url\" size=\"80\" value=\"{}\"></p>",
+            escape_html(if preset.is_none() { &s.search_url } else { "" })
+        ));
         for (key, label, about) in TEXT_FIELDS {
             let value = match *key {
                 "home_page" => s.home_page.clone().unwrap_or_default(),
-                "search_url" => s.search_url.clone(),
                 "user_agent" => s.user_agent.clone(),
                 "i2p_proxy" => s.i2p_proxy.clone(),
                 _ => s.download_dir.as_ref().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default(),
             };
             html.push_str(&format!(
-                "<p><b>{}</b>: {}<br><input type=\"text\" name=\"{}\" size=\"70\" value=\"{}\"></p>",
+                "<p><b>{}</b>: {}<br><input type=\"text\" name=\"{}\" size=\"80\" value=\"{}\"></p>",
                 escape_html(label),
                 escape_html(about),
                 key,
@@ -86,7 +101,10 @@ impl App {
             s.solve_anubis,
             "Pass Anubis bot checks by doing their proof of work, without JavaScript",
         ));
-        html.push_str("<p><input type=\"submit\" value=\"Save settings\"></p></form>");
+        html.push_str(
+            "<p><input type=\"submit\" value=\"Save settings\"> \
+             <input type=\"submit\" name=\"reset\" value=\"Restore defaults\"></p></form>",
+        );
         match &self.config_dir {
             Some(dir) => html.push_str(&format!(
                 "<p>Saved to {}, which can also be edited by hand (saving here rewrites it).</p>",
@@ -98,12 +116,23 @@ impl App {
     }
 
     /// Save the settings page's form: check it as the settings file would be, write the file and
-    /// apply the new settings
-    pub(super) fn save_settings_form(&mut self, form: usize) {
+    /// apply the new settings. Pressed with the Restore defaults button (twice, to confirm), it
+    /// puts every setting back to its default instead.
+    pub(super) fn save_settings_form(&mut self, form: usize, submitter: Option<usize>) {
         let tab = &self.tabs[self.active_tab_index];
+        if submitter.and_then(|i| tab.controls.get(i)).is_some_and(|c| c.name == "reset") {
+            if !std::mem::replace(&mut self.confirm_reset_settings, true) {
+                self.current_tab().status_message =
+                    String::from("Press Restore defaults again to put every setting back to its default");
+                return;
+            }
+            self.confirm_reset_settings = false;
+            return self.store_settings(crate::settings::Settings::default(), "Settings restored to defaults");
+        }
         let mut lines = Vec::new();
         let mut history = false;
         let mut anubis = false;
+        let mut engine = None;
         for (control, value) in tab.controls.iter().zip(&tab.control_values) {
             if control.form != Some(form) {
                 continue;
@@ -111,6 +140,11 @@ impl App {
             match (control.name.as_str(), value) {
                 ("history", ControlValue::Checked(on)) => history = *on,
                 ("anubis", ControlValue::Checked(on)) => anubis = *on,
+                (key, ControlValue::Selected(i)) if key == "search_engine" => {
+                    if let ControlKind::Select { options } = &control.kind {
+                        engine = options.get(*i).map(|o| o.value.clone());
+                    }
+                }
                 (key, ControlValue::Text(text)) if !text.trim().is_empty() => {
                     // One line per setting: a line break typed in can't add a setting
                     lines.push(format!("{} = {}", key, text.replace(['\r', '\n'], " ").trim()))
@@ -125,6 +159,15 @@ impl App {
                 _ => {}
             }
         }
+        // A chosen engine's address wins over whatever is in the custom field
+        if let Some(url) = crate::constants::SEARCH_ENGINES
+            .iter()
+            .find(|(name, ..)| Some(*name) == engine.as_deref())
+            .map(|(_, _, url)| url)
+        {
+            lines.retain(|line| !line.starts_with("search_url ="));
+            lines.push(format!("search_url = {}", url));
+        }
         lines.push(format!("history = {}", if history { "on" } else { "off" }));
         lines.push(format!("anubis = {}", if anubis { "on" } else { "off" }));
 
@@ -135,8 +178,13 @@ impl App {
             self.current_tab().status_message = format!("Not saved: {}", problem);
             return;
         }
+        self.store_settings(settings, "Settings saved");
+    }
+
+    /// Write settings to the settings file, apply them, and show the page again with `message`
+    fn store_settings(&mut self, settings: crate::settings::Settings, message: &'static str) {
         let saved = match &self.config_dir {
-            Some(dir) => settings.save(dir).map(|_| "Settings saved"),
+            Some(dir) => settings.save(dir).map(|_| message),
             None => Ok("Settings applied (no settings folder to save them in)"),
         };
         match saved {
