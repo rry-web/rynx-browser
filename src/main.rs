@@ -59,20 +59,22 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 }
 
 async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
+    let mut size = terminal.size()?;
     loop {
-        let size = terminal.size()?;
-
         terminal.draw(|f| ui(f, &app))?;
 
         // Handle network events
         process_network_events::<B>(&mut app, size.width)?;
 
-        // Handle input events
-        if event::poll(Duration::from_millis(
-            rynx_browser::constants::EVENT_POLL_TIMEOUT_MS,
-        ))? {
+        // Handle input events: wait briefly for the first, then everything already queued before
+        // redrawing. One event per frame let touchpad bursts pile up and replay long after.
+        let mut timeout = Duration::from_millis(rynx_browser::constants::EVENT_POLL_TIMEOUT_MS);
+        while event::poll(timeout)? {
+            timeout = Duration::ZERO;
             match event::read()? {
-                Event::Resize(width, _height) => {
+                Event::Resize(width, height) => {
+                    size.width = width;
+                    size.height = height;
                     app.resize_all_tabs(width);
                 }
                 Event::Key(key) => {
