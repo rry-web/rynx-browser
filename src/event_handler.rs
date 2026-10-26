@@ -154,6 +154,7 @@ fn handle_normal_mode<B: Backend>(
             let active_index = app.active_tab_index;
             let tab = app.current_tab();
             tab.is_source_view = !tab.is_source_view; // Toggle
+            tab.content_changed();
 
             // Update the status message
             tab.status_message = if tab.is_source_view {
@@ -486,6 +487,7 @@ pub fn handle_network_event<B: Backend>(
         NetworkResponse::DownloadProgress(id, ..) => *id,
         NetworkResponse::DownloadFinished(id, ..) => *id,
         NetworkResponse::DownloadError(id, ..) => *id,
+        NetworkResponse::Rendered(id, ..) => *id,
     };
 
     if let Some(index) = app.tabs.iter().position(|t| t.id == target_id) {
@@ -525,8 +527,7 @@ pub fn handle_network_event<B: Backend>(
             NetworkResponse::Success(_, title, html_source, final_url, kind) => {
                 let tab = &mut app.tabs[index];
                 tab.page_title = title;
-                tab.html_source = html_source;
-                tab.page_kind = kind;
+                tab.set_content(html_source, kind);
                 tab.reset_page_state();
                 tab.status_message = String::from("Loaded");
 
@@ -544,10 +545,14 @@ pub fn handle_network_event<B: Backend>(
                 }
                 tab.page_url = Some(page_url);
 
+                tab.jump_after_render(fragment);
                 app.render_tab(index, terminal_width);
-                if let Some(fragment) = fragment {
-                    app.tabs[index].jump_to_fragment(&fragment);
+                if app.is_rendering(index) {
+                    app.tabs[index].status_message = String::from(crate::app::RENDERING_STATUS);
                 }
+            }
+            NetworkResponse::Rendered(_, version, page) => {
+                app.finish_render(index, version, *page);
             }
             NetworkResponse::DownloadError(_, msg) => {
                 let tab = &mut app.tabs[index];
@@ -569,9 +574,12 @@ pub fn handle_network_event<B: Backend>(
             NetworkResponse::Error(_, msg) => {
                 let tab = &mut app.tabs[index];
                 tab.page_title = String::from("Error");
-                tab.html_source = format!(
-                    "<h1>Error</h1><hr><p style='color:red'>{}</p>",
-                    crate::network::escape_html(&msg)
+                tab.set_content(
+                    format!(
+                        "<h1>Error</h1><hr><p style='color:red'>{}</p>",
+                        crate::network::escape_html(&msg)
+                    ),
+                    crate::network::PageKind::Html,
                 );
                 tab.reset_page_state();
                 tab.page_url = None;

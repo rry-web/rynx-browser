@@ -5,8 +5,9 @@ use crate::constants::{
 use crate::models::{InputMode, LinkRegion, SearchState, Selection};
 use crate::network::{
     ContentClass, NetworkManager, NetworkResponse, PageKind, attempt_jump, classify_content_type,
-    fragment_of, parse_html_metadata, should_attempt_jump,
+    fragment_of, should_attempt_jump,
 };
+use crate::renderer::{RenderJob, RenderedPage, render_page};
 use crate::renderer::DomRenderer;
 
 use ratatui::text::Line;
@@ -22,6 +23,9 @@ use directories::UserDirs;
 use futures_util::StreamExt;
 use tokio::io::AsyncWriteExt; // Required for streaming to file
 
+/// Status shown while a new page is laid out in the background
+pub const RENDERING_STATUS: &str = "Rendering...";
+
 pub struct BrowserTab {
     pub id: usize,
     pub url_input: String,
@@ -33,7 +37,7 @@ pub struct BrowserTab {
     pub selected_link_index: usize,
     pub input_mode: InputMode,
     pub status_message: String,
-    pub html_source: String,
+    pub html_source: Arc<str>,
     pub is_source_view: bool,
     pub cursor_line: usize,
     pub cursor_char: usize,
@@ -51,6 +55,15 @@ pub struct BrowserTab {
     pub pending_fragment: Option<String>,
     /// Whether html_source holds HTML or plain text
     pub page_kind: PageKind,
+    /// Bumped whenever what's shown changes (new page, source view toggle), so a background
+    /// render of older content is never applied
+    pub content_version: u64,
+    /// Version of the background render currently running, if any
+    render_in_flight: Option<u64>,
+    /// Width for one more render once the running one finishes (coalesces rapid resizes)
+    render_pending_width: Option<u16>,
+    /// #fragment to jump to once the page has been laid out
+    jump_after_render: Option<String>,
 }
 
 impl BrowserTab {
@@ -150,6 +163,40 @@ impl BrowserTab {
         true
     }
 
+    /// Replace what the tab shows. The old layout is cleared at once, so links from the previous
+    /// page can't be followed while the new one is being laid out.
+    pub fn set_content(&mut self, source: impl Into<Arc<str>>, kind: PageKind) {
+        self.html_source = source.into();
+        self.page_kind = kind;
+        self.content_changed();
+    }
+
+    /// Mark the shown content as changed (e.g. toggling source view)
+    pub fn content_changed(&mut self) {
+        self.content_version += 1;
+        self.rendered_content.clear();
+        self.link_regions.clear();
+        self.anchors.clear();
+    }
+
+    /// Jump to `fragment` once the page being laid out is ready
+    pub fn jump_after_render(&mut self, fragment: Option<String>) {
+        self.jump_after_render = fragment;
+    }
+
+    fn apply_render(&mut self, page: RenderedPage) {
+        self.rendered_content = page.lines;
+        self.link_regions = page.links;
+        self.anchors = page.anchors;
+        if let Some(title) = page.title {
+            self.page_title = title;
+        }
+        self.clamp_positions();
+        if let Some(fragment) = self.jump_after_render.take() {
+            self.jump_to_fragment(&fragment);
+        }
+    }
+
     /// Keep the selected link and cursor inside the current content after a re-render
     fn clamp_positions(&mut self) {
         if self.selected_link_index >= self.link_regions.len() {
@@ -183,7 +230,8 @@ impl BrowserTab {
             selected_link_index: 0,
             input_mode: InputMode::Normal,
             status_message: String::from("Ready"),
-            html_source: String::new(),
+            // Kept so the help page can be laid out again at other widths
+            html_source: Arc::from(help_html),
             is_source_view: false,
             cursor_line: 0,
             cursor_char: 0,
@@ -196,6 +244,10 @@ impl BrowserTab {
             page_url: None,
             pending_fragment: None,
             page_kind: PageKind::Html,
+            content_version: 0,
+            render_in_flight: None,
+            render_pending_width: None,
+            jump_after_render: None,
         }
     }
 
@@ -308,6 +360,9 @@ pub struct App {
     pub clipboard: Option<arboard::Clipboard>,
     pub network_manager: Arc<NetworkManager>,
     pub download_dir: PathBuf,
+    /// Lay pages out on a background thread (the default), so slow pages never freeze the UI.
+    /// When false, rendering happens inline, which tests use for deterministic results.
+    pub render_in_background: bool,
 }
 
 impl App {
@@ -331,6 +386,7 @@ impl App {
             download_dir: UserDirs::new()
                 .and_then(|dirs| dirs.download_dir().map(|p| p.to_path_buf()))
                 .unwrap_or_default(),
+            render_in_background: true,
         })
     }
 
@@ -348,29 +404,63 @@ impl App {
         &mut self.tabs[self.active_tab_index]
     }
 
+    /// Lay out a tab's content for a terminal `width` columns wide
     pub fn render_tab(&mut self, tab_index: usize, width: u16) {
-        if let Some(tab) = self.tabs.get_mut(tab_index) {
-            if tab.is_source_view {
-                tab.rendered_content = tab
-                    .html_source
-                    .lines()
-                    .map(|l| Line::from(crate::renderer::sanitize_for_terminal(l).into_owned()))
-                    .collect();
-                tab.link_regions.clear();
-                tab.anchors.clear();
-            } else {
-                // DomRenderer::new leaves room for the page's border itself
-                let mut renderer = DomRenderer::new(width as usize);
-                match tab.page_kind {
-                    PageKind::Html => renderer.render(&Html::parse_document(&tab.html_source)),
-                    PageKind::PlainText => renderer.render_plain_text(&tab.html_source),
-                }
-                tab.rendered_content = renderer.lines;
-                tab.link_regions = renderer.links;
-                tab.anchors = renderer.anchors;
-            }
-            tab.clamp_positions();
+        let background = self.render_in_background;
+        let tx = self.tx.clone();
+        let Some(tab) = self.tabs.get_mut(tab_index) else {
+            return;
+        };
+        let job = RenderJob {
+            source: Arc::clone(&tab.html_source),
+            kind: tab.page_kind,
+            source_view: tab.is_source_view,
+            width,
+        };
+        if !background {
+            tab.apply_render(render_page(&job));
+            return;
         }
+
+        let version = tab.content_version;
+        if tab.render_in_flight == Some(version) {
+            // This content is already being laid out; render once more at the latest width when
+            // that finishes, instead of piling up renders during a resize
+            tab.render_pending_width = Some(width);
+            return;
+        }
+        // New content starts right away; an older render still running is discarded on arrival
+        tab.render_in_flight = Some(version);
+        tab.render_pending_width = None;
+        let tab_id = tab.id;
+        tokio::task::spawn_blocking(move || {
+            let page = render_page(&job);
+            let _ = tx.blocking_send(NetworkResponse::Rendered(tab_id, version, Box::new(page)));
+        });
+    }
+
+    /// A background render finished: show it if it's still current, then run any queued render
+    pub fn finish_render(&mut self, tab_index: usize, version: u64, page: RenderedPage) {
+        let Some(tab) = self.tabs.get_mut(tab_index) else {
+            return;
+        };
+        if version == tab.content_version {
+            tab.apply_render(page);
+            if tab.status_message == RENDERING_STATUS {
+                tab.status_message = String::from("Loaded");
+            }
+        }
+        if tab.render_in_flight == Some(version) {
+            tab.render_in_flight = None;
+            if let Some(width) = tab.render_pending_width.take() {
+                self.render_tab(tab_index, width);
+            }
+        }
+    }
+
+    /// Whether a background render is running for the tab
+    pub fn is_rendering(&self, tab_index: usize) -> bool {
+        self.tabs.get(tab_index).is_some_and(|t| t.render_in_flight.is_some())
     }
 
     pub fn resize_all_tabs(&mut self, width: u16) {
@@ -553,9 +643,12 @@ impl App {
 
                     match crate::network::read_text_limited(resp, MAX_PAGE_SIZE_BYTES).await {
                         Ok(body) => {
-                            let (title, kind) = match class {
-                                ContentClass::Html => (parse_html_metadata(&body).title, PageKind::Html),
-                                _ => (crate::network::title_from_url(&final_url), PageKind::PlainText),
+                            // The page isn't parsed here; an HTML page's <title> replaces this
+                            // name once the page has been laid out
+                            let title = crate::network::title_from_url(&final_url);
+                            let kind = match class {
+                                ContentClass::Html => PageKind::Html,
+                                _ => PageKind::PlainText,
                             };
                             let _ = tx_clone
                                 .send(NetworkResponse::Success(id, title, body, final_url, kind))

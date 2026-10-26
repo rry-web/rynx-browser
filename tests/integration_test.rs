@@ -43,7 +43,8 @@ async fn test_full_request_to_render_flow() {
     }
 
     if let Some(NetworkResponse::Success(id, title, body, final_url, kind)) = final_response {
-        assert_eq!(title, "Test Page");
+        // The page isn't parsed by the network task; its <title> arrives with the layout
+        assert_eq!(title, "127.0.0.1");
 
         // Use the actual terminal width constant or a test value
         let test_width = 80;
@@ -53,6 +54,12 @@ async fn test_full_request_to_render_flow() {
             test_width,
         )
         .unwrap();
+        // Pages are laid out on a background thread; wait for the result
+        while app.is_rendering(app.active_tab_index) {
+            let resp = app.rx.recv().await.unwrap();
+            handle_network_event::<TestBackend>(&mut app, resp, test_width).unwrap();
+        }
+        assert_eq!(app.current_tab().page_title, "Test Page");
 
         // Verify the content exists somewhere in the rendered lines
         let found = app
@@ -186,6 +193,8 @@ fn test_app() -> App {
     let mut app = App::new(tx, rx).expect("Failed to create App");
     // Never let a test write into the real Downloads folder
     app.download_dir = unique_temp_dir();
+    // Lay pages out inline so tests see results immediately; background rendering has its own tests
+    app.render_in_background = false;
     app
 }
 
@@ -268,7 +277,8 @@ async fn test_rerender_clamps_link_selection() {
 #[tokio::test]
 async fn test_visual_mode_on_empty_page_does_not_panic() {
     let mut app = test_app();
-    // Source view of the help tab has no html_source, so there are no lines at all
+    // Source view of an empty page has no lines at all
+    load_page(&mut app, "");
     handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('V')), 80, 24).unwrap();
     assert!(app.current_tab().rendered_content.is_empty());
 
@@ -1110,9 +1120,10 @@ async fn test_compressed_page_under_limit_still_loads() {
 
     let mut app = test_app();
     let resp = load_url(&mut app, &format!("{}/small", mock_server.uri())).await;
-    let NetworkResponse::Success(_, title, body, _, _) = resp else { panic!("small page failed") };
-    assert_eq!(title, "Small");
+    let NetworkResponse::Success(_, _, ref body, _, _) = resp else { panic!("small page failed") };
     assert!(body.contains("compressed ok"));
+    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+    assert_eq!(app.current_tab().page_title, "Small");
 }
 
 #[tokio::test]

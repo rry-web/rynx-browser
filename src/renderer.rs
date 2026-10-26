@@ -1,11 +1,13 @@
 use crate::constants::UI_BORDER_WIDTH;
 use crate::models::LinkRegion;
+use crate::network::PageKind;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ego_tree::iter::Edge;
-use scraper::{ElementRef, Html, Node};
+use scraper::{ElementRef, Html, Node, Selector};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
 use unicode_width::UnicodeWidthChar;
 
 /// Make untrusted text safe to draw. Control characters are dropped because a terminal acts on
@@ -43,6 +45,59 @@ fn char_width(ch: char) -> usize {
 
 fn text_width(text: &str) -> usize {
     text.chars().map(char_width).sum()
+}
+
+/// Everything needed to lay out a page, so it can run away from the UI thread
+pub struct RenderJob {
+    pub source: Arc<str>,
+    pub kind: PageKind,
+    pub source_view: bool,
+    /// Terminal width; the page's border is allowed for
+    pub width: u16,
+}
+
+/// A laid-out page, ready to draw
+pub struct RenderedPage {
+    pub lines: Vec<Line<'static>>,
+    pub links: Vec<LinkRegion>,
+    pub anchors: HashMap<String, usize>,
+    /// The document's <title>, for HTML pages that have one
+    pub title: Option<String>,
+}
+
+/// Parse and lay out a page. Pure and thread-safe: the UI runs it on a background thread, so a
+/// page that is slow to parse never freezes input or drawing.
+pub fn render_page(job: &RenderJob) -> RenderedPage {
+    if job.source_view {
+        let lines = job
+            .source
+            .lines()
+            .map(|l| Line::from(sanitize_for_terminal(l).into_owned()))
+            .collect();
+        return RenderedPage { lines, links: Vec::new(), anchors: HashMap::new(), title: None };
+    }
+    let mut renderer = DomRenderer::new(job.width as usize);
+    let title = match job.kind {
+        PageKind::Html => {
+            let document = Html::parse_document(&job.source);
+            renderer.render(&document);
+            document_title(&document)
+        }
+        PageKind::PlainText => {
+            renderer.render_plain_text(&job.source);
+            None
+        }
+    };
+    RenderedPage { lines: renderer.lines, links: renderer.links, anchors: renderer.anchors, title }
+}
+
+/// The text of the document's <title>, whitespace collapsed
+fn document_title(document: &Html) -> Option<String> {
+    static TITLE: OnceLock<Selector> = OnceLock::new();
+    let selector = TITLE.get_or_init(|| Selector::parse("title").expect("valid selector"));
+    let title = document.select(selector).next()?.text().collect::<String>();
+    let title = title.split_ascii_whitespace().collect::<Vec<_>>().join(" ");
+    (!title.is_empty()).then_some(title)
 }
 
 /// Byte ranges of http(s) URLs in a line of plain text, without trailing punctuation

@@ -2,10 +2,7 @@ use crate::constants::{
     BROWSING_TIMEOUT_SECS, DOWNLOAD_TIMEOUT_SECS, I2P_PROXY_URL, JUMP_SERVICES, MAX_REDIRECTS,
     USER_AGENT,
 };
-use crate::models::PageMetadata;
 use reqwest::{Client, StatusCode};
-use scraper::{Html, Selector};
-use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use url::{Host, Url};
@@ -19,6 +16,8 @@ pub enum NetworkResponse {
     DownloadProgress(usize, u64, Option<u64>),
     DownloadFinished(usize, String), // tab_id, filename
     DownloadError(usize, String),    // tab_id, message; leaves the page untouched
+    /// A page laid out by a background render: tab_id, content version it was made from
+    Rendered(usize, u64, Box<crate::renderer::RenderedPage>),
 }
 
 /// How a page's body is shown
@@ -254,27 +253,6 @@ impl NetworkManager {
             &self.download_client
         }
     }
-}
-
-pub fn parse_html_metadata(html: &str) -> PageMetadata {
-    let document = Html::parse_document(html);
-    static TITLE_SELECTOR: OnceLock<Selector> = OnceLock::new();
-    let title_selector = TITLE_SELECTOR.get_or_init(|| Selector::parse("title").unwrap());
-
-    let title = document
-        .select(title_selector)
-        .next()
-        .map(|element| {
-            element
-                .text()
-                .collect::<Vec<_>>()
-                .join(" ")
-                .trim()
-                .to_string()
-        })
-        .unwrap_or_else(|| "No Title".to_string());
-
-    PageMetadata { title }
 }
 
 /// Loopback hosts, which are reachable over plain HTTP for local development

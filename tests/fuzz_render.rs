@@ -221,6 +221,7 @@ fn new_app() -> App {
     let (tx, rx) = tokio::sync::mpsc::channel(10);
     let mut app = App::new(tx, rx).unwrap();
     app.clipboard = None;
+    app.render_in_background = false;
     app
 }
 

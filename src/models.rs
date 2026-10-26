@@ -8,10 +8,6 @@ pub struct LinkRegion {
     pub x_end: usize,
 }
 
-pub struct PageMetadata {
-    pub title: String,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum InputMode {
     Normal,

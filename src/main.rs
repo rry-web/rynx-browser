@@ -75,14 +75,19 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     terminal.show_cursor()?;
 
     if let Err(err) = res {
-        println!("{:?}", err)
+        println!("{:?}", err);
+        std::process::exit(1);
     }
 
-    Ok(())
+    // Exit now rather than returning: the runtime would wait for any page still being laid out
+    // on a background thread, which can't be interrupted. The terminal is already restored.
+    std::process::exit(0);
 }
 
 async fn run_app<B: Backend<Error = io::Error>>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     let mut size = terminal.size()?;
+    // Lay out the start page for the actual terminal width
+    app.resize_all_tabs(size.width);
     loop {
         terminal.draw(|f| ui(f, &app))?;
 
