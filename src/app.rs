@@ -4,12 +4,14 @@ use crate::constants::{
 };
 use crate::models::{InputMode, LinkRegion, SearchState, Selection};
 use crate::network::{
-    NetworkManager, NetworkResponse, attempt_jump, parse_html_metadata, should_attempt_jump,
+    NetworkManager, NetworkResponse, attempt_jump, fragment_of, parse_html_metadata,
+    should_attempt_jump,
 };
 use crate::renderer::DomRenderer;
 
 use ratatui::text::Line;
 use scraper::Html;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -41,6 +43,12 @@ pub struct BrowserTab {
     pub download_prompt: Option<crate::models::DownloadPrompt>,
     /// Address bar contents when Edit mode was entered, for history and cancelling
     pub url_before_edit: Option<String>,
+    /// Line index of each in-page link target on the displayed page
+    pub anchors: HashMap<String, usize>,
+    /// URL of the displayed document after redirects; None for the help page and error pages
+    pub page_url: Option<String>,
+    /// #fragment to jump to once the page being loaded arrives
+    pub pending_fragment: Option<String>,
 }
 
 impl BrowserTab {
@@ -100,6 +108,46 @@ impl BrowserTab {
         }
     }
 
+    /// Base URL for links on the displayed page
+    pub fn link_base(&self) -> &str {
+        self.page_url.as_deref().unwrap_or(&self.url_input)
+    }
+
+    /// Whether `url` refers to the displayed document, ignoring any #fragment
+    pub fn is_current_document(&self, url: &str) -> bool {
+        let page = self.page_url.as_deref().and_then(|p| Url::parse(p).ok());
+        match (page, Url::parse(url)) {
+            (Some(mut page), Ok(mut target)) => {
+                page.set_fragment(None);
+                target.set_fragment(None);
+                page == target
+            }
+            _ => false,
+        }
+    }
+
+    /// Scroll to the element named by `fragment`; returns false if the page has no such anchor
+    pub fn jump_to_fragment(&mut self, fragment: &str) -> bool {
+        let decoded = percent_encoding::percent_decode_str(fragment).decode_utf8_lossy();
+        let line = match self.anchors.get(decoded.as_ref()).or_else(|| self.anchors.get(fragment)) {
+            Some(&line) => line,
+            // "#" and "#top" mean the top of the page unless something is named that
+            None if decoded.is_empty() || decoded.eq_ignore_ascii_case("top") => 0,
+            None => {
+                self.status_message = format!("Anchor #{} not found on this page", decoded);
+                return false;
+            }
+        };
+        self.scroll = line;
+        self.cursor_line = line.min(self.rendered_content.len().saturating_sub(1));
+        self.cursor_char = 0;
+        // Tab continues from the jump target rather than wherever the selection was
+        if let Some(i) = self.link_regions.iter().position(|l| l.line_index >= line) {
+            self.selected_link_index = i;
+        }
+        true
+    }
+
     /// Keep the selected link and cursor inside the current content after a re-render
     fn clamp_positions(&mut self) {
         if self.selected_link_index >= self.link_regions.len() {
@@ -142,6 +190,9 @@ impl BrowserTab {
             search_state: None,
             download_prompt: None,
             url_before_edit: None,
+            anchors: renderer.anchors,
+            page_url: None,
+            pending_fragment: None,
         }
     }
 
@@ -300,12 +351,14 @@ impl App {
                     .map(|l| Line::from(l.to_string()))
                     .collect();
                 tab.link_regions.clear();
+                tab.anchors.clear();
             } else {
                 let document = Html::parse_document(&tab.html_source);
                 let mut renderer = DomRenderer::new(content_width);
                 renderer.render(&document);
                 tab.rendered_content = renderer.lines;
                 tab.link_regions = renderer.links;
+                tab.anchors = renderer.anchors;
             }
             tab.clamp_positions();
         }
@@ -339,6 +392,49 @@ impl App {
         self.tabs.push(new_tab);
         self.active_tab_index = self.tabs.len() - 1;
         self.id_counter += 1;
+        self.submit_request();
+    }
+
+    /// Follow a link in the current tab, recording the current address in history
+    pub fn follow_link(&mut self, url: String) {
+        let tab = self.current_tab();
+        if !tab.url_input.is_empty() {
+            tab.history.push(tab.url_input.clone());
+        }
+        tab.url_input = url;
+        self.load_url_input(false);
+    }
+
+    /// Return to the previous history entry
+    pub fn go_back(&mut self) {
+        let tab = self.current_tab();
+        if let Some(previous_url) = tab.history.pop() {
+            tab.url_input = previous_url;
+            self.load_url_input(true);
+        }
+    }
+
+    /// Load the address in url_input, or jump within the displayed page when only the
+    /// #fragment differs. A link to the same page without a fragment reloads it, but going
+    /// back through history to it does not.
+    pub fn load_url_input(&mut self, from_history: bool) {
+        let tab = self.current_tab();
+        let url = tab.url_input.clone();
+        if tab.is_current_document(&url) {
+            match fragment_of(&url) {
+                Some(fragment) => {
+                    tab.page_url = Some(url);
+                    tab.jump_to_fragment(&fragment);
+                    return;
+                }
+                None if from_history => {
+                    tab.page_url = Some(url);
+                    tab.jump_to_fragment("");
+                    return;
+                }
+                None => {}
+            }
+        }
         self.submit_request();
     }
 
@@ -387,6 +483,8 @@ impl App {
         }
 
         tab.url_input = target_url.clone();
+        // The server never sees the #fragment, so remember it to jump to after loading
+        tab.pending_fragment = fragment_of(&target_url);
         let id = tab.id;
         let tx_clone = self.tx.clone();
         let use_i2p = self.i2p_mode;
@@ -424,11 +522,18 @@ impl App {
                         }
                     }
 
+                    // Where redirects actually led; relative links resolve against this
+                    let final_url = resp.url().to_string();
                     match resp.text().await {
                         Ok(html_text) => {
                             let metadata = parse_html_metadata(&html_text);
                             let _ = tx_clone
-                                .send(NetworkResponse::Success(id, metadata.title, html_text))
+                                .send(NetworkResponse::Success(
+                                    id,
+                                    metadata.title,
+                                    html_text,
+                                    final_url,
+                                ))
                                 .await;
                         }
                         Err(e) => {

@@ -2,6 +2,7 @@ use crate::constants::UI_BORDER_WIDTH;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use scraper::{Html, Node};
+use std::collections::HashMap;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 pub struct DomRenderer {
@@ -9,6 +10,8 @@ pub struct DomRenderer {
     current_line: Vec<Span<'static>>,
     style_stack: Vec<Style>,
     pub links: Vec<crate::models::LinkRegion>,
+    /// Line index for each in-page link target (`id`, or `name` on `<a>`)
+    pub anchors: HashMap<String, usize>,
     max_width: usize,
     current_line_width: usize,
     active_link_url: Option<String>,
@@ -40,6 +43,7 @@ impl DomRenderer {
             current_line: Vec::new(),
             style_stack: vec![Style::default()],
             links: Vec::new(),
+            anchors: HashMap::new(),
             max_width: width.saturating_sub(UI_BORDER_WIDTH),
             current_line_width: 0,
             active_link_url: None,
@@ -287,6 +291,15 @@ impl DomRenderer {
                         self.add_vertical_space();
                     }
                     _ => {}
+                }
+
+                // Record link targets after any block spacing, so jumps land on the content
+                let anchor = elem
+                    .attr("id")
+                    .or_else(|| if tag == "a" { elem.attr("name") } else { None });
+                if let Some(name) = anchor {
+                    // First occurrence wins, as in browsers
+                    self.anchors.entry(name.to_string()).or_insert(self.lines.len());
                 }
 
                 for child in node.children() {

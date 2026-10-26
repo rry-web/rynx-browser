@@ -42,14 +42,14 @@ async fn test_full_request_to_render_flow() {
         }
     }
 
-    if let Some(NetworkResponse::Success(id, title, body)) = final_response {
+    if let Some(NetworkResponse::Success(id, title, body, final_url)) = final_response {
         assert_eq!(title, "Test Page");
 
         // Use the actual terminal width constant or a test value
         let test_width = 80;
         handle_network_event::<TestBackend>(
             &mut app,
-            NetworkResponse::Success(id, title, body),
+            NetworkResponse::Success(id, title, body, final_url),
             test_width,
         )
         .unwrap();
@@ -179,6 +179,8 @@ async fn test_input_handling_switch_to_edit_mode() {
 
 // --- Regression test helpers ---
 
+const TEST_PAGE_URL: &str = "http://127.0.0.1:1/page";
+
 fn test_app() -> App {
     let (tx, rx) = mpsc::channel(10);
     let mut app = App::new(tx, rx).expect("Failed to create App");
@@ -219,7 +221,7 @@ fn load_page(app: &mut App, html: &str) {
     let id = app.current_tab().id;
     handle_network_event::<TestBackend>(
         app,
-        NetworkResponse::Success(id, "Page".to_string(), html.to_string()),
+        NetworkResponse::Success(id, "Page".to_string(), html.to_string(), TEST_PAGE_URL.to_string()),
         80,
     )
     .unwrap();
@@ -751,4 +753,117 @@ async fn test_wheel_scroll_in_visual_mode_extends_selection() {
     }
     let sel = app.current_tab().selection.as_ref().unwrap();
     assert_eq!((sel.start_line, sel.end_line), (0, 30));
+}
+
+/// A table of contents linking to a chapter heading far down the page
+fn book_page() -> String {
+    let filler: String = (0..50).map(|i| format!("<p>filler {i}</p>")).collect();
+    format!(
+        "<p><a href='#ch2'>Go to chapter two</a> <a href='#nowhere'>Broken</a></p>{filler}\
+         <p><a id='ch2'></a></p><h2>Chapter Two</h2><p><a href='next.html'>Next</a></p>{filler}"
+    )
+}
+
+fn line_text(app: &mut App, line: usize) -> String {
+    app.current_tab().rendered_content[line].to_string()
+}
+
+/// Wait a moment and report whether the tab started a network request
+async fn made_request(app: &mut App) -> bool {
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    std::iter::from_fn(|| app.rx.try_recv().ok()).any(|r| matches!(r, NetworkResponse::Loading(_)))
+}
+
+#[tokio::test]
+async fn test_fragment_link_jumps_within_page_without_reloading() {
+    let mut app = test_app();
+    load_page(&mut app, &book_page());
+    let anchor_line = app.current_tab().anchors["ch2"];
+    assert!(line_text(&mut app, anchor_line + 1).contains("Chapter Two") || line_text(&mut app, anchor_line).contains("Chapter Two"));
+
+    // First link is selected by default
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Enter), 80, 24).unwrap();
+
+    let tab = app.current_tab();
+    assert_eq!(tab.scroll, anchor_line);
+    assert_eq!(tab.cursor_line, anchor_line);
+    assert_eq!(tab.url_input, format!("{TEST_PAGE_URL}#ch2"));
+    assert_eq!(tab.history, vec![TEST_PAGE_URL]);
+    // Tab continues from the chapter, not from the top of the page
+    assert_eq!(tab.link_regions[tab.selected_link_index].url, "next.html");
+    assert!(!made_request(&mut app).await, "fragment link refetched the page");
+
+    // Back returns to the top of the same page, also without a refetch
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
+    assert_eq!(app.current_tab().scroll, 0);
+    assert_eq!(app.current_tab().url_input, TEST_PAGE_URL);
+    assert!(!made_request(&mut app).await, "going back refetched the page");
+}
+
+#[tokio::test]
+async fn test_missing_anchor_reports_and_stays_put() {
+    let mut app = test_app();
+    load_page(&mut app, &book_page());
+    app.current_tab().scroll = 5;
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Tab), 80, 24).unwrap();
+    app.current_tab().scroll = 5;
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Enter), 80, 24).unwrap();
+
+    assert_eq!(app.current_tab().scroll, 5);
+    assert!(app.current_tab().status_message.contains("#nowhere"));
+    assert!(!made_request(&mut app).await);
+}
+
+#[tokio::test]
+async fn test_loading_url_with_fragment_jumps_after_load() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/book.html"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(book_page(), "text/html"))
+        .mount(&mock_server)
+        .await;
+
+    let mut app = test_app();
+    let url = format!("{}/book.html#ch2", mock_server.uri());
+    app.current_tab().url_input = url.clone();
+    app.submit_request();
+    loop {
+        match app.rx.recv().await.unwrap() {
+            resp @ NetworkResponse::Success(..) => {
+                handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+                break;
+            }
+            NetworkResponse::Error(_, e) => panic!("load failed: {e}"),
+            _ => {}
+        }
+    }
+
+    let anchor_line = app.current_tab().anchors["ch2"];
+    assert!(anchor_line > 0);
+    assert_eq!(app.current_tab().scroll, anchor_line);
+    assert_eq!(app.current_tab().url_input, url);
+}
+
+#[tokio::test]
+async fn test_redirected_page_resolves_links_against_final_url() {
+    let mut app = test_app();
+    app.current_tab().url_input = "https://example.com/ebooks/1.html".to_string();
+    let id = app.current_tab().id;
+    handle_network_event::<TestBackend>(
+        &mut app,
+        NetworkResponse::Success(
+            id,
+            "Book".into(),
+            "<a href='images/cover.jpg'>cover</a>".into(),
+            "https://example.com/cache/epub/1/book.html".into(),
+        ),
+        80,
+    )
+    .unwrap();
+
+    let tab = app.current_tab();
+    assert_eq!(tab.url_input, "https://example.com/cache/epub/1/book.html");
+    let resolved = rynx_browser::network::resolve_url(tab.link_base(), &tab.link_regions[0].url);
+    assert_eq!(resolved, "https://example.com/cache/epub/1/images/cover.jpg");
 }

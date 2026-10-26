@@ -62,7 +62,7 @@ fn handle_normal_mode<B: Backend>(
             let download_dir = app.download_dir.clone();
             let tab = app.current_tab();
             if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
-                let url = crate::network::resolve_url(&tab.url_input, &region.url);
+                let url = crate::network::resolve_url(tab.link_base(), &region.url);
                 tab.initiate_download_request(url, &download_dir);
             }
         }
@@ -97,7 +97,7 @@ fn handle_normal_mode<B: Backend>(
         KeyCode::Char('t') => {
             let tab = app.current_tab();
             if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
-                let full_url = crate::network::resolve_url(&tab.url_input, &region.url);
+                let full_url = crate::network::resolve_url(tab.link_base(), &region.url);
                 app.open_link_in_new_tab(full_url);
             }
         }
@@ -192,13 +192,7 @@ fn handle_normal_mode<B: Backend>(
         }
 
         // HISTORY BACK
-        KeyCode::Backspace | KeyCode::Left => {
-            let tab = app.current_tab();
-            if let Some(previous_url) = tab.history.pop() {
-                tab.url_input = previous_url;
-                app.submit_request();
-            }
-        }
+        KeyCode::Backspace | KeyCode::Left => app.go_back(),
 
         // LINK NAVIGATION (Tab)
         KeyCode::Tab | KeyCode::BackTab => {
@@ -226,20 +220,9 @@ fn handle_normal_mode<B: Backend>(
             let tab = app.current_tab();
 
             if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
-                // 1. Save History
-                if !tab.url_input.is_empty() {
-                    tab.history.push(tab.url_input.clone());
-                }
-
-                // 2. Resolve URL (Handle relative paths)
-                let new_url = crate::network::resolve_url(&tab.url_input, &region.url);
-                tab.url_input = new_url;
-
-                // 3. Submit
-                app.submit_request(); // This function already looks at current_tab()
-
-                // 4. Reset
-                app.current_tab().selected_link_index = 0;
+                // Resolve URL (Handle relative paths), then load it or jump within the page
+                let new_url = crate::network::resolve_url(tab.link_base(), &region.url);
+                app.follow_link(new_url);
             }
         }
         KeyCode::Char('p') => {
@@ -259,7 +242,7 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
                 tab.history.push(previous_url);
             }
 
-            app.submit_request();
+            app.load_url_input(false);
             app.current_tab().input_mode = InputMode::Normal;
         }
         // COPY LINE (from address bar to clipboard)
@@ -462,7 +445,7 @@ pub fn handle_mouse_event<B: Backend>(
 
                 if let Some(region) = found_link {
                     // 3. Determine if this should be a download or navigation
-                    let full_url = crate::network::resolve_url(&tab.url_input, &region.url);
+                    let full_url = crate::network::resolve_url(tab.link_base(), &region.url);
 
                     if mouse.modifiers.contains(KeyModifiers::CONTROL) {
                         app.open_link_in_new_tab(full_url);
@@ -471,11 +454,7 @@ pub fn handle_mouse_event<B: Backend>(
                         tab.initiate_download_request(full_url, &download_dir);
                     } else {
                         // Normal navigation for HTML pages
-                        if !tab.url_input.is_empty() {
-                            tab.history.push(tab.url_input.clone());
-                        }
-                        tab.url_input = full_url;
-                        app.submit_request();
+                        app.follow_link(full_url);
                     }
                 }
             }
@@ -543,13 +522,31 @@ pub fn handle_network_event<B: Backend>(
                 d.filename = filename.clone();
                 tab.status_message = format!("Download complete: {}", filename);
             }
-            NetworkResponse::Success(_, title, html_source) => {
+            NetworkResponse::Success(_, title, html_source, final_url) => {
                 let tab = &mut app.tabs[index];
                 tab.page_title = title;
                 tab.html_source = html_source;
                 tab.reset_page_state();
                 tab.status_message = String::from("Loaded");
+
+                // Show where redirects led, keeping the #fragment that was asked for
+                let fragment = tab.pending_fragment.take();
+                let page_url = match url::Url::parse(&final_url) {
+                    Ok(mut url) => {
+                        url.set_fragment(fragment.as_deref());
+                        url.to_string()
+                    }
+                    Err(_) => final_url,
+                };
+                if tab.input_mode != InputMode::Editing {
+                    tab.url_input = page_url.clone();
+                }
+                tab.page_url = Some(page_url);
+
                 app.render_tab(index, terminal_width);
+                if let Some(fragment) = fragment {
+                    app.tabs[index].jump_to_fragment(&fragment);
+                }
             }
             NetworkResponse::DownloadError(_, msg) => {
                 let tab = &mut app.tabs[index];
@@ -573,6 +570,8 @@ pub fn handle_network_event<B: Backend>(
                 tab.page_title = String::from("Error");
                 tab.html_source = format!("<h1>Error</h1><hr><p style='color:red'>{}</p>", msg);
                 tab.reset_page_state();
+                tab.page_url = None;
+                tab.pending_fragment = None;
                 tab.status_message = String::from("Error");
                 app.render_tab(index, terminal_width);
             }

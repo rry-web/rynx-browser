@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 use url::Url;
 
 pub enum NetworkResponse {
-    Success(usize, String, String),
+    Success(usize, String, String, String), // tab_id, title, html, final URL after redirects
     Error(usize, String),
     Loading(usize),
     Info(usize, String),
@@ -19,6 +19,11 @@ pub enum NetworkResponse {
     DownloadProgress(usize, u64, Option<u64>),
     DownloadFinished(usize, String), // tab_id, filename
     DownloadError(usize, String),    // tab_id, message; leaves the page untouched
+}
+
+/// The #fragment of a URL, if it has one
+pub fn fragment_of(url: &str) -> Option<String> {
+    Url::parse(url).ok()?.fragment().map(str::to_string)
 }
 
 /// Resolve relative URLs against a base URL
