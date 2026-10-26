@@ -1,6 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0-beta.2]
+
+Second beta: history, the small web (Gemini, Gopher, RSS/Atom), site tools over MCP, Anubis bot
+checks passed without JavaScript, and an honest User-Agent.
 
 ### Added
 - History: `s` lists the pages you've visited, newest first by day. It's kept in memory unless

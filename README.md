@@ -3,7 +3,7 @@
 A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**, with absolutely
 **zero JavaScript**.
 
-> **Status: beta.** Version 0.2.0-beta.1 is the first release with pre-built binaries. Please report
+> **Status: beta.** Version 0.2.0-beta.2 is the latest pre-built release. Please report
 > problems as [GitHub issues](https://github.com/rry-web/rynx-browser/issues).
 
 - **Readable pages:** headings, numbered and nested lists, blockquotes, aligned table columns, and
@@ -259,7 +259,7 @@ with results recorded in [TEST_LOG.md](TEST_LOG.md). Changes are listed in
 
 CI tests every push on Linux, macOS and Windows, fuzzes the renderer and audits dependencies. To
 make a release, set the version in `Cargo.toml`, add its section to `CHANGELOG.md`, and push a
-matching tag (`git tag v0.2.0-beta.1 && git push origin v0.2.0-beta.1`): the release workflow
+matching tag (`git tag v0.2.0-beta.2 && git push origin v0.2.0-beta.2`): the release workflow
 builds every platform and publishes the release. Tags containing `-` become pre-releases.
 
 ## Roadmap
