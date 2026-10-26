@@ -1,9 +1,9 @@
-use rynx_browser::app::App;
-use rynx_browser::constants::{DEFAULT_TAB_INDEX, INITIAL_TAB_ID};
-use rynx_browser::event_handler::handle_key_event;
-use rynx_browser::event_handler::handle_network_event;
-use rynx_browser::network::{NetworkResponse, PageKind};
-use rynx_browser::ui::ui;
+use rynx::app::App;
+use rynx::constants::{DEFAULT_TAB_INDEX, INITIAL_TAB_ID};
+use rynx::event_handler::handle_key_event;
+use rynx::event_handler::handle_network_event;
+use rynx::network::{NetworkResponse, PageKind};
+use rynx::ui::ui;
 use tokio::sync::mpsc;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
@@ -77,7 +77,7 @@ async fn test_search_url_normalization() {
     app.submit_request();
 
     // Verify it was transformed into a Marginalia search URL
-    assert!(app.current_tab().url_input.starts_with(rynx_browser::constants::MARGINALIA_SEARCH_URL));
+    assert!(app.current_tab().url_input.starts_with(rynx::constants::MARGINALIA_SEARCH_URL));
     assert!(app.current_tab().url_input.contains("query=rust+programming"));
 }
 
@@ -85,7 +85,7 @@ async fn test_search_url_normalization() {
 fn test_utf8_selection_extraction() {
     use ratatui::text::Line;
     let content = vec![Line::from("Hello 🦀 World")]; // "🦀" is multi-byte
-    let selection = rynx_browser::models::Selection {
+    let selection = rynx::models::Selection {
         start_line: 0,
         start_char: 6, // Index of the crab
         end_line: 0,
@@ -161,7 +161,7 @@ async fn test_input_handling_switch_to_edit_mode() {
     assert!(result.is_ok());
 
     // Verify app state changed to Editing
-    assert_eq!(app.current_tab().input_mode, rynx_browser::models::InputMode::Editing);
+    assert_eq!(app.current_tab().input_mode, rynx::models::InputMode::Editing);
 }
 
 // --- Regression test helpers ---
@@ -192,7 +192,7 @@ fn start_download(app: &mut App, url: &str) {
     app.trigger_download(prompt);
 }
 
-fn history_urls(tab: &rynx_browser::app::BrowserTab) -> Vec<&str> {
+fn history_urls(tab: &rynx::app::BrowserTab) -> Vec<&str> {
     tab.history.iter().map(|entry| entry.url.as_str()).collect()
 }
 
@@ -262,7 +262,7 @@ async fn test_visual_mode_on_empty_page_does_not_panic() {
 
 #[tokio::test]
 async fn test_download_popups_render_in_tiny_terminal() {
-    use rynx_browser::models::{Download, DownloadPrompt, DownloadStatus};
+    use rynx::models::{Download, DownloadPrompt, DownloadStatus};
 
     let mut app = test_app();
     app.current_tab().download_state = Some(Download {
@@ -326,7 +326,7 @@ async fn test_search_survives_query_with_no_matches() {
     handle_key_event(&mut app, key(KeyCode::Char('/')), 80, 24).unwrap();
     // Typo: "wx" matches nothing, then correct it to "wo"
     type_text(&mut app, "wx");
-    assert_eq!(app.current_tab().input_mode, rynx_browser::models::InputMode::Search);
+    assert_eq!(app.current_tab().input_mode, rynx::models::InputMode::Search);
     let state = app.current_tab().search_state.as_ref().expect("query should be kept");
     assert_eq!(state.query, "wx");
     assert!(state.matches.is_empty());
@@ -366,7 +366,7 @@ async fn finish_download(app: &mut App) -> (NetworkResponse, usize) {
 
 #[tokio::test]
 async fn test_failed_download_keeps_current_page() {
-    use rynx_browser::models::DownloadStatus;
+    use rynx::models::DownloadStatus;
 
     let mut app = test_app();
     load_page(&mut app, "<h1>My Page</h1>");
@@ -386,7 +386,7 @@ async fn test_failed_download_keeps_current_page() {
 
 #[tokio::test]
 async fn test_page_error_does_not_fail_active_download() {
-    use rynx_browser::models::{Download, DownloadStatus};
+    use rynx::models::{Download, DownloadStatus};
 
     let mut app = test_app();
     app.current_tab().download_state = Some(Download {
@@ -403,7 +403,7 @@ async fn test_page_error_does_not_fail_active_download() {
 
 #[tokio::test]
 async fn test_process_network_events_drains_queue() {
-    use rynx_browser::event_handler::process_network_events;
+    use rynx::event_handler::process_network_events;
 
     let mut app = test_app();
     let id = app.current_tab().id;
@@ -419,7 +419,7 @@ async fn test_process_network_events_drains_queue() {
 
 #[tokio::test]
 async fn test_download_progress_is_throttled() {
-    use rynx_browser::models::DownloadStatus;
+    use rynx::models::DownloadStatus;
 
     let mock_server = MockServer::start().await;
     let body = vec![b'x'; 4 * 1024 * 1024];
@@ -466,7 +466,7 @@ fn test_download_filename_from_url() {
 
 #[tokio::test]
 async fn test_download_ignores_query_string_and_saves_to_prompted_path() {
-    use rynx_browser::models::DownloadStatus;
+    use rynx::models::DownloadStatus;
 
     let mock_server = MockServer::start().await;
     Mock::given(method("GET"))
@@ -554,7 +554,7 @@ async fn test_second_download_in_same_tab_is_refused() {
 #[test]
 fn test_jump_only_for_i2p_sites_in_i2p_mode() {
     use reqwest::StatusCode;
-    use rynx_browser::network::should_attempt_jump;
+    use rynx::network::should_attempt_jump;
 
     assert!(should_attempt_jump(true, "example.i2p", StatusCode::INTERNAL_SERVER_ERROR));
     assert!(should_attempt_jump(true, "example.i2p", StatusCode::SERVICE_UNAVAILABLE));
@@ -567,7 +567,7 @@ fn test_jump_only_for_i2p_sites_in_i2p_mode() {
 
 #[tokio::test]
 async fn test_jump_tries_next_service_after_failure() {
-    use rynx_browser::network::attempt_jump_with;
+    use rynx::network::attempt_jump_with;
 
     let no_entry = MockServer::start().await;
     Mock::given(method("GET")).respond_with(ResponseTemplate::new(404)).mount(&no_entry).await;
@@ -585,7 +585,7 @@ async fn test_jump_tries_next_service_after_failure() {
 
     let (tx, _rx) = mpsc::channel(20);
     // Use the browser's own client: a bare reqwest Client needs a process-wide crypto provider
-    let manager = rynx_browser::network::NetworkManager::new().unwrap();
+    let manager = rynx::network::NetworkManager::new().unwrap();
     let resp = attempt_jump_with(manager.get_client(false), &services, "example.i2p", tx, 0)
         .await
         .expect("should fall through to the working service");
@@ -660,7 +660,7 @@ fn sixty_line_page(app: &mut App) {
 #[tokio::test]
 async fn test_scrolling_stops_at_end_of_page() {
     use crossterm::event::MouseEventKind;
-    use rynx_browser::event_handler::handle_mouse_event;
+    use rynx::event_handler::handle_mouse_event;
 
     let mut app = test_app();
     sixty_line_page(&mut app);
@@ -686,7 +686,7 @@ async fn test_scrolling_stops_at_end_of_page() {
 #[tokio::test]
 async fn test_cursor_follows_wheel_scroll_so_j_does_not_jump_to_top() {
     use crossterm::event::MouseEventKind;
-    use rynx_browser::event_handler::handle_mouse_event;
+    use rynx::event_handler::handle_mouse_event;
 
     let mut app = test_app();
     sixty_line_page(&mut app);
@@ -709,7 +709,7 @@ async fn test_cursor_follows_wheel_scroll_so_j_does_not_jump_to_top() {
 #[tokio::test]
 async fn test_wheel_scroll_in_visual_mode_extends_selection() {
     use crossterm::event::MouseEventKind;
-    use rynx_browser::event_handler::handle_mouse_event;
+    use rynx::event_handler::handle_mouse_event;
 
     let mut app = test_app();
     sixty_line_page(&mut app);
@@ -834,13 +834,13 @@ async fn test_redirected_page_resolves_links_against_final_url() {
 
     let tab = app.current_tab();
     assert_eq!(tab.url_input, "https://example.com/cache/epub/1/book.html");
-    let resolved = rynx_browser::network::resolve_url(tab.link_base(), &tab.link_regions[0].url);
+    let resolved = rynx::network::resolve_url(tab.link_base(), &tab.link_regions[0].url);
     assert_eq!(resolved, "https://example.com/cache/epub/1/images/cover.jpg");
 }
 
 #[test]
 fn test_enforce_https_rules() {
-    use rynx_browser::network::enforce_https;
+    use rynx::network::enforce_https;
 
     let cases = [
         // Only the scheme changes, not http:// inside the query
@@ -862,7 +862,7 @@ fn test_enforce_https_rules() {
 
 #[test]
 fn test_redirect_checks_block_local_network_from_public_sites() {
-    use rynx_browser::network::check_redirect;
+    use rynx::network::check_redirect;
     use url::Url;
 
     let public = Url::parse("https://example.com/").unwrap();
@@ -985,7 +985,7 @@ fn screen_cells(terminal: &Terminal<TestBackend>) -> Vec<String> {
 
 #[tokio::test]
 async fn test_control_characters_never_reach_the_terminal() {
-    use rynx_browser::models::{Download, DownloadStatus};
+    use rynx::models::{Download, DownloadStatus};
 
     // OSC 0 sets the window title, OSC 52 writes the clipboard, CSI 2J clears the screen,
     // and U+009B is the single-byte C1 form of CSI
@@ -1192,7 +1192,7 @@ async fn test_downloads_are_quarantined_for_gatekeeper() {
     let value = String::from_utf8_lossy(&output.stdout);
     let _ = std::fs::remove_dir_all(&dir);
     assert!(output.status.success(), "no quarantine attribute on {saved}");
-    assert!(value.starts_with("0081;") && value.contains(";rynx_browser;"), "{value}");
+    assert!(value.starts_with("0081;") && value.contains(";rynx;"), "{value}");
 }
 
 #[cfg(target_os = "macos")]
@@ -1228,7 +1228,7 @@ fn render_within_time_limit(html: String, width: usize) -> Vec<String> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let document = scraper::Html::parse_document(&html);
-        let mut renderer = rynx_browser::renderer::DomRenderer::new(width);
+        let mut renderer = rynx::renderer::DomRenderer::new(width);
         renderer.render(&document);
         let _ = tx.send(renderer.lines.iter().map(|l| l.to_string()).collect());
     });
@@ -1258,7 +1258,7 @@ fn test_zero_width_content_area_does_not_hang_renderer() {
 #[test]
 fn test_zero_width_characters_do_not_create_empty_link_regions() {
     let document = scraper::Html::parse_document("<a href='/x'>\u{200b}</a><a href='/y'>e\u{301}</a>");
-    let mut renderer = rynx_browser::renderer::DomRenderer::new(80);
+    let mut renderer = rynx::renderer::DomRenderer::new(80);
     renderer.render(&document);
     assert!(renderer.links.iter().all(|l| l.x_start < l.x_end));
     assert!(renderer.links.iter().any(|l| l.url == "/y"));
@@ -1282,7 +1282,7 @@ fn test_rendered_text_is_stored_compactly() {
     // A span per character made a 10MB page use ~700MB; same-styled runs must share spans
     let html = "<p>plain text paragraph with <b>some bold</b> and a <a href='/x'>link</a></p>".repeat(1000);
     let document = scraper::Html::parse_document(&html);
-    let mut renderer = rynx_browser::renderer::DomRenderer::new(80);
+    let mut renderer = rynx::renderer::DomRenderer::new(80);
     renderer.render(&document);
     let spans: usize = renderer.lines.iter().map(|l| l.spans.len()).sum();
     let chars: usize = renderer.lines.iter().map(|l| l.to_string().chars().count()).sum();
@@ -1293,10 +1293,10 @@ fn test_rendered_text_is_stored_compactly() {
 fn test_link_regions_match_drawn_width_for_joined_emoji() {
     // A ZWJ family emoji is width 2 as one string but drawn as 6 cells character by character
     let document = scraper::Html::parse_document("<a href='/f'>family \u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}</a>");
-    let mut renderer = rynx_browser::renderer::DomRenderer::new(80);
+    let mut renderer = rynx::renderer::DomRenderer::new(80);
     renderer.render(&document);
     let link = &renderer.links[0];
-    assert!(link.x_end <= rynx_browser::renderer::display_width(&renderer.lines[link.line_index]));
+    assert!(link.x_end <= rynx::renderer::display_width(&renderer.lines[link.line_index]));
 }
 
 #[tokio::test]
@@ -1317,7 +1317,7 @@ async fn test_requests_send_no_referer_header() {
 
 #[test]
 fn test_content_types_are_classified() {
-    use rynx_browser::network::{ContentClass, classify_content_type};
+    use rynx::network::{ContentClass, classify_content_type};
 
     for html in [None, Some("text/html"), Some("text/html; charset=utf-8"), Some("application/xhtml+xml")] {
         assert_eq!(classify_content_type(html), ContentClass::Html, "{html:?}");
@@ -1402,8 +1402,7 @@ async fn test_pages_use_the_full_content_width() {
     // An 80-column terminal leaves 78 columns inside the page's border
     let mut app = test_app();
     load_page(&mut app, &format!("<p>{}</p><hr>", "word ".repeat(200)));
-    let widths: Vec<usize> =
-        app.current_tab().rendered_content.iter().map(rynx_browser::renderer::display_width).collect();
+    let widths: Vec<usize> = app.current_tab().rendered_content.iter().map(rynx::renderer::display_width).collect();
     assert_eq!(widths.iter().max(), Some(&78), "{widths:?}");
 
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
@@ -1617,7 +1616,7 @@ async fn test_paging_keys() {
 #[tokio::test]
 async fn test_only_binary_file_links_skip_straight_to_downloading() {
     use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
-    use rynx_browser::event_handler::handle_mouse_event;
+    use rynx::event_handler::handle_mouse_event;
 
     let click = |row| MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),

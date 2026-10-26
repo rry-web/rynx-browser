@@ -1,12 +1,12 @@
 //! Gemini and Gopher, against small local servers.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
-use rynx_browser::app::App;
-use rynx_browser::event_handler::{handle_key_event, handle_network_event};
-use rynx_browser::gemini::{self, KnownHosts};
-use rynx_browser::gopher;
-use rynx_browser::network::{NetworkResponse, PageKind};
-use rynx_browser::renderer::{RenderJob, render_page};
+use rynx::app::App;
+use rynx::event_handler::{handle_key_event, handle_network_event};
+use rynx::gemini::{self, KnownHosts};
+use rynx::gopher;
+use rynx::network::{NetworkResponse, PageKind};
+use rynx::renderer::{RenderJob, render_page};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -328,7 +328,7 @@ async fn public_pages_cannot_link_to_local_gopher_services() {
     assert!(app.current_tab().status_message.contains("Blocked"));
     assert_eq!(app.current_tab().url_input, "https://evil.example/");
     // Public Gopher and Gemini links are fine
-    assert!(!rynx_browser::network::unsupported_link_scheme("gemini://capsule.example/").is_some());
+    assert!(!rynx::network::unsupported_link_scheme("gemini://capsule.example/").is_some());
 }
 
 #[tokio::test]
@@ -343,7 +343,7 @@ async fn small_web_is_refused_in_i2p_mode() {
 
 #[test]
 fn local_addresses_are_recognised_in_every_scheme() {
-    use rynx_browser::network::is_local_network_url;
+    use rynx::network::is_local_network_url;
     for url in [
         "gopher://127.0.0.1:6379/",
         "gopher://2130706433/",

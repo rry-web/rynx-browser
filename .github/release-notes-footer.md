@@ -1,7 +1,7 @@
 
 ## Installing
 
-Download the archive for your platform below, extract it, and run `rynx_browser` from a terminal.
+Download the archive for your platform below, extract it, and run `rynx` from a terminal.
 
 | Platform | Archive |
 |---|---|
@@ -14,7 +14,7 @@ Download the archive for your platform below, extract it, and run `rynx_browser`
 The binaries are **not code-signed**, so the OS will warn the first time:
 
 - **macOS:** Gatekeeper blocks unsigned downloads. After checking the file, allow it with
-  `xattr -d com.apple.quarantine rynx_browser`, or right-click it in Finder and choose Open.
+  `xattr -d com.apple.quarantine rynx`, or right-click it in Finder and choose Open.
 - **Windows:** SmartScreen may show "Windows protected your PC"; choose *More info* → *Run anyway*.
 
 ## Verifying

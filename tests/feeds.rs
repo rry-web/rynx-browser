@@ -1,8 +1,8 @@
 //! RSS and Atom feeds.
 
-use rynx_browser::feeds::{feed_to_html, is_feed};
-use rynx_browser::network::PageKind;
-use rynx_browser::renderer::{RenderJob, render_page};
+use rynx::feeds::{feed_to_html, is_feed};
+use rynx::network::PageKind;
+use rynx::renderer::{RenderJob, render_page};
 use std::sync::Arc;
 
 fn rendered(html: &str) -> (String, Vec<String>) {
@@ -127,9 +127,9 @@ fn pages_show_the_feeds_they_announce() {
 
 #[tokio::test]
 async fn feeds_served_as_xml_open_as_a_page() {
-    use rynx_browser::app::App;
-    use rynx_browser::event_handler::handle_network_event;
-    use rynx_browser::network::NetworkResponse;
+    use rynx::app::App;
+    use rynx::event_handler::handle_network_event;
+    use rynx::network::NetworkResponse;
     use wiremock::matchers::path;
     use wiremock::{Mock, MockServer, ResponseTemplate};
 

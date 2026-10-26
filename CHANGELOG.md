@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0-beta.3]
+
+rynx is now on crates.io: `cargo install rynx --version 0.2.0-beta.3`.
+
+### Changed
+- The program and crate are now called `rynx` (was `rynx_browser`); release archives are named
+  `rynx-<version>-<platform>`. The settings folder keeps its name, so settings, bookmarks,
+  history and Gemini certificates carry over.
+- Licence stated as GPL-3.0-or-later.
+- Code formatted with rustfmt, all clippy warnings fixed, and both checked in CI.
+
 ## [0.2.0-beta.2]
 
 Second beta: history, the small web (Gemini, Gopher, RSS/Atom), site tools over MCP, Anubis bot

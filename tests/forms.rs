@@ -2,24 +2,24 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use ratatui::{Terminal, backend::TestBackend};
-use rynx_browser::app::App;
-use rynx_browser::event_handler::{handle_key_event, handle_network_event};
-use rynx_browser::forms::{ControlKind, ControlValue, FormMethod, build_submission};
-use rynx_browser::models::InputMode;
-use rynx_browser::network::{NetworkResponse, PageKind};
-use rynx_browser::renderer::{RenderJob, render_page};
-use rynx_browser::ui::ui;
+use rynx::app::App;
+use rynx::event_handler::{handle_key_event, handle_network_event};
+use rynx::forms::{ControlKind, ControlValue, FormMethod, build_submission};
+use rynx::models::InputMode;
+use rynx::network::{NetworkResponse, PageKind};
+use rynx::renderer::{RenderJob, render_page};
+use rynx::ui::ui;
 use std::sync::Arc;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const PAGE: &str = "https://example.com/dir/page.html";
 
-fn render(html: &str) -> rynx_browser::renderer::RenderedPage {
+fn render(html: &str) -> rynx::renderer::RenderedPage {
     render_page(&RenderJob { source: Arc::from(html), kind: PageKind::Html, source_view: false, width: 82 })
 }
 
-fn text(page: &rynx_browser::renderer::RenderedPage) -> Vec<String> {
+fn text(page: &rynx::renderer::RenderedPage) -> Vec<String> {
     page.lines.iter().map(|l| l.to_string()).filter(|l| !l.trim().is_empty()).collect()
 }
 
@@ -28,7 +28,7 @@ fn submit(
     html: &str,
     submitter: Option<usize>,
     edit: impl FnOnce(&mut Vec<ControlValue>),
-) -> Result<rynx_browser::forms::Submission, String> {
+) -> Result<rynx::forms::Submission, String> {
     let page = render(html);
     let mut values: Vec<ControlValue> = page.controls.iter().map(|c| c.initial_value()).collect();
     edit(&mut values);
@@ -315,7 +315,7 @@ fn controls_outside_forms_are_inert() {
 
 // --- Protections ---
 
-fn submit_from(page_url: &str, action: &str) -> Result<rynx_browser::forms::Submission, String> {
+fn submit_from(page_url: &str, action: &str) -> Result<rynx::forms::Submission, String> {
     let page = render(&format!("<form action='{action}' method=post><input name=q value=x></form>"));
     let values: Vec<ControlValue> = page.controls.iter().map(|c| c.initial_value()).collect();
     build_submission(&page.forms, &page.controls, &values, 0, None, page_url)

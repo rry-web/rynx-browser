@@ -1,12 +1,12 @@
 //! The settings file and bookmarks.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
-use rynx_browser::app::App;
-use rynx_browser::bookmarks::{BOOKMARKS_FILE, BOOKMARKS_PAGE, Bookmarks};
-use rynx_browser::event_handler::{handle_key_event, handle_network_event};
-use rynx_browser::history::{HISTORY_FILE, HISTORY_PAGE, History, MAX_HISTORY};
-use rynx_browser::network::{NetworkResponse, PageKind};
-use rynx_browser::settings::{SETTINGS_FILE, Settings};
+use rynx::app::App;
+use rynx::bookmarks::{BOOKMARKS_FILE, BOOKMARKS_PAGE, Bookmarks};
+use rynx::event_handler::{handle_key_event, handle_network_event};
+use rynx::history::{HISTORY_FILE, HISTORY_PAGE, History, MAX_HISTORY};
+use rynx::network::{NetworkResponse, PageKind};
+use rynx::settings::{SETTINGS_FILE, Settings};
 use std::path::PathBuf;
 
 fn temp_dir(name: &str) -> PathBuf {
@@ -277,11 +277,11 @@ async fn user_agents_sent(settings: Settings, i2p: bool) -> Vec<String> {
 #[tokio::test]
 async fn the_user_agent_is_sent() {
     let default = user_agents_sent(Settings::default(), false).await;
-    assert_eq!(default, [rynx_browser::constants::USER_AGENT]);
+    assert_eq!(default, [rynx::constants::USER_AGENT]);
 
     let (custom, _) = Settings::parse("user_agent = Custom/1.0");
     assert_eq!(user_agents_sent(custom.clone(), false).await, ["Custom/1.0"]);
 
     // I2P mode always sends the generic one, whatever the setting
-    assert_eq!(user_agents_sent(custom, true).await, [rynx_browser::constants::I2P_USER_AGENT]);
+    assert_eq!(user_agents_sent(custom, true).await, [rynx::constants::I2P_USER_AGENT]);
 }

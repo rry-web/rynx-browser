@@ -3,7 +3,7 @@
 A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**, with absolutely
 **zero JavaScript**.
 
-> **Status: beta.** Version 0.2.0-beta.2 is the latest pre-built release. Please report
+> **Status: beta.** Version 0.2.0-beta.3 is the latest release. Please report
 > problems as [GitHub issues](https://github.com/rry-web/rynx-browser/issues).
 
 - **Readable pages:** headings, numbered and nested lists, blockquotes, aligned table columns, and
@@ -28,11 +28,21 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
 
 ## Installation
 
+### With Cargo
+
+With [Rust](https://rustup.rs) 1.88 or newer installed:
+
+```sh
+cargo install rynx --version 0.2.0-beta.3
+```
+
+Then run `rynx`. (Cargo skips beta versions unless you name one with `--version`.)
+
 ### Pre-built binaries
 
 Download the archive for your system from the
 [releases page](https://github.com/rry-web/rynx-browser/releases) (beta builds are marked
-*Pre-release*), extract it, and run `rynx_browser` in a terminal:
+*Pre-release*), extract it, and run `rynx` in a terminal:
 
 | System | Archive name contains |
 | :--- | :--- |
@@ -47,7 +57,7 @@ attestation).
 
 ### From source
 
-Install [Rust](https://rustup.rs) and run:
+Install [Rust](https://rustup.rs), clone this repository, and run:
 
 ```sh
 cargo run --release
@@ -259,7 +269,7 @@ with results recorded in [TEST_LOG.md](TEST_LOG.md). Changes are listed in
 
 CI tests every push on Linux, macOS and Windows, fuzzes the renderer and audits dependencies. To
 make a release, set the version in `Cargo.toml`, add its section to `CHANGELOG.md`, and push a
-matching tag (`git tag v0.2.0-beta.2 && git push origin v0.2.0-beta.2`): the release workflow
+matching tag (`git tag v0.2.0-beta.3 && git push origin v0.2.0-beta.3`): the release workflow
 builds every platform and publishes the release. Tags containing `-` become pre-releases.
 
 ## Roadmap
@@ -282,4 +292,5 @@ If you want to contribute, open an issue or pull request on GitHub.
 
 ## License
 
-This project is licensed under GPLv3.
+rynx is free software, licensed under the GNU General Public License, version 3 or (at your
+option) any later version (GPL-3.0-or-later). See [LICENSE.txt](LICENSE.txt).

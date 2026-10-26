@@ -1,6 +1,6 @@
 //! How HTML is laid out as terminal text.
 
-use rynx_browser::renderer::DomRenderer;
+use rynx::renderer::DomRenderer;
 use scraper::Html;
 
 /// Render at a content width of `width` columns

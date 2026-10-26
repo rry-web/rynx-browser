@@ -1,10 +1,10 @@
 //! Anubis bot checks, passed without JavaScript, against a fake Anubis that checks answers the
 //! way the real one does.
 
-use rynx_browser::anubis::{self, Challenge};
-use rynx_browser::app::App;
-use rynx_browser::event_handler::handle_network_event;
-use rynx_browser::network::NetworkResponse;
+use rynx::anubis::{self, Challenge};
+use rynx::app::App;
+use rynx::event_handler::handle_network_event;
+use rynx::network::NetworkResponse;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -267,7 +267,7 @@ async fn unsupported_methods_and_the_setting_show_the_check() {
 
     let (server, state) = guarded_site("fast", 1, "abcd", false, false).await;
     let (tx, rx) = tokio::sync::mpsc::channel(10);
-    let (settings, _) = rynx_browser::settings::Settings::parse("anubis = off");
+    let (settings, _) = rynx::settings::Settings::parse("anubis = off");
     let mut app = App::with_settings(tx, rx, settings).unwrap();
     app.clipboard = None;
     app.render_in_background = false;

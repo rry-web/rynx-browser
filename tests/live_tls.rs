@@ -1,7 +1,7 @@
 //! Live TLS checks against public test servers. They need internet access, so they're ignored
 //! by default; run them with `cargo test --test live_tls -- --ignored`.
 
-use rynx_browser::network::NetworkManager;
+use rynx::network::NetworkManager;
 
 async fn fetch(url: &str) -> Result<reqwest::Response, String> {
     let manager = NetworkManager::new().unwrap();

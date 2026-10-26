@@ -68,15 +68,15 @@ jobs:
         shell: bash
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          name="rynx-browser-$version-${{ matrix.target }}"
+          name="rynx-$version-${{ matrix.target }}"
           mkdir "$name"
           cp README.md LICENSE.txt CHANGELOG.md "$name/"
           if [[ "${{ matrix.target }}" == *windows* ]]; then
-            cp "target/${{ matrix.target }}/release/rynx_browser.exe" "$name/"
+            cp "target/${{ matrix.target }}/release/rynx.exe" "$name/"
             7z a "$name.zip" "$name" > /dev/null
             echo "archive=$name.zip" >> "$GITHUB_OUTPUT"
           else
-            cp "target/${{ matrix.target }}/release/rynx_browser" "$name/"
+            cp "target/${{ matrix.target }}/release/rynx" "$name/"
             tar czf "$name.tar.gz" "$name"
             echo "archive=$name.tar.gz" >> "$GITHUB_OUTPUT"
           fi
@@ -133,7 +133,7 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "rynx-browser $GITHUB_REF_NAME" \
+            --title "rynx $GITHUB_REF_NAME" \
             --notes-file notes.md \
             --verify-tag \
             "${flags[@]}"

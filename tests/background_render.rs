@@ -1,9 +1,9 @@
 //! Pages are laid out on a background thread so slow pages never freeze the UI.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
-use rynx_browser::app::{App, RENDERING_STATUS};
-use rynx_browser::event_handler::{handle_key_event, handle_network_event};
-use rynx_browser::network::{NetworkResponse, PageKind};
+use rynx::app::{App, RENDERING_STATUS};
+use rynx::event_handler::{handle_key_event, handle_network_event};
+use rynx::network::{NetworkResponse, PageKind};
 use std::time::{Duration, Instant};
 
 const WIDTH: u16 = 80;
@@ -108,7 +108,7 @@ async fn rapid_resizes_are_coalesced() {
     assert!(renders <= 2, "{renders} renders for one burst of resizes");
 
     // The final layout is the one for the last width
-    let expected = rynx_browser::renderer::render_page(&rynx_browser::renderer::RenderJob {
+    let expected = rynx::renderer::render_page(&rynx::renderer::RenderJob {
         source: app.current_tab().html_source.clone(),
         kind: PageKind::Html,
         source_view: false,

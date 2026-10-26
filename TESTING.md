@@ -348,7 +348,7 @@ Worth repeating after any dependency upgrade.
       or script (e.g. a `.zip` containing a `.app` from a GitHub release), then open it from
       Finder.
       *Expected:* macOS shows its "downloaded from the internet" warning.
-      `xattr -l ~/Downloads/<file>` shows `com.apple.quarantine: 0081;...;rynx_browser;`.
+      `xattr -l ~/Downloads/<file>` shows `com.apple.quarantine: 0081;...;rynx;`.
 - [ ] **DL-07 HTTP download links are upgraded.** Download a file from an `http://` link to a
       public site.
       *Expected:* it's fetched over `https://`. If the site has no HTTPS, it fails instead of
@@ -410,7 +410,7 @@ Worth repeating after any dependency upgrade.
       *Expected:* "Where from" shows the download URL.
 - [ ] **PLAT-06 Device-name downloads.** Download a link whose file is named `con.txt` or `NUL`.
       *Expected:* it's saved as `_con.txt` / `_NUL`.
-- [ ] **PLAT-07 Command-line options.** Run `rynx_browser --version` and `rynx_browser --help`.
+- [ ] **PLAT-07 Command-line options.** Run `rynx --version` and `rynx --help`.
       *Expected:* the version (`0.2.0-beta.1`) and a usage summary; an unknown option prints an
       error and the usage.
 

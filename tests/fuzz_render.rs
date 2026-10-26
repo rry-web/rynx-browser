@@ -8,11 +8,11 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers, MouseEvent, MouseEventKind};
 use ratatui::{Terminal, backend::TestBackend};
-use rynx_browser::app::App;
-use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, handle_network_event};
-use rynx_browser::network::{NetworkResponse, PageKind};
-use rynx_browser::renderer::DomRenderer;
-use rynx_browser::ui::ui;
+use rynx::app::App;
+use rynx::event_handler::{handle_key_event, handle_mouse_event, handle_network_event};
+use rynx::network::{NetworkResponse, PageKind};
+use rynx::renderer::DomRenderer;
+use rynx::ui::ui;
 use scraper::Html;
 
 /// xorshift64*: tiny, deterministic, good enough to explore inputs
@@ -267,7 +267,7 @@ fn check_render_invariants(seed: u64, html: &str, width: usize) {
         assert!(link.line_index < lines.len(), "seed {seed}: link on missing line");
         assert!(link.x_start < link.x_end, "seed {seed}: empty link region");
         assert!(
-            link.x_end <= rynx_browser::renderer::display_width(&lines[link.line_index]),
+            link.x_end <= rynx::renderer::display_width(&lines[link.line_index]),
             "seed {seed}: link region past end of line"
         );
     }
@@ -286,7 +286,7 @@ fn check_plain_text_invariants(seed: u64, text: &str, width: usize) {
         assert!(link.line_index < renderer.lines.len(), "seed {seed}: plain link on missing line");
         assert!(link.x_start < link.x_end, "seed {seed}: empty plain link region");
         assert!(
-            link.x_end <= rynx_browser::renderer::display_width(&renderer.lines[link.line_index]),
+            link.x_end <= rynx::renderer::display_width(&renderer.lines[link.line_index]),
             "seed {seed}: plain link region past end of line"
         );
     }

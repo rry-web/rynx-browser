@@ -2,11 +2,11 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 use ratatui::backend::TestBackend;
-use rynx_browser::app::App;
-use rynx_browser::event_handler::{handle_key_event, handle_network_event};
-use rynx_browser::forms::ControlValue;
-use rynx_browser::mcp::{self, check_server};
-use rynx_browser::network::{NetworkResponse, PageKind};
+use rynx::app::App;
+use rynx::event_handler::{handle_key_event, handle_network_event};
+use rynx::forms::ControlValue;
+use rynx::mcp::{self, check_server};
+use rynx::network::{NetworkResponse, PageKind};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use wiremock::matchers::{method, path};
@@ -278,7 +278,7 @@ async fn a_sites_tools_are_listed_confirmed_and_run() {
         assert_eq!(prompt.arguments, json!({ "query": "red shoes", "limit": 10 }));
         assert!(prompt.warning.is_none(), "the search is read-only");
         let mut terminal = ratatui::Terminal::new(TestBackend::new(80, 24)).unwrap();
-        terminal.draw(|f| rynx_browser::ui::ui(f, &app)).unwrap();
+        terminal.draw(|f| rynx::ui::ui(f, &app)).unwrap();
         let screen: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
         assert!(screen.contains("Run \"Search the shop\" on 127.0.0.1?"), "{screen}");
         assert!(screen.contains("\"query\": \"red shoes\""), "{screen}");

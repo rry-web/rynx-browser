@@ -1,10 +1,10 @@
-use rynx_browser::app::App;
-use rynx_browser::bookmarks::Bookmarks;
-use rynx_browser::event_handler::{handle_key_event, handle_mouse_event, process_network_events};
-use rynx_browser::history::History;
-use rynx_browser::sandbox::SandboxStatus;
-use rynx_browser::settings::Settings;
-use rynx_browser::ui::ui;
+use rynx::app::App;
+use rynx::bookmarks::Bookmarks;
+use rynx::event_handler::{handle_key_event, handle_mouse_event, process_network_events};
+use rynx::history::History;
+use rynx::sandbox::SandboxStatus;
+use rynx::settings::Settings;
+use rynx::ui::ui;
 
 use std::{error::Error, fmt, io, time::Duration};
 
@@ -38,14 +38,14 @@ impl Command for EnableClickAndWheelCapture {
 
 /// Discard input still queued at exit so stray mouse reports don't land in the shell
 fn drain_pending_input() -> io::Result<()> {
-    while event::poll(Duration::from_millis(rynx_browser::constants::EXIT_DRAIN_TIMEOUT_MS))? {
+    while event::poll(Duration::from_millis(rynx::constants::EXIT_DRAIN_TIMEOUT_MS))? {
         let _ = event::read()?;
     }
     Ok(())
 }
 
 const USAGE: &str = "\
-Usage: rynx_browser [OPTIONS]
+Usage: rynx [OPTIONS]
 
 A terminal web browser with no JavaScript.
 
@@ -63,7 +63,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         match arg.as_str() {
             "--no-sandbox" => sandbox_enabled = false,
             "-V" | "--version" => {
-                println!("rynx_browser {}", env!("CARGO_PKG_VERSION"));
+                println!("rynx {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
             "-h" | "--help" => {
@@ -71,14 +71,14 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 return Ok(());
             }
             other => {
-                eprintln!("rynx_browser: unknown option '{}'\n\n{}", other, USAGE);
+                eprintln!("rynx: unknown option '{}'\n\n{}", other, USAGE);
                 std::process::exit(2);
             }
         }
     }
 
     // Settings are read (and the settings folder created) before sandboxing
-    let config_dir = rynx_browser::settings::config_dir();
+    let config_dir = rynx::settings::config_dir();
     let (settings, problems) = match &config_dir {
         Some(dir) => Settings::load_or_create(dir),
         None => (Settings::default(), Vec::new()),
@@ -95,7 +95,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 writable.push(dir);
             }
         }
-        rynx_browser::sandbox::restrict_filesystem(&writable)
+        rynx::sandbox::restrict_filesystem(&writable)
     } else {
         SandboxStatus::Disabled
     };
@@ -127,15 +127,15 @@ async fn run(
     let mut terminal = Terminal::new(backend)?;
 
     // Setup Channel
-    let (tx, rx) = tokio::sync::mpsc::channel(rynx_browser::constants::CHANNEL_CAPACITY);
+    let (tx, rx) = tokio::sync::mpsc::channel(rynx::constants::CHANNEL_CAPACITY);
     let mut app = App::with_settings(tx, rx, settings)?;
     if let Some(dir) = &config_dir {
-        app.bookmarks = Bookmarks::load(dir.join(rynx_browser::bookmarks::BOOKMARKS_FILE));
-        app.gemini_hosts = std::sync::Arc::new(std::sync::Mutex::new(rynx_browser::gemini::KnownHosts::load(
-            dir.join(rynx_browser::gemini::KNOWN_HOSTS_FILE),
+        app.bookmarks = Bookmarks::load(dir.join(rynx::bookmarks::BOOKMARKS_FILE));
+        app.gemini_hosts = std::sync::Arc::new(std::sync::Mutex::new(rynx::gemini::KnownHosts::load(
+            dir.join(rynx::gemini::KNOWN_HOSTS_FILE),
         )));
         if app.settings.save_history {
-            app.history = History::load(dir.join(rynx_browser::history::HISTORY_FILE));
+            app.history = History::load(dir.join(rynx::history::HISTORY_FILE));
         }
     }
     let sandbox_note = sandbox.describe();
@@ -180,7 +180,7 @@ async fn run_app<B: Backend<Error = io::Error>>(terminal: &mut Terminal<B>, mut 
 
         // Handle input events: wait briefly for the first, then everything already queued before
         // redrawing. One event per frame let touchpad bursts pile up and replay long after.
-        let mut timeout = Duration::from_millis(rynx_browser::constants::EVENT_POLL_TIMEOUT_MS);
+        let mut timeout = Duration::from_millis(rynx::constants::EVENT_POLL_TIMEOUT_MS);
         while event::poll(timeout)? {
             timeout = Duration::ZERO;
             match event::read()? {

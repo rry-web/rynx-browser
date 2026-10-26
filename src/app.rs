@@ -1395,7 +1395,7 @@ impl App {
     fn mark_downloaded(path: &Path, url: &str) -> std::io::Result<()> {
         let timestamp =
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        let value = format!("0081;{:08x};rynx_browser;", timestamp);
+        let value = format!("0081;{:08x};rynx;", timestamp);
         xattr::set(path, "com.apple.quarantine", value.as_bytes())?;
         let where_from = Self::binary_plist_string_array(&Self::origin_url(url));
         xattr::set(path, "com.apple.metadata:kMDItemWhereFroms", &where_from)

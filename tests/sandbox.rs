@@ -2,7 +2,7 @@
 //! itself in a child process that sandboxes itself and reports what it could and couldn't do.
 #![cfg(target_os = "linux")]
 
-use rynx_browser::sandbox::{SandboxStatus, restrict_filesystem};
+use rynx::sandbox::{SandboxStatus, restrict_filesystem};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

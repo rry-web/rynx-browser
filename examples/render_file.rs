@@ -1,6 +1,6 @@
 //! Render an HTML file as rynx would and print it: cargo run --example render_file -- page.html [width]
-use rynx_browser::network::PageKind;
-use rynx_browser::renderer::{RenderJob, render_page};
+use rynx::network::PageKind;
+use rynx::renderer::{RenderJob, render_page};
 
 fn main() {
     let mut args = std::env::args().skip(1);
