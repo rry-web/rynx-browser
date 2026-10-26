@@ -1029,7 +1029,7 @@ async fn test_control_characters_never_reach_the_terminal() {
     let id = app.current_tab().id;
     handle_network_event::<TestBackend>(
         &mut app,
-        NetworkResponse::Success(id, format!("Title\x1b]0;pwned\x07"), html, TEST_PAGE_URL.into()),
+        NetworkResponse::Success(id, "Title\x1b]0;pwned\x07".to_string(), html, TEST_PAGE_URL.into()),
         80,
     )
     .unwrap();
