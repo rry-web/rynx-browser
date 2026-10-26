@@ -59,11 +59,15 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
                 .as_ref()
                 .map(|s| s.matches.len())
                 .unwrap_or(0);
-            let current_index = active_tab
-                .search_state
-                .as_ref()
-                .map(|s| s.current_match_index + 1)
-                .unwrap_or(0);
+            let current_index = if match_count == 0 {
+                0
+            } else {
+                active_tab
+                    .search_state
+                    .as_ref()
+                    .map(|s| s.current_match_index + 1)
+                    .unwrap_or(0)
+            };
 
             (
                 query,

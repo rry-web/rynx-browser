@@ -312,3 +312,28 @@ async fn test_escape_restores_address_bar() {
     assert_eq!(app.current_tab().url_input, "http://127.0.0.1:1/first");
     assert!(app.current_tab().history.is_empty());
 }
+
+#[tokio::test]
+async fn test_search_survives_query_with_no_matches() {
+    let mut app = test_app();
+    load_page(&mut app, "<p>hello world</p>");
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Char('/')), 80, 24).unwrap();
+    // Typo: "wx" matches nothing, then correct it to "wo"
+    type_text(&mut app, "wx");
+    assert_eq!(app.current_tab().input_mode, rynx_browser::models::InputMode::Search);
+    let state = app.current_tab().search_state.as_ref().expect("query should be kept");
+    assert_eq!(state.query, "wx");
+    assert!(state.matches.is_empty());
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal.draw(|f| ui(f, &app)).unwrap();
+    let screen: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+    assert!(screen.contains("[0/0]"));
+
+    handle_key_event::<TestBackend>(&mut app, key(KeyCode::Backspace), 80, 24).unwrap();
+    type_text(&mut app, "o");
+    let state = app.current_tab().search_state.as_ref().unwrap();
+    assert_eq!(state.query, "wo");
+    assert_eq!(state.matches.len(), 1);
+}

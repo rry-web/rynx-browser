@@ -149,15 +149,12 @@ impl BrowserTab {
             }
         }
 
-        self.search_state = if matches.is_empty() {
-            None
-        } else {
-            Some(SearchState {
-                query: query.to_string(),
-                matches,
-                current_match_index: 0,
-            })
-        };
+        // Keep the state even with no matches so the query survives and can be edited
+        self.search_state = Some(SearchState {
+            query: query.to_string(),
+            matches,
+            current_match_index: 0,
+        });
     }
 
     pub fn next_search_match(&mut self) {
