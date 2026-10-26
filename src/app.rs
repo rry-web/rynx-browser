@@ -434,7 +434,7 @@ impl App {
             let res = match client.get(&url).send().await {
                 Ok(r) => r,
                 Err(e) => {
-                    let _ = tx.send(NetworkResponse::Error(tab_id, format!("Connection failed: {}", e))).await;
+                    let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Connection failed: {}", e))).await;
                     return;
                 }
             };
@@ -445,53 +445,61 @@ impl App {
             let mut file_handle: Option<(tokio::fs::File, String)> = None;
 
             while let Some(item) = stream.next().await {
-                if let Ok(chunk) = item {
-                    if file_handle.is_none() {
-                        // 2. Resolve and Create Downloads Directory
-                        let download_dir = UserDirs::new()
-                            .and_then(|d| d.download_dir().map(|p| p.to_path_buf()))
-                            .unwrap_or_default();
+                let chunk = match item {
+                    Ok(chunk) => chunk,
+                    Err(e) => {
+                        let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Download interrupted: {}", e))).await;
+                        return;
+                    }
+                };
+                if file_handle.is_none() {
+                    // 2. Resolve and Create Downloads Directory
+                    let download_dir = UserDirs::new()
+                        .and_then(|d| d.download_dir().map(|p| p.to_path_buf()))
+                        .unwrap_or_default();
 
-                        if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
-                            let _ = tx.send(NetworkResponse::Error(tab_id, format!("Folder error: {}", e))).await;
+                    if let Err(e) = tokio::fs::create_dir_all(&download_dir).await {
+                        let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Folder error: {}", e))).await;
+                        return;
+                    }
+
+                    // 3. Sanitize and Sniff Extension
+                    let raw_name = url.split('/').last().unwrap_or("download.dat");
+                    let mut sanitized = Self::sanitize_filename(raw_name);
+
+                    if !sanitized.contains('.') {
+                        if let Some(ext) = crate::network::sniff_extension(&chunk) {
+                            sanitized.push_str(&format!(".{}", ext));
+                        }
+                    }
+
+                    let file_path = download_dir.join(&sanitized);
+
+                    // 4. Safe File Creation (No unwraps)
+                    let file = match tokio::fs::File::create(&file_path).await {
+                        Ok(f) => f,
+                        Err(e) => {
+                            let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("File error: {}", e))).await;
                             return;
                         }
+                    };
+                    file_handle = Some((file, file_path.display().to_string()));
+                }
 
-                        // 3. Sanitize and Sniff Extension
-                        let raw_name = url.split('/').last().unwrap_or("download.dat");
-                        let mut sanitized = Self::sanitize_filename(raw_name);
-
-                        if !sanitized.contains('.') {
-                            if let Some(ext) = crate::network::sniff_extension(&chunk) {
-                                sanitized.push_str(&format!(".{}", ext));
-                            }
-                        }
-
-                        let file_path = download_dir.join(&sanitized);
-
-                        // 4. Safe File Creation (No unwraps)
-                        let file = match tokio::fs::File::create(&file_path).await {
-                            Ok(f) => f,
-                            Err(e) => {
-                                let _ = tx.send(NetworkResponse::Error(tab_id, format!("File error: {}", e))).await;
-                                return;
-                            }
-                        };
-                        file_handle = Some((file, file_path.display().to_string()));
+                if let Some((ref mut file, _)) = file_handle {
+                    if let Err(e) = file.write_all(&chunk).await {
+                        let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Write failed: {}", e))).await;
+                        return;
                     }
-
-                    if let Some((ref mut file, _)) = file_handle {
-                        if file.write_all(&chunk).await.is_err() { break; }
-                        downloaded += chunk.len() as u64;
-                        let _ = tx.send(NetworkResponse::DownloadProgress(tab_id, downloaded, total)).await;
-                    }
+                    downloaded += chunk.len() as u64;
+                    let _ = tx.send(NetworkResponse::DownloadProgress(tab_id, downloaded, total)).await;
                 }
             }
 
             if let Some((_, path)) = file_handle {
                 let _ = tx.send(NetworkResponse::DownloadFinished(tab_id, path)).await;
             } else {
-                let _ = tx.send(NetworkResponse::Error(tab_id, "Download stream was empty".to_string())).await;
+                let _ = tx.send(NetworkResponse::DownloadError(tab_id, "Download stream was empty".to_string())).await;
             }
         });
     }

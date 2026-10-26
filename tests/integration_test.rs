@@ -337,3 +337,69 @@ async fn test_search_survives_query_with_no_matches() {
     assert_eq!(state.query, "wo");
     assert_eq!(state.matches.len(), 1);
 }
+
+/// Receive network messages until a download reports Finished or DownloadError
+async fn finish_download(app: &mut App) -> (NetworkResponse, usize) {
+    let mut progress_messages = 0;
+    loop {
+        let resp = tokio::time::timeout(std::time::Duration::from_secs(10), app.rx.recv())
+            .await
+            .expect("download timed out")
+            .expect("channel closed");
+        match resp {
+            NetworkResponse::DownloadProgress(..) => {
+                progress_messages += 1;
+                handle_network_event::<TestBackend>(app, resp, 80).unwrap();
+            }
+            NetworkResponse::DownloadFinished(..) | NetworkResponse::DownloadError(..) => {
+                return (resp, progress_messages);
+            }
+            _ => {}
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_failed_download_keeps_current_page() {
+    use rynx_browser::models::DownloadStatus;
+
+    let mut app = test_app();
+    load_page(&mut app, "<h1>My Page</h1>");
+    let source_before = app.current_tab().html_source.clone();
+
+    // Nothing listens on port 1, so the connection is refused
+    app.trigger_download("http://127.0.0.1:1/file.zip".to_string());
+    let (resp, _) = finish_download(&mut app).await;
+    assert!(matches!(resp, NetworkResponse::DownloadError(..)));
+    handle_network_event::<TestBackend>(&mut app, resp, 80).unwrap();
+
+    let tab = app.current_tab();
+    assert_eq!(tab.html_source, source_before, "page was replaced by download error");
+    assert_eq!(tab.page_title, "Page");
+    assert!(matches!(
+        tab.download_state.as_ref().map(|d| &d.status),
+        Some(DownloadStatus::Failed(_))
+    ));
+}
+
+#[tokio::test]
+async fn test_page_error_does_not_fail_active_download() {
+    use rynx_browser::models::{Download, DownloadStatus};
+
+    let mut app = test_app();
+    app.current_tab().download_state = Some(Download {
+        _id: 0,
+        filename: String::new(),
+        bytes_downloaded: 10,
+        total_size: None,
+        status: DownloadStatus::Active,
+    });
+    let id = app.current_tab().id;
+    handle_network_event::<TestBackend>(&mut app, NetworkResponse::Error(id, "boom".into()), 80)
+        .unwrap();
+
+    assert!(matches!(
+        app.current_tab().download_state.as_ref().map(|d| &d.status),
+        Some(DownloadStatus::Active)
+    ));
+}

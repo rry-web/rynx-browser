@@ -18,6 +18,7 @@ pub enum NetworkResponse {
     // Variant for downloads
     DownloadProgress(usize, u64, Option<u64>),
     DownloadFinished(usize, String), // tab_id, filename
+    DownloadError(usize, String),    // tab_id, message; leaves the page untouched
 }
 
 /// Resolve relative URLs against a base URL

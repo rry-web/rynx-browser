@@ -521,6 +521,7 @@ pub fn handle_network_event<B: Backend>(
         NetworkResponse::Info(id, ..) => *id,
         NetworkResponse::DownloadProgress(id, ..) => *id,
         NetworkResponse::DownloadFinished(id, ..) => *id,
+        NetworkResponse::DownloadError(id, ..) => *id,
     };
 
     if let Some(index) = app.tabs.iter().position(|t| t.id == target_id) {
@@ -557,11 +558,25 @@ pub fn handle_network_event<B: Backend>(
                 tab.status_message = String::from("Loaded");
                 app.render_tab(index, terminal_width);
             }
+            NetworkResponse::DownloadError(_, msg) => {
+                let tab = &mut app.tabs[index];
+                // The download may fail before any progress created its state
+                match tab.download_state {
+                    Some(ref mut d) => d.status = DownloadStatus::Failed(msg.clone()),
+                    None => {
+                        tab.download_state = Some(crate::models::Download {
+                            _id: target_id,
+                            filename: String::new(),
+                            bytes_downloaded: 0,
+                            total_size: None,
+                            status: DownloadStatus::Failed(msg.clone()),
+                        })
+                    }
+                }
+                tab.status_message = format!("Download failed: {}", msg);
+            }
             NetworkResponse::Error(_, msg) => {
                 let tab = &mut app.tabs[index];
-                if let Some(ref mut d) = tab.download_state {
-                    d.status = crate::models::DownloadStatus::Failed(msg.clone());
-                }
                 tab.page_title = String::from("Error");
                 tab.html_source = format!("<h1>Error</h1><hr><p style='color:red'>{}</p>", msg);
                 tab.reset_page_state();
