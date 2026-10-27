@@ -29,6 +29,13 @@ fn viewport_height(terminal_height: u16) -> usize {
 }
 
 pub fn handle_key_event(app: &mut App, key: KeyEvent, terminal_width: u16, terminal_height: u16) -> Result<bool> {
+    // The image viewer covers the page: Esc (or q, or i) closes it
+    if app.images.viewer.is_some() {
+        if matches!(key.code, KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('i') | KeyCode::Enter) {
+            app.close_viewer();
+        }
+        return Ok(false);
+    }
     // Confirmation boxes take every key until they're answered
     if app.current_tab().tool_prompt.is_some() {
         match key.code {
@@ -304,6 +311,9 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
             if let Some(region) = tab.link_regions.get(tab.selected_link_index) {
                 if let Some(control) = region.control {
                     app.activate_control(control);
+                } else if region.url.is_empty() && region.image.is_some() {
+                    // An image's placeholder (not inside a link): view it
+                    app.view_image(viewport_height(terminal_height));
                 } else {
                     // Resolve URL (Handle relative paths), then load it or jump within the page
                     let new_url = crate::network::resolve_url(tab.link_base(), &region.url);
@@ -315,6 +325,8 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
         KeyCode::Char('S') => app.follow_link(crate::app::SETTINGS_PAGE.to_string()),
         KeyCode::Char('A') => app.open_archived_copy(),
         KeyCode::Char('T') => app.toggle_tracking(),
+        KeyCode::Char('I') => app.load_images(app.active_tab_index, true),
+        KeyCode::Char('i') => app.view_image(viewport_height(terminal_height)),
         KeyCode::Char('Z') => app.open_snapshots(),
         _ => {}
     }
@@ -589,6 +601,7 @@ pub fn handle_network_event(app: &mut App, response: NetworkResponse, terminal_w
         NetworkResponse::Rendered(id, ..) => *id,
         NetworkResponse::ToolsListed(id, ..) => *id,
         NetworkResponse::ToolFinished(id, ..) => *id,
+        NetworkResponse::ImageLoaded(id, ..) => *id,
     };
 
     if let Some(index) = app.tabs.iter().position(|t| t.id == target_id) {
@@ -644,6 +657,7 @@ pub fn handle_network_event(app: &mut App, response: NetworkResponse, terminal_w
                 }
                 tab.page_url = Some(page_url);
                 tab.record_visit_after_render = true;
+                tab.load_images_after_render = true;
 
                 tab.jump_after_render(fragment);
                 tab.restore_position_after_render();
@@ -660,6 +674,9 @@ pub fn handle_network_event(app: &mut App, response: NetworkResponse, terminal_w
             }
             NetworkResponse::ToolFinished(_, server, title, result) => {
                 app.finish_tool(index, server, title, result);
+            }
+            NetworkResponse::ImageLoaded(_, url, result) => {
+                app.finish_image(index, url, result);
             }
             NetworkResponse::DownloadError(_, msg) => {
                 let tab = &mut app.tabs[index];

@@ -61,6 +61,24 @@ const DOCUMENTED: &[Documented] = &[
         examples: &["off"],
     },
     Documented {
+        key: "images",
+        about: "Which images load by themselves: \"ask\" (the default: none; I loads a page's images),\n\
+                \"site\" (those from the page's own site; others are often trackers), or \"all\".",
+        examples: &["site"],
+    },
+    Documented {
+        key: "image_display",
+        about: "Where loaded images are shown: \"inline\" (the default, in the page) or \"viewer\" (only\n\
+                full screen, with i).",
+        examples: &["viewer"],
+    },
+    Documented {
+        key: "image_protocol",
+        about: "How images are drawn: \"auto\" (the default: asks the terminal), \"kitty\", \"iterm2\",\n\
+                \"sixel\", or \"blocks\" (coloured text blocks, for terminals without graphics, like macOS Terminal).",
+        examples: &["blocks"],
+    },
+    Documented {
         key: "cache",
         about: "Keep pages on disk (compressed, in rynx's cache folder), so Back, unchanged pages and sites\n\
                 that can't be reached are served from it. Off by default: pages are then kept only in memory,\n\
@@ -85,6 +103,35 @@ const DOCUMENTED: &[Documented] = &[
         examples: &["on"],
     },
 ];
+
+/// Which images load by themselves
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ImageLoading {
+    /// None; I loads a page's images
+    Ask,
+    /// Those from the page's own site
+    Site,
+    All,
+}
+
+/// Where loaded images are shown
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ImageDisplay {
+    Inline,
+    Viewer,
+}
+
+/// How images are drawn
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ImageProtocol {
+    /// Ask the terminal what it supports
+    Auto,
+    Kitty,
+    Iterm2,
+    Sixel,
+    /// Coloured text blocks
+    Blocks,
+}
 
 /// Whether the browser may switch between the clearweb and I2P
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -126,6 +173,9 @@ pub struct Settings {
     pub disk_cache_i2p: bool,
     /// The disk cache's limit, in megabytes
     pub cache_size_mb: u64,
+    pub images: ImageLoading,
+    pub image_display: ImageDisplay,
+    pub image_protocol: ImageProtocol,
 }
 
 impl Default for Settings {
@@ -142,6 +192,9 @@ impl Default for Settings {
             disk_cache: false,
             disk_cache_i2p: false,
             cache_size_mb: crate::cache::DEFAULT_DISK_MB,
+            images: ImageLoading::Ask,
+            image_display: ImageDisplay::Inline,
+            image_protocol: ImageProtocol::Auto,
         }
     }
 }
@@ -191,6 +244,25 @@ impl Settings {
                 "download_dir" if !value.is_empty() => settings.download_dir = Some(PathBuf::from(value)),
                 "history" if matches!(value, "on" | "off") => settings.save_history = value == "on",
                 "anubis" if matches!(value, "on" | "off") => settings.solve_anubis = value == "on",
+                "images" if matches!(value, "ask" | "site" | "all") => {
+                    settings.images = match value {
+                        "site" => ImageLoading::Site,
+                        "all" => ImageLoading::All,
+                        _ => ImageLoading::Ask,
+                    }
+                }
+                "image_display" if matches!(value, "inline" | "viewer") => {
+                    settings.image_display = if value == "viewer" { ImageDisplay::Viewer } else { ImageDisplay::Inline }
+                }
+                "image_protocol" if matches!(value, "auto" | "kitty" | "iterm2" | "sixel" | "blocks") => {
+                    settings.image_protocol = match value {
+                        "kitty" => ImageProtocol::Kitty,
+                        "iterm2" => ImageProtocol::Iterm2,
+                        "sixel" => ImageProtocol::Sixel,
+                        "blocks" => ImageProtocol::Blocks,
+                        _ => ImageProtocol::Auto,
+                    }
+                }
                 "cache" if matches!(value, "on" | "off") => settings.disk_cache = value == "on",
                 "cache_i2p" if matches!(value, "on" | "off") => settings.disk_cache_i2p = value == "on",
                 "cache_size" if value.parse::<u64>().is_ok_and(|mb| (1..=1_000_000).contains(&mb)) => {
@@ -213,7 +285,7 @@ impl Settings {
                     settings.user_agent = value.to_string()
                 }
                 "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" | "user_agent" | "anubis"
-                | "cache" | "cache_i2p" | "cache_size" => {
+                | "cache" | "cache_i2p" | "cache_size" | "images" | "image_display" | "image_protocol" => {
                     problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
                 }
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),
@@ -249,6 +321,19 @@ impl Settings {
             "user_agent" => changed(self.user_agent.clone(), default.user_agent),
             "anubis" => (!self.solve_anubis).then(|| "off".to_string()),
             "history" => self.save_history.then(|| "on".to_string()),
+            "images" => match self.images {
+                ImageLoading::Ask => None,
+                ImageLoading::Site => Some("site".to_string()),
+                ImageLoading::All => Some("all".to_string()),
+            },
+            "image_display" => (self.image_display == ImageDisplay::Viewer).then(|| "viewer".to_string()),
+            "image_protocol" => match self.image_protocol {
+                ImageProtocol::Auto => None,
+                ImageProtocol::Kitty => Some("kitty".to_string()),
+                ImageProtocol::Iterm2 => Some("iterm2".to_string()),
+                ImageProtocol::Sixel => Some("sixel".to_string()),
+                ImageProtocol::Blocks => Some("blocks".to_string()),
+            },
             "cache" => self.disk_cache.then(|| "on".to_string()),
             "cache_i2p" => self.disk_cache_i2p.then(|| "on".to_string()),
             "cache_size" => changed(self.cache_size_mb.to_string(), default.cache_size_mb.to_string()),

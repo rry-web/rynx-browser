@@ -448,22 +448,64 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
 
     f.render_widget(Clear, area);
     f.render_widget(content, area);
+    render_inline_images(f, app, area, start_index, end_index);
     render_download_overlay(f, app, area);
     render_download_prompt(f, app);
     render_tool_prompt(f, app);
+    render_image_viewer(f, app, area);
+}
+
+/// Draw the page's loaded images over the space reserved for them, when it's entirely on screen
+fn render_inline_images(f: &mut Frame, app: &App, area: Rect, start: usize, end: usize) {
+    let tab = &app.tabs[app.active_tab_index];
+    for block in &tab.image_blocks {
+        let last = block.line_index + block.rows as usize;
+        if block.line_index < start || last > end {
+            continue;
+        }
+        let Some(image) = tab.page_images.get(block.image) else { continue };
+        let url = crate::network::resolve_url(tab.link_base(), &image.src);
+        // Inside the page's border
+        let rect = Rect {
+            x: area.x + 1 + block.x as u16,
+            y: area.y + 1 + (block.line_index - start) as u16,
+            width: block.columns,
+            height: block.rows,
+        }
+        .intersection(area);
+        app.with_drawn_image(&url, |state| {
+            f.render_stateful_widget(ratatui_image::StatefulImage::default(), rect, state);
+        });
+    }
+}
+
+/// The full-screen image viewer, over the page
+fn render_image_viewer(f: &mut Frame, app: &App, area: Rect) {
+    let Some((_, alt)) = &app.images.viewer else { return };
+    let mut state = app.images.viewer_state.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(state) = state.as_mut() else { return };
+    f.render_widget(Clear, area);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .title(Line::from(vec![Span::styled(
+            format!(" {} ", sanitize_for_terminal(alt)),
+            Style::default().add_modifier(Modifier::BOLD),
+        )]))
+        .title_bottom(" Esc closes ");
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    f.render_stateful_widget(ratatui_image::StatefulImage::default(), inner, state);
 }
 
 pub fn ui(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Length(TAB_BAR_HEIGHT), // Tab Bar
-                Constraint::Length(URL_BAR_HEIGHT), // URL Input
-                Constraint::Min(0),                 // Content area
-            ]
-            .as_ref(),
-        )
+        .constraints([
+            Constraint::Length(TAB_BAR_HEIGHT), // Tab Bar
+            Constraint::Length(URL_BAR_HEIGHT), // URL Input
+            Constraint::Min(0),                 // Content area
+        ])
         .split(f.area());
 
     // Render each UI component

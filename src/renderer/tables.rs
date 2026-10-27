@@ -298,6 +298,7 @@ impl DomRenderer {
                             self.links.push(LinkRegion {
                                 url: link.url.clone(),
                                 control: link.control,
+                                image: link.image,
                                 line_index,
                                 x_start: x + link.x_start,
                                 x_end: x + link.x_end,
@@ -339,6 +340,8 @@ impl DomRenderer {
         renderer.forms = std::mem::take(&mut self.forms);
         renderer.controls = std::mem::take(&mut self.controls);
         renderer.form_ids = std::mem::take(&mut self.form_ids);
+        // The page's image list, so image numbers stay the page's own
+        renderer.images = std::mem::take(&mut self.images);
         renderer.current_form = self.current_form;
         renderer.depth = self.depth + 1;
         let mut style = self.current_style();
@@ -355,6 +358,7 @@ impl DomRenderer {
         self.forms = std::mem::take(&mut renderer.forms);
         self.controls = std::mem::take(&mut renderer.controls);
         self.form_ids = std::mem::take(&mut renderer.form_ids);
+        self.images = std::mem::take(&mut renderer.images);
 
         // Blank lines at the edges of a cell (from <p> margins) would only pad the row
         let is_blank = |line: &Line| line.spans.iter().all(|s| s.content.trim().is_empty());

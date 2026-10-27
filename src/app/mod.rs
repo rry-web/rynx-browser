@@ -28,12 +28,14 @@ use tokio::io::AsyncWriteExt; // Required for streaming to file
 
 mod downloads;
 mod fetch;
+mod images;
 mod pages;
 mod settings_page;
 mod snapshot_pages;
 mod tab;
 mod tools;
 
+pub use images::draws_images;
 pub use settings_page::SETTINGS_PAGE;
 pub use tab::BrowserTab;
 
@@ -64,6 +66,8 @@ pub struct App {
     pub cache: Arc<crate::cache::Cache>,
     /// Dated copies of tracked sites' pages
     pub snapshots: Arc<crate::snapshots::Snapshots>,
+    /// Images: decoded, loading, and how they're drawn on this terminal
+    pub images: images::Images,
     /// Certificates seen for Gemini hosts (trust on first use)
     pub gemini_hosts: Arc<std::sync::Mutex<crate::gemini::KnownHosts>>,
     /// MCP sessions with the servers whose tools have been used
@@ -121,6 +125,7 @@ impl App {
             gemini_hosts: Arc::default(),
             cache: Arc::default(),
             snapshots: Arc::default(),
+            images: images::Images::default(),
             confirm_clear_history: false,
             confirm_reset_settings: false,
             confirm_delete_snapshots: None,
@@ -177,11 +182,13 @@ impl App {
             kind: tab.page_kind,
             source_view: tab.is_source_view,
             reader: tab.reader_mode,
+            image_sizes: Arc::clone(&tab.image_sizes),
             width,
         };
         if !background {
             tab.apply_render(render_page(&job));
             self.record_visit_if_pending(tab_index);
+            self.load_images_if_pending(tab_index);
             return;
         }
 
@@ -213,6 +220,7 @@ impl App {
                 tab.status_message = String::from("Loaded");
             }
             self.record_visit_if_pending(tab_index);
+            self.load_images_if_pending(tab_index);
         }
         let tab = &mut self.tabs[tab_index];
         if tab.render_in_flight == Some(version) {

@@ -40,6 +40,10 @@ quick-xml = "0.42.0"
 serde_json = "1.0.154"
 # Anubis argon2id challenges: the same version (and so the same default parameters) Anubis uses
 argon2 = { version = "0.5", default-features = false, features = ["alloc"] }
+# Images: drawing them in the terminal (Kitty, iTerm2, Sixel, or text blocks), and decoding with
+# pure-Rust decoders only. ratatui-image's chafa feature (a C library) is left out.
+ratatui-image = { version = "11.1.0", default-features = false, features = ["crossterm"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 # The page cache and snapshots: gzip (pure Rust) and HTTP dates
 flate2 = "1.1.10"
 httpdate = "1.0.3"

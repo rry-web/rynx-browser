@@ -13,6 +13,7 @@ use unicode_width::UnicodeWidthChar;
 
 mod forms;
 mod head;
+mod images;
 mod menus;
 mod plain;
 mod reader;
@@ -60,6 +61,9 @@ pub struct RenderJob {
     pub source_view: bool,
     /// Show only the page's main text (reader mode)
     pub reader: bool,
+    /// Images loaded so far, by their address as written on the page: the columns and rows to
+    /// reserve for each, to draw it in the page
+    pub image_sizes: Arc<HashMap<String, (u16, u16)>>,
     /// Terminal width; the page's border is allowed for
     pub width: u16,
 }
@@ -75,6 +79,28 @@ pub struct RenderedPage {
     pub controls: Vec<FormControl>,
     /// In reader mode, whether a main text was found (otherwise the whole page is shown)
     pub reader_found: Option<bool>,
+    /// Every image on the page, and where space was reserved to draw the loaded ones
+    pub images: Vec<PageImage>,
+    pub image_blocks: Vec<ImageBlock>,
+}
+
+/// An image on the page: its address as written, and its description
+#[derive(Clone, Debug, PartialEq)]
+pub struct PageImage {
+    pub src: String,
+    pub alt: String,
+}
+
+/// Space reserved in the page to draw a loaded image
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ImageBlock {
+    /// Index into the page's images
+    pub image: usize,
+    /// The block's first line, and its column
+    pub line_index: usize,
+    pub x: usize,
+    pub columns: u16,
+    pub rows: u16,
 }
 
 /// Parse and lay out a page. Pure and thread-safe: the UI runs it on a background thread, so a
@@ -90,9 +116,12 @@ pub fn render_page(job: &RenderJob) -> RenderedPage {
             forms: Vec::new(),
             controls: Vec::new(),
             reader_found: None,
+            images: Vec::new(),
+            image_blocks: Vec::new(),
         };
     }
     let mut renderer = DomRenderer::new(job.width as usize);
+    renderer.image_sizes = Arc::clone(&job.image_sizes);
     let mut reader_found = None;
     let title = match job.kind {
         PageKind::Html => {
@@ -117,6 +146,8 @@ pub fn render_page(job: &RenderJob) -> RenderedPage {
         forms: renderer.forms,
         controls: renderer.controls,
         reader_found,
+        images: renderer.images,
+        image_blocks: renderer.image_blocks,
     }
 }
 
@@ -283,6 +314,13 @@ pub struct DomRenderer {
     last_image: Option<(String, usize)>,
     /// Lines of preformatted text, which may legitimately repeat
     preformatted_lines: std::collections::HashSet<usize>,
+    /// The page's images, and the blocks reserved for loaded ones
+    pub images: Vec<PageImage>,
+    pub image_blocks: Vec<ImageBlock>,
+    /// Sizes of the images loaded so far (see RenderJob)
+    image_sizes: Arc<HashMap<String, (u16, u16)>>,
+    /// The image whose placeholder is being drawn
+    active_image: Option<usize>,
 }
 
 impl DomRenderer {
@@ -322,6 +360,10 @@ impl DomRenderer {
             words_drawn: 0,
             last_image: None,
             preformatted_lines: std::collections::HashSet::new(),
+            images: Vec::new(),
+            image_blocks: Vec::new(),
+            image_sizes: Arc::default(),
+            active_image: None,
         }
     }
 
@@ -474,8 +516,10 @@ impl DomRenderer {
 
     /// Append text that is a link or form control (or neither), tracking its clickable region
     fn emit_to(&mut self, text: &str, style: Style, link: Option<&str>, control: Option<usize>) {
-        let target = link.or(control.map(|_| ""));
         for ch in text.chars() {
+            // The space before an image's placeholder isn't part of it
+            let image = if ch.is_whitespace() { None } else { self.active_image };
+            let target = link.or(control.or(image).map(|_| ""));
             let width = char_width(ch);
             let start_x = self.current_line_width;
             let end_x = start_x + width;
@@ -495,6 +539,7 @@ impl DomRenderer {
                     && last.line_index == line_index
                     && last.url == url
                     && last.control == control
+                    && last.image == image
                     && last.x_end == start_x
                 {
                     last.x_end = end_x;
@@ -508,6 +553,7 @@ impl DomRenderer {
                 self.links.push(LinkRegion {
                     url: url.to_string(),
                     control,
+                    image,
                     line_index,
                     x_start: start_x,
                     x_end: end_x,
@@ -682,24 +728,7 @@ impl DomRenderer {
                 self.emit_text(&rule);
                 return self.add_vertical_space();
             }
-            "img" => {
-                // alt="" marks a decorative image; an image without alt is only worth showing
-                // when it's a link, so the link stays visible
-                let label = match elem.attr("alt").map(str::trim) {
-                    Some("") => return,
-                    Some(alt) => alt.to_string(),
-                    None if self.active_link_url.is_some() => "image".to_string(),
-                    None => return,
-                };
-                if self.last_image.as_ref().is_some_and(|(last, at)| *last == label && *at == self.words_drawn) {
-                    return;
-                }
-                self.add_style(|s| s.fg(Color::DarkGray));
-                self.push_word(&format!("[{}]", sanitize_for_terminal(&label)));
-                self.style_stack.pop();
-                self.last_image = Some((label, self.words_drawn));
-                return;
-            }
+            "img" => return self.render_image(elem),
             "iframe" => {
                 if let Some(src) = elem.attr("src") {
                     let label = elem.attr("title").unwrap_or("embedded page");

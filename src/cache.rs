@@ -22,6 +22,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Most page text kept in memory, in bytes
 const MEMORY_LIMIT: usize = 64 * 1024 * 1024;
 
+/// Largest file (an image) kept
+pub const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
+
 /// The disk cache's default size limit, in megabytes
 pub const DEFAULT_DISK_MB: u64 = 200;
 
@@ -129,9 +132,18 @@ impl Memory {
     }
 }
 
+/// Images' bytes kept in memory, least recently used first out
+#[derive(Default)]
+struct Bytes {
+    files: HashMap<String, Arc<Vec<u8>>>,
+    order: VecDeque<String>,
+    total: usize,
+}
+
 /// The cache, shared by every tab
 pub struct Cache {
     memory: Mutex<Memory>,
+    bytes: Mutex<Bytes>,
     /// The cache folder; None if the system has none
     dir: Option<PathBuf>,
     disk_clearweb: AtomicBool,
@@ -156,6 +168,7 @@ impl Cache {
     pub fn new(dir: Option<PathBuf>) -> Cache {
         Cache {
             memory: Mutex::default(),
+            bytes: Mutex::default(),
             dir,
             disk_clearweb: AtomicBool::new(false),
             disk_i2p: AtomicBool::new(false),
@@ -224,12 +237,57 @@ impl Cache {
         }
     }
 
-    /// Forget every cached page, in memory and on disk
+    /// A cached file (an image) for `url`, from memory or (if allowed for it) disk
+    pub fn get_bytes(&self, url: &str, i2p: bool) -> Option<Arc<Vec<u8>>> {
+        let key = key(url)?;
+        if let Some(found) = self.bytes.lock().unwrap_or_else(|e| e.into_inner()).files.get(&key).cloned() {
+            return Some(found);
+        }
+        let path = Self::file_for(self.disk_dir(i2p)?, &key).with_extension("img");
+        let mut data = Vec::new();
+        std::fs::File::open(path).ok()?.take(MAX_FILE_BYTES).read_to_end(&mut data).ok()?;
+        let data = Arc::new(data);
+        self.keep_bytes(key, Arc::clone(&data));
+        Some(data)
+    }
+
+    /// Keep a file (an image) for `url`
+    pub fn put_bytes(&self, url: &str, data: Arc<Vec<u8>>, i2p: bool) {
+        let Some(key) = key(url) else { return };
+        if let Some(dir) = self.disk_dir(i2p) {
+            let _ = std::fs::create_dir_all(dir);
+            let path = Self::file_for(dir, &key).with_extension("img");
+            let temporary = path.with_extension("img.tmp");
+            if std::fs::write(&temporary, data.as_slice()).and_then(|_| std::fs::rename(&temporary, &path)).is_ok() {
+                self.trim_disk(dir);
+            }
+        }
+        self.keep_bytes(key, data);
+    }
+
+    fn keep_bytes(&self, key: String, data: Arc<Vec<u8>>) {
+        let mut bytes = self.bytes.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(old) = bytes.files.insert(key.clone(), Arc::clone(&data)) {
+            bytes.total -= old.len();
+            bytes.order.retain(|k| *k != key);
+        }
+        bytes.total += data.len();
+        bytes.order.push_back(key);
+        while bytes.total > MEMORY_LIMIT {
+            let Some(oldest) = bytes.order.pop_front() else { break };
+            if let Some(old) = bytes.files.remove(&oldest) {
+                bytes.total -= old.len();
+            }
+        }
+    }
+
+    /// Forget every cached page and file, in memory and on disk
     pub fn clear(&self) -> Result<(), String> {
         *self.memory.lock().unwrap_or_else(|e| e.into_inner()) = Memory::default();
+        *self.bytes.lock().unwrap_or_else(|e| e.into_inner()) = Bytes::default();
         let Some(dir) = &self.dir else { return Ok(()) };
         for entry in std::fs::read_dir(dir).map_err(|e| e.to_string())?.flatten() {
-            if entry.path().extension().is_some_and(|e| e == "gz") {
+            if entry.path().extension().is_some_and(|e| e == "gz" || e == "img") {
                 std::fs::remove_file(entry.path()).map_err(|e| format!("Couldn't clear the cache: {}", e))?;
             }
         }
@@ -266,7 +324,7 @@ impl Cache {
 fn entries(dir: &Path) -> Vec<(PathBuf, u64, SystemTime)> {
     let Ok(read) = std::fs::read_dir(dir) else { return Vec::new() };
     read.flatten()
-        .filter(|e| e.path().extension().is_some_and(|x| x == "gz"))
+        .filter(|e| e.path().extension().is_some_and(|x| x == "gz" || x == "img"))
         .filter_map(|e| {
             let meta = e.metadata().ok()?;
             Some((e.path(), meta.len(), meta.modified().unwrap_or(UNIX_EPOCH)))

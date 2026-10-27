@@ -478,6 +478,21 @@ Worth repeating after any dependency upgrade.
 - [ ] **SMALL-07 Bookmarks and history.** Bookmark a Gemini page (`b`), then check `B` and `s`.
       *Expected:* both list the page by its first heading, and selecting it opens it again.
 
+## Images
+
+- [ ] **IMG-01 (priority) Real images.** In iTerm2, Kitty, Ghostty or WezTerm, open a page with
+      pictures (a Wikipedia article) and press `I`.
+      *Expected:* "Loading N images...", then the pictures appear in the page under their
+      captions, sharp, not as blocks. Scrolling keeps them in place; `i` on one shows it full
+      screen, and Esc returns. The settings page says which method it draws with.
+- [ ] **IMG-02 macOS Terminal.** The same in macOS Terminal.
+      *Expected:* rynx starts normally (it doesn't ask this terminal about images), and pictures
+      appear as rough coloured blocks.
+- [ ] **IMG-03 Loading settings.** Set "Load images" to "Those from the page's own site" and open
+      a news article.
+      *Expected:* the site's own pictures load by themselves; third-party ones stay placeholders
+      until `I`.
+
 ## Cache and snapshots
 
 - [ ] **CACHE-01 Back is instant.** Open a page, follow a link, press Backspace.

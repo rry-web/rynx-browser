@@ -14,7 +14,14 @@ use tokio::net::TcpListener;
 const LIMIT: u64 = 1024 * 1024;
 
 fn rendered_text(html: &str) -> String {
-    let job = RenderJob { source: Arc::from(html), kind: PageKind::Html, source_view: false, reader: false, width: 80 };
+    let job = RenderJob {
+        source: Arc::from(html),
+        kind: PageKind::Html,
+        source_view: false,
+        reader: false,
+        image_sizes: Default::default(),
+        width: 80,
+    };
     let page = render_page(&job);
     page.lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n")
 }

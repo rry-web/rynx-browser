@@ -143,7 +143,10 @@ fn hidden_and_non_text_content_is_skipped() {
 
 #[test]
 fn images_show_alt_text_unless_decorative() {
-    assert_eq!(text_lines("<p>x <img alt='A chart'> <img alt=''> <img src='a.png'></p>", 80), ["x [A chart]"]);
+    // Decorative images (alt="") and tracking pixels stay hidden; a picture without a
+    // description shows as [image], so it can be loaded
+    let html = "<p>x <img alt='A chart'> <img alt=''> <img src='a.png'> <img src='t.gif' width='1' height='1'></p>";
+    assert_eq!(text_lines(html, 80), ["x [A chart] [image]"]);
     // An image link without alt text stays visible and clickable
     let r = render_full("<p><a href='/home'><img src='logo.png'></a></p>", 80);
     assert_eq!(r.lines[0].to_string(), "[image]");

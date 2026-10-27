@@ -14,6 +14,8 @@ pub struct LinkRegion {
     pub url: String,
     /// The form control drawn here (index into the tab's controls), instead of a link
     pub control: Option<usize>,
+    /// The image whose placeholder this is (index into the page's images), if any
+    pub image: Option<usize>,
     pub line_index: usize,
     pub x_start: usize,
     pub x_end: usize,

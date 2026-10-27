@@ -28,6 +28,13 @@ pub struct BrowserTab {
     pub tool_prompt: Option<crate::models::ToolPrompt>,
     /// How the next load may use the cache (Back/Forward show the cached copy; Reload asks)
     pub(super) pending_cache_use: fetch::CacheUse,
+    /// The page's images, and where loaded ones are drawn in it
+    pub page_images: Vec<crate::renderer::PageImage>,
+    pub image_blocks: Vec<crate::renderer::ImageBlock>,
+    /// Space to reserve for each loaded image, by its address on the page
+    pub image_sizes: Arc<HashMap<String, (u16, u16)>>,
+    /// A page just arrived: load the images it may load by itself once it's laid out
+    pub load_images_after_render: bool,
     /// Address bar contents when Edit mode was entered, for history and cancelling
     pub url_before_edit: Option<String>,
     /// Line index of each in-page link target on the displayed page
@@ -168,6 +175,8 @@ impl BrowserTab {
     pub fn set_content(&mut self, source: impl Into<Arc<str>>, kind: PageKind) {
         self.html_source = source.into();
         self.page_kind = kind;
+        // A new page: no images of it are laid out yet
+        self.image_sizes = Arc::default();
         self.content_changed();
     }
 
@@ -253,6 +262,8 @@ impl BrowserTab {
         self.rendered_content = page.lines;
         self.link_regions = page.links;
         self.anchors = page.anchors;
+        self.page_images = page.images;
+        self.image_blocks = page.image_blocks;
         // A re-layout of the same page (e.g. a resize) keeps what was typed
         if self.control_values.len() != page.controls.len() {
             self.control_values = page.controls.iter().map(FormControl::initial_value).collect();
@@ -319,6 +330,10 @@ impl BrowserTab {
             download_prompt: None,
             tool_prompt: None,
             pending_cache_use: fetch::CacheUse::Normal,
+            page_images: Vec::new(),
+            image_blocks: Vec::new(),
+            image_sizes: Arc::default(),
+            load_images_after_render: false,
             url_before_edit: None,
             anchors: renderer.anchors,
             page_url: None,

@@ -22,6 +22,8 @@ pub enum NetworkResponse {
     ToolsListed(usize, String, String, Result<Vec<crate::mcp::Tool>, String>),
     /// A tool finished: tab_id, server, tool title, result
     ToolFinished(usize, String, String, Result<serde_json::Value, String>),
+    /// An image was fetched and decoded (or failed): tab_id, address, image
+    ImageLoaded(usize, String, Result<std::sync::Arc<image::DynamicImage>, String>),
 }
 
 /// A fetched page, ready to show
@@ -512,6 +514,21 @@ pub async fn read_text_limited(mut resp: reqwest::Response, limit: u64) -> Resul
     // decode() also honours a byte order mark, as resp.text() does
     let (text, _, _) = encoding.decode(&body);
     Ok(text.into_owned())
+}
+
+/// Read a response's body as bytes, up to `limit`
+pub async fn read_bytes_limited(mut resp: reqwest::Response, limit: u64) -> Result<Vec<u8>, String> {
+    if resp.content_length().is_some_and(|len| len > limit) {
+        return Err(format!("File too large (over {} MB)", limit / (1024 * 1024)));
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+        if (body.len() + chunk.len()) as u64 > limit {
+            return Err(format!("File too large (over {} MB)", limit / (1024 * 1024)));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }
 
 /// Detects file extensions based on magic bytes (file signatures)

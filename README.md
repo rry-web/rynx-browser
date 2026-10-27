@@ -121,6 +121,20 @@ objects are typed as JSON) and the `readOnlyHint` / `destructiveHint` annotation
 Results can contain text, links and text resources. Sign-in (OAuth), server requests to the
 user, and the older HTTP+SSE transport aren't supported yet.
 
+### Images
+
+Images show as placeholders (`[A photo of the bridge]`) until you ask for them: **`I`** loads the
+page's images, and **`i`** opens the selected one (or the first on screen) full screen. On the
+settings page you can let images load by themselves, either only those from the page's own site
+(images from elsewhere are often trackers) or all of them, and choose whether loaded images are
+shown in the page or only full screen.
+
+How they look depends on the terminal. Kitty, iTerm2, Ghostty and WezTerm show real images; rynx
+recognises them and picks the best way to draw. Other terminals, including macOS Terminal, get a
+rough picture made of coloured text blocks. The settings page can force a method if detection
+gets it wrong. Images are fetched like pages, through the cache, and a public page can never load
+images from your local network. SVG images aren't supported yet.
+
 ### The cache and snapshots
 
 Pages you visit are kept in memory until you quit, so **Back** and **Forward** show them
@@ -173,6 +187,8 @@ anubis = off
 cache = on
 cache_i2p = on
 cache_size = 500
+images = site
+image_display = inline
 ```
 
 rynx introduces itself honestly to websites, as `rynx/<version> (+<project page>)`. Bot walls
@@ -248,6 +264,8 @@ The same list is on the start page.
 | **`/`** | Find on the page (live highlighting) |
 | **`>`** / **`<`** | Next / previous match |
 | **`v`** | Copy mode: select text with `h` `j` `k` `l` or the arrow keys, **`y`** copies it, **`Esc`** cancels |
+| **`I`** | Load this page's images |
+| **`i`** | View the selected image (or the first on screen) full screen; `Esc` closes |
 | **`T`** | Track this site: keep a dated snapshot whenever one of its pages changes (again to stop) |
 | **`Z`** | Snapshots of this page (or of every tracked site) |
 | **`A`** | Open the Internet Archive's latest copy of the page (also for pages that failed to load) |
@@ -302,6 +320,10 @@ that:
   mouse can't confirm it), and web pages can't submit forms to tools or open results directly.
   Tool servers can't redirect. No AI model is involved, so instructions hidden in tool
   descriptions have nothing to act on; they're just text.
+- **Images:** none load until you ask (unless you choose otherwise), since images are how many
+  sites track you. Images are decoded by memory-safe decoders with limits on size, so a crafted
+  "image bomb" can't exhaust memory, and a public page can never make the browser request an
+  image from your local network (a request that can make a router or printer act).
 - **I2P:** in I2P mode all traffic goes through the I2P proxy, and `.i2p` addresses are never looked
   up outside it.
 - **Maintained dependencies:** `cargo audit` runs in CI on every change and weekly.
@@ -332,7 +354,7 @@ builds every platform and publishes the release. Tags containing `-` become pre-
 - [x] **Find on page** with highlighting
 - [x] **Rendering** of tables, lists, quotes, code and plain-text files
 - [x] **Forms** for searching and other text input
-- [ ] **Images** with `ratatui-image` (Sixel/Kitty)
+- [x] **Images**: Kitty, iTerm2, Sixel, or coloured text blocks; inline or full screen
 - [x] **Bookmarks**
 - [x] **Settings file** (home page, search engine, I2P proxy, downloads folder)
 - [x] **Persistent history** (opt-in)

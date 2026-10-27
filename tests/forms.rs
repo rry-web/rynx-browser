@@ -21,6 +21,7 @@ fn render(html: &str) -> rynx::renderer::RenderedPage {
         kind: PageKind::Html,
         source_view: false,
         reader: false,
+        image_sizes: Default::default(),
         width: 82,
     })
 }

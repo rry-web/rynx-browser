@@ -10,7 +10,14 @@ fn main() {
     let path = args.next().expect("usage: render_file <page.html> [width] [--reader]");
     let width = args.next().and_then(|w| w.parse().ok()).unwrap_or(100);
     let html = std::fs::read_to_string(path).expect("readable file");
-    let page = render_page(&RenderJob { source: html.into(), kind: PageKind::Html, source_view: false, reader, width });
+    let page = render_page(&RenderJob {
+        source: html.into(),
+        kind: PageKind::Html,
+        source_view: false,
+        reader,
+        image_sizes: Default::default(),
+        width,
+    });
     if page.reader_found == Some(false) {
         eprintln!("(no article found: the whole page is shown)");
     }

@@ -135,6 +135,8 @@ async fn run(
     let (tx, rx) = tokio::sync::mpsc::channel(rynx::constants::CHANNEL_CAPACITY);
     let mut app = App::with_settings(tx, rx, settings)?;
     app.config_dir = config_dir.clone();
+    // Asked now: the terminal answers on standard input, which the event loop reads from later
+    app.images.detect(app.settings.image_protocol);
     app.cache = std::sync::Arc::new(rynx::cache::Cache::new(rynx::settings::cache_dir()));
     app.cache.configure(app.settings.disk_cache, app.settings.disk_cache_i2p, app.settings.cache_size_mb);
     app.snapshots = std::sync::Arc::new(rynx::snapshots::Snapshots::load(

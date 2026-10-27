@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- A picture without a description now shows as `[image]` (so it can be loaded), unless it's
+  marked decorative (`alt=""`) or is a 1–2 pixel tracking image.
+
 ### Added
 - A page cache. Pages are kept in memory for the session: Back and Forward show them at once, a
   page the site says is fresh isn't fetched again, an older one is checked with the site
@@ -15,6 +19,14 @@
   pages then keeps a dated, compressed snapshot when the page changed. `Z` lists a page's
   snapshots; opening one shows the page as it was, with working links, and `r` loads the live
   page. Snapshots can be deleted per site (asks twice).
+
+- Images. Pages show placeholders until `I` loads their images (or `images = site` / `all` lets
+  them load by themselves); `i` opens one full screen. Loaded images are drawn in the page
+  (`image_display = inline`, the default) or only in the viewer, with Kitty graphics, iTerm2 images
+  or Sixel where the terminal supports them, otherwise coloured text blocks (`image_protocol`
+  chooses). Images go through the cache; lazy-loading `data-src`/`srcset` addresses are found;
+  tracking pixels are skipped. Decoding uses pure-Rust decoders with size limits, big images are
+  scaled down, SVG isn't supported, and public pages can't load images from the local network.
 
 ### Fixed
 - Reload on a page shown under an `about:` address reloads the page itself.

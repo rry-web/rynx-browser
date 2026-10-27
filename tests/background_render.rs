@@ -113,6 +113,7 @@ async fn rapid_resizes_are_coalesced() {
         kind: PageKind::Html,
         source_view: false,
         reader: false,
+        image_sizes: Default::default(),
         width: 89,
     });
     assert!(app.current_tab().rendered_content == expected.lines, "layout isn't for the final width");

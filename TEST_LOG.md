@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 131 (25 priority).
+Total checks: 134 (26 priority).
 
 
 ## Automated checks
@@ -203,6 +203,14 @@ Total checks: 131 (25 priority).
 | SMALL-05 | Not in I2P mode |  |  |  |  |
 | SMALL-06 | Feeds |  |  |  |  |
 | SMALL-07 | Bookmarks and history |  |  |  |  |
+
+## Images
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| IMG-01 | Real images | Yes |  |  |  |
+| IMG-02 | macOS Terminal |  |  |  |  |
+| IMG-03 | Loading settings |  |  |  |  |
 
 ## Cache and snapshots
 

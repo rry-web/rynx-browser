@@ -11,6 +11,7 @@ fn reader(html: &str) -> (Vec<String>, Option<bool>) {
         kind: PageKind::Html,
         source_view: false,
         reader: true,
+        image_sizes: Default::default(),
         width: 82,
     });
     (page.lines.iter().map(|l| l.to_string()).filter(|l| !l.trim().is_empty()).collect(), page.reader_found)

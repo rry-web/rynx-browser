@@ -91,6 +91,52 @@ impl App {
             let checked = if on { " checked" } else { "" };
             format!("<p><input type=\"checkbox\" name=\"{name}\" value=\"on\"{checked}> {label}</p>")
         };
+        // Images: which load by themselves, where they're shown, and how they're drawn
+        let choice = |name: &str, current: &str, options: &[(&str, &str)]| {
+            let options: String = options
+                .iter()
+                .map(|(value, label)| {
+                    let selected = if *value == current { " selected" } else { "" };
+                    format!("<option value=\"{value}\"{selected}>{label}</option>")
+                })
+                .collect();
+            format!("<select name=\"{name}\">{options}</select>")
+        };
+        use crate::settings::{ImageDisplay, ImageLoading, ImageProtocol};
+        let loading = match s.images {
+            ImageLoading::Ask => "ask",
+            ImageLoading::Site => "site",
+            ImageLoading::All => "all",
+        };
+        let display = if s.image_display == ImageDisplay::Viewer { "viewer" } else { "inline" };
+        let protocol = match s.image_protocol {
+            ImageProtocol::Auto => "auto",
+            ImageProtocol::Kitty => "kitty",
+            ImageProtocol::Iterm2 => "iterm2",
+            ImageProtocol::Sixel => "sixel",
+            ImageProtocol::Blocks => "blocks",
+        };
+        html.push_str(&format!(
+            "<h2>Images</h2>\
+             <p><b>Load images</b>: images can track you and use data, so by default none load until you press I.<br>{}</p>\
+             <p><b>Show loaded images</b>:<br>{}</p>\
+             <p><b>Draw them with</b>: now {}. Terminals like Kitty, iTerm2, Ghostty and WezTerm show real images; \
+             macOS Terminal only coloured blocks.<br>{}</p>",
+            choice("images", loading, &[
+                ("ask", "Only when I press I (or i for one image)"),
+                ("site", "Those from the page's own site"),
+                ("all", "All of them"),
+            ]),
+            choice("image_display", display, &[("inline", "In the page"), ("viewer", "Only full screen, with i")]),
+            self.images.protocol_name(),
+            choice("image_protocol", protocol, &[
+                ("auto", "What the terminal supports"),
+                ("kitty", "Kitty graphics"),
+                ("iterm2", "iTerm2 images"),
+                ("sixel", "Sixel graphics"),
+                ("blocks", "Coloured text blocks"),
+            ]),
+        ));
         html.push_str("<h2>Privacy</h2>");
         html.push_str(&checkbox(
             "history",
@@ -246,6 +292,7 @@ impl App {
             self.network_manager = Arc::new(network);
         }
         self.cache.configure(new.disk_cache, new.disk_cache_i2p, new.cache_size_mb);
+        self.images.use_protocol(new.image_protocol);
         match new.network {
             NetworkMode::I2p => self.i2p_mode = true,
             NetworkMode::Clearweb => self.i2p_mode = false,
