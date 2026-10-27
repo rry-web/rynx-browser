@@ -20,8 +20,13 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
   buttons and comments.
 - **Tabs, history and search:** Back and Forward return you to where you were on each page,
   in-page links jump without reloading, and `/` finds text on the page.
-- **Fast:** pages are laid out on a background thread, so even huge or slow pages never freeze the
-  screen.
+- **Images, when you want them:** placeholders by default; `I` loads a page's images, drawn in the
+  page with Kitty, iTerm2 or Sixel graphics (or coloured text blocks), and `i` shows one full screen.
+- **Made for slow connections:** a page cache (Back is instant, unchanged pages aren't downloaded
+  again, unreachable sites show the copy kept), dated snapshots of sites you track, and downloads
+  that resume where they stopped. Useful on any connection, a big help over I2P.
+- **Fast and light:** pages are laid out on a background thread, so even huge or slow pages never
+  freeze the screen, and rynx uses about 16 MB of memory. See [Efficiency](#efficiency).
 - **Private and hardened:** no cookies, no JavaScript, HTTPS everywhere, and on Linux and macOS a
   filesystem sandbox. See [Security and privacy](#security-and-privacy).
 - **The small web:** [Gemini](https://geminiprotocol.net) and Gopher sites, and RSS/Atom feeds
@@ -29,7 +34,10 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
 - **Site tools instead of JavaScript:** sites can offer interactive features as
   [MCP](https://modelcontextprotocol.io) tools, which rynx shows as forms. Nothing runs on your
   computer, and nothing is sent until you've seen exactly what it is and confirmed.
-- **I2P:** browse `.i2p` sites through a local I2P router.
+- **I2P:** browse `.i2p` sites through a local I2P router, and lock rynx to I2P so a stray key
+  can't send a page outside it.
+- **Settings in the browser:** `S` opens every setting as a form; `A` opens the Internet Archive's
+  copy of a page that's gone or blocked.
 
 ## Installation
 
@@ -158,7 +166,9 @@ Press **`A`** to open the [Internet Archive](https://web.archive.org)'s latest c
 handy when a site is down, gone, or behind a CAPTCHA or a JavaScript wall. It works on a page that
 failed to load, too. The Archive learns which address you looked up.
 
-Downloads (**`d`** on a link) are saved to your Downloads folder after you confirm.
+Downloads (**`d`** on a link) are saved to your Downloads folder after you confirm. If the connection breaks,
+a download resumes where it stopped; if it still fails, downloading the same link again later
+picks up from what was saved.
 
 Press **`b`** to bookmark a page (again to remove it) and **`B`** to see your bookmarks. Press
 **`s`** to see the pages you've visited. History is kept only until you quit, unless you turn on
@@ -308,7 +318,8 @@ that:
   on screen and never saved in bookmarks.
 - **Safe downloads:** files are tagged as coming from the internet (macOS quarantine, Windows Mark
   of the Web, Linux `user.xdg.origin.url`) so your OS checks them before they run; filenames are
-  made safe on every OS, and existing files are never overwritten silently.
+  made safe on every OS, and existing files are never overwritten silently. A resumed download
+  checks the file hasn't changed on the server, so two versions are never spliced together.
 - **Gemini and Gopher:** Gemini sites usually have self-signed certificates, so the first one
   seen for each site is remembered, and a different one later is refused unless it's signed by a
   certificate authority. Gopher is unencrypted, like plain HTTP. A public page can't link to Gopher
@@ -326,7 +337,49 @@ that:
   image from your local network (a request that can make a router or printer act).
 - **I2P:** in I2P mode all traffic goes through the I2P proxy, and `.i2p` addresses are never looked
   up outside it.
-- **Maintained dependencies:** `cargo audit` runs in CI on every change and weekly.
+- **Maintained dependencies:** `cargo deny` checks every change, and weekly, for known
+  vulnerabilities, licences and where dependencies come from; Dependabot proposes updates. Images
+  and every other untrusted format are handled by memory-safe Rust code only.
+
+## Efficiency
+
+Measured on macOS with the release build:
+
+| | |
+| :--- | :--- |
+| Memory, idle | about 16 MB |
+| Laying out a 390 KB Wikipedia article | 0.19 s, 13 MB at most |
+| Program size | about 10 MB |
+
+rynx downloads a page's HTML and nothing else: no style sheets, scripts, fonts or adverts, and
+images only when you ask. That's often a few percent of what a graphical browser fetches for the
+same page. Pages arrive compressed (gzip, Brotli), HTTP/2 reuses connections, Back is served from
+memory, a page the site says is unchanged costs only a short "has it changed?" request, and an
+interrupted download continues instead of starting over. The page cache holds at most 64 MB in
+memory, and decoded images at most 192 MB.
+
+## Known gaps and limitations
+
+rynx is a beta. What's missing or rough today:
+
+- **No JavaScript, by design.** Sites that only work with it (many web apps, most logins,
+  CAPTCHAs) won't work; `A` (the Internet Archive's copy) or reader mode (`R`) sometimes help.
+  Anubis bot checks are passed natively, except the `hashx` kind.
+- **No cookies**, so sites can't keep you signed in.
+- **Images:** SVG isn't supported; an image only partly on screen shows as its caption until it's
+  scrolled fully into view; macOS Terminal can only show rough coloured blocks. Forcing an image
+  protocol your terminal doesn't support can make it miss your first key presses.
+- **Platforms:** Windows has no sandbox yet, and the macOS and Windows builds aren't code-signed,
+  so the systems warn on first run. The sandbox has been checked on few Linux kernels and macOS
+  versions so far.
+- **Small web:** files can't be downloaded from Gemini or Gopher, and Gemini client certificates
+  (used by some capsules for accounts) aren't supported. View source on Gemini, Gopher and feed
+  pages shows the converted HTML, not the original.
+- **Site tools (MCP):** no sign-in (OAuth), and servers can't ask questions while a tool runs.
+- **Smaller things:** the history page shows times in UTC; a public site whose name points at
+  your local network isn't caught (only addresses are); key bindings can't be changed yet.
+- **Untested by hand:** [TEST_LOG.md](TEST_LOG.md) lists the checks still waiting for a person
+  with the right system (I2P, other terminals, Linux distributions, Windows).
 
 ## Development
 
@@ -342,12 +395,23 @@ cargo run --example render_file -- page.html 100   # print a saved page as rynx 
 with results recorded in [TEST_LOG.md](TEST_LOG.md). Changes are listed in
 [CHANGELOG.md](CHANGELOG.md).
 
-CI tests every push on Linux, macOS and Windows, fuzzes the renderer and audits dependencies. To
-make a release, set the version in `Cargo.toml`, add its section to `CHANGELOG.md`, and push a
-matching tag (`git tag v0.2.0-beta.5 && git push origin v0.2.0-beta.5`): the release workflow
-builds every platform and publishes the release. Tags containing `-` become pre-releases.
+CI runs on every push and pull request: the tests on Linux, macOS and Windows, `cargo fmt` and
+`cargo clippy` (warnings fail), extended renderer fuzzing, `cargo deny` (see `deny.toml`), and a
+build with the oldest supported Rust (1.88). Dependabot proposes dependency and action updates
+weekly. Actions are pinned to commit hashes.
+
+To make a release, set the version in `Cargo.toml`, add its section to `CHANGELOG.md`, and push a
+matching tag (`git tag v0.2.0-beta.5 && git push origin v0.2.0-beta.5`). The release workflow runs
+the checks, tests and builds every platform, publishes the GitHub release with checksums and
+build provenance attestations, then publishes the crate to crates.io by trusted publishing, with
+no stored token. Tags containing `-` become pre-releases. (Trusted publishing is set up once on
+crates.io: the crate's Settings, Trusted Publishing, repository `rry-web/rynx-browser`, workflow
+`release.yml`.)
 
 ## Roadmap
+
+Done:
+
 - [x] **I2P integration** through a local proxy
 - [x] **Downloads** with progress, safe filenames and OS security tagging
 - [x] **Clipboard** support for the address bar and page text
@@ -360,8 +424,27 @@ builds every platform and publishes the release. Tags containing `-` become pre-
 - [x] **Persistent history** (opt-in)
 - [x] **Gopher, Gemini and RSS** support
 - [x] **MCP tools** offered by sites, as an alternative to JavaScript
+- [x] **Reader mode**, **Anubis** bot checks without JavaScript, a **settings page**
+- [x] **Page cache**, **snapshots** of tracked sites, **resumable downloads**
+- [x] **Sandbox** on Linux and macOS
+
+Next:
+
+- [ ] **A bundled I2P router** (i2pd, or the Rust router emissary), so I2P works without setting
+      one up separately
 - [ ] **Your own MCP servers**: tools from servers you configure, usable on any page
+- [ ] **Customisable key bindings** (`keys.conf`)
+- [ ] **Coverage-guided fuzzing** of every parser of untrusted input, run nightly
+
+Later:
+
 - [ ] **MCP sign-in** (OAuth) for tools that need an account
+- [ ] **Session restore** (opt-in): reopen your tabs
+- [ ] **Encryption at rest** for history, the cache and snapshots, with a passphrase
+- [ ] **SVG images**, and drawing images that are partly on screen
+- [ ] **Downloads from Gemini and Gopher**, and Gemini client certificates
+- [ ] **A Windows sandbox**, and **code-signed** macOS and Windows builds
+- [ ] **Packages**: Homebrew, the AUR and others
 
 If you want to contribute, open an issue or pull request on GitHub.
 

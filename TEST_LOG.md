@@ -150,7 +150,7 @@ Total checks: 135 (27 priority).
 | DL-05 | One download per tab |  |  |  |  |
 | DL-06 | Gatekeeper checks downloads (macOS) | Yes |  |  |  |
 | DL-07 | HTTP download links are upgraded |  |  |  |  |
-| DL-09 | Resuming over I2P | Yes |  |  |  |
+| DL-08 | Resuming over I2P | Yes |  |  |  |
 
 ## Clipboard
 
