@@ -188,6 +188,8 @@ async fn run_app<B: Backend<Error = io::Error>>(terminal: &mut Terminal<B>, mut 
     app.resize_all_tabs(size.width);
     loop {
         terminal.draw(|f| ui(f, &app))?;
+        // Images the frame needed that had been dropped from memory are decoded again
+        app.restore_missing_images();
 
         // Handle network events
         process_network_events(&mut app, size.width)?;

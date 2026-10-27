@@ -26,6 +26,9 @@ const MAX_KEPT_SIDE: u32 = 2048;
 const PARALLEL_FETCHES: usize = 6;
 /// Tallest an image drawn in the page gets, in rows
 const MAX_INLINE_ROWS: u16 = 24;
+/// Most memory decoded images may use (4 bytes a pixel); the least recently used are dropped
+/// beyond it, and decoded again from the cache if they're needed on screen
+const DECODED_BUDGET: usize = 192 * 1024 * 1024;
 
 /// The browser's images: decoded ones, those loading or failed, and their drawing state
 pub struct Images {
@@ -34,6 +37,13 @@ pub struct Images {
     /// What the terminal said it supports, for going back to it from a chosen protocol
     detected: ratatui_image::picker::ProtocolType,
     decoded: HashMap<String, Arc<DynamicImage>>,
+    /// Least recently used first, and the bytes they take
+    decoded_order: std::collections::VecDeque<String>,
+    decoded_bytes: usize,
+    /// Every image's size in pixels, kept after it's dropped so the page's layout doesn't change
+    dimensions: HashMap<String, (u32, u32)>,
+    /// Images the page needed on screen that had been dropped; reloaded after the frame
+    pub missing: Mutex<HashSet<String>>,
     loading: HashSet<String>,
     failed: HashMap<String, String>,
     /// Images still loading, per tab
@@ -54,6 +64,10 @@ impl Default for Images {
             picker: Picker::halfblocks(),
             detected: ratatui_image::picker::ProtocolType::Halfblocks,
             decoded: HashMap::new(),
+            decoded_order: std::collections::VecDeque::new(),
+            decoded_bytes: 0,
+            dimensions: HashMap::new(),
+            missing: Mutex::default(),
             loading: HashSet::new(),
             failed: HashMap::new(),
             pending: HashMap::new(),
@@ -72,9 +86,47 @@ impl std::fmt::Debug for Images {
     }
 }
 
+/// The memory a decoded image takes
+fn image_bytes(image: &DynamicImage) -> usize {
+    image.width() as usize * image.height() as usize * 4
+}
+
 impl Images {
     pub fn is_decoded(&self, url: &str) -> bool {
         self.decoded.contains_key(url)
+    }
+
+    /// Images decoded and held in memory, and the bytes they take
+    pub fn decoded_memory(&self) -> (usize, usize) {
+        (self.decoded.len(), self.decoded_bytes)
+    }
+
+    /// Keep a decoded image, dropping the least recently used beyond the budget (with their
+    /// drawing state, which holds another copy)
+    pub fn keep(&mut self, url: String, image: Arc<DynamicImage>) {
+        if let Some(old) = self.decoded.remove(&url) {
+            self.decoded_bytes -= image_bytes(&old);
+            self.decoded_order.retain(|u| *u != url);
+        }
+        self.dimensions.insert(url.clone(), (image.width(), image.height()));
+        self.decoded_bytes += image_bytes(&image);
+        self.decoded.insert(url.clone(), image);
+        self.decoded_order.push_back(url);
+        while self.decoded_bytes > DECODED_BUDGET && self.decoded_order.len() > 1 {
+            let Some(oldest) = self.decoded_order.pop_front() else { break };
+            if let Some(old) = self.decoded.remove(&oldest) {
+                self.decoded_bytes -= image_bytes(&old);
+            }
+            self.drawn.lock().unwrap_or_else(|e| e.into_inner()).remove(&oldest);
+        }
+    }
+
+    /// Mark an image as just used, so it's the last to be dropped
+    fn touch(&mut self, url: &str) {
+        if let Some(i) = self.decoded_order.iter().position(|u| u == url) {
+            let url = self.decoded_order.remove(i).expect("position is in range");
+            self.decoded_order.push_back(url);
+        }
     }
 
     /// Ask the terminal how it draws images (once, at startup, before input is read), then use
@@ -195,11 +247,11 @@ async fn fetch(
     Ok(data)
 }
 
-/// The columns and rows to draw an image in, keeping its shape on a terminal whose character
-/// cells are `font` pixels, within `available` columns
-fn cells_for(image: &DynamicImage, font: (u16, u16), available: u16) -> (u16, u16) {
+/// The columns and rows to draw an image of `size` pixels in, keeping its shape on a terminal
+/// whose character cells are `font` pixels, within `available` columns
+fn cells_for(size: (u32, u32), font: (u16, u16), available: u16) -> (u16, u16) {
     let (fw, fh) = (font.0.max(1) as f64, font.1.max(1) as f64);
-    let (iw, ih) = (image.width().max(1) as f64, image.height().max(1) as f64);
+    let (iw, ih) = (size.0.max(1) as f64, size.1.max(1) as f64);
     let mut columns = (iw / fw).ceil().min(available.max(1) as f64).max(1.0);
     let mut rows = (columns * fw * ih / iw / fh).ceil().max(1.0);
     if rows > MAX_INLINE_ROWS as f64 {
@@ -294,7 +346,7 @@ impl App {
         let done = *pending == 0;
         match result {
             Ok(image) => {
-                self.images.decoded.insert(url.clone(), image);
+                self.images.keep(url.clone(), image);
             }
             Err(e) => {
                 self.images.failed.insert(url.clone(), e);
@@ -332,8 +384,9 @@ impl App {
         let font = (font.width, font.height);
         let mut sizes = HashMap::new();
         for (url, image) in self.page_images(index) {
-            if let Some(decoded) = self.images.decoded.get(&url) {
-                sizes.insert(image.src.clone(), cells_for(decoded, font, available));
+            // Dimensions are kept after an image is dropped from memory, so the layout stays put
+            if let Some(size) = self.images.dimensions.get(&url) {
+                sizes.insert(image.src.clone(), cells_for(*size, font, available));
             }
         }
         let tab = &mut self.tabs[index];
@@ -383,6 +436,7 @@ impl App {
         };
         let url = crate::network::resolve_url(tab.link_base(), &image.src);
         if self.images.decoded.contains_key(&url) {
+            self.images.touch(&url);
             self.open_viewer(url, image.alt);
             return;
         }
@@ -414,12 +468,56 @@ impl App {
         *self.images.viewer_state.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
-    /// The drawing state for an image in the page, made on first use
+    /// Decode again the images the last frame needed but had been dropped from memory (from the
+    /// cache, so without the network unless the cache let them go too)
+    pub fn restore_missing_images(&mut self) {
+        let missing: Vec<String> = self.images.missing.lock().unwrap_or_else(|e| e.into_inner()).drain().collect();
+        for url in missing {
+            if !self.images.loading.contains(&url) && !self.images.decoded.contains_key(&url) {
+                self.fetch_image(self.active_tab_index, url);
+            }
+        }
+    }
+
+    /// The drawing state for an image in the page, made on first use. An image that was dropped
+    /// from memory is noted, to be decoded again after this frame.
     pub fn with_drawn_image<R>(&self, url: &str, draw: impl FnOnce(&mut StatefulProtocol) -> R) -> Option<R> {
-        let image = self.images.decoded.get(url)?;
+        let Some(image) = self.images.decoded.get(url) else {
+            if self.images.dimensions.contains_key(url) {
+                self.images.missing.lock().unwrap_or_else(|e| e.into_inner()).insert(url.to_string());
+            }
+            return None;
+        };
         let mut drawn = self.images.drawn.lock().unwrap_or_else(|e| e.into_inner());
         let state =
             drawn.entry(url.to_string()).or_insert_with(|| self.images.picker.new_resize_protocol((**image).clone()));
         Some(draw(state))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decoded_images_stay_within_their_budget() {
+        let mut images = Images::default();
+        // 2048 x 2048 pixels: 16 MB each, so the budget holds 12
+        for i in 0..20 {
+            images.keep(format!("https://x.example/{i}.png"), Arc::new(DynamicImage::new_rgba8(2048, 2048)));
+        }
+        let (count, bytes) = images.decoded_memory();
+        assert!(bytes <= DECODED_BUDGET, "{bytes}");
+        assert_eq!(count, 12);
+        assert!(!images.is_decoded("https://x.example/0.png"), "the oldest went first");
+        assert!(images.is_decoded("https://x.example/19.png"));
+        // Its size is remembered, so the page keeps its layout
+        assert_eq!(images.dimensions.get("https://x.example/0.png"), Some(&(2048, 2048)));
+
+        // Using one keeps it longest
+        images.touch("https://x.example/8.png");
+        images.keep("https://x.example/new.png".into(), Arc::new(DynamicImage::new_rgba8(2048, 2048)));
+        assert!(images.is_decoded("https://x.example/8.png"));
+        assert!(!images.is_decoded("https://x.example/9.png"));
     }
 }
