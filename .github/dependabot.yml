@@ -1,0 +1,22 @@
+# Weekly pull requests to update dependencies and the pinned GitHub Actions. Each runs through CI
+# (tests, lints, cargo deny, minimum Rust version) before it can be merged.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    # One pull request for all compatible (semver-minor and patch) updates, separate ones for
+    # major versions, which may need code changes
+    groups:
+      compatible:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
