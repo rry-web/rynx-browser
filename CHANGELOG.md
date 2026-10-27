@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0-beta.6]
+
+Images, a page cache and snapshots, resumable downloads, and in-app updates: the first release
+whose checksums are signed, so later releases can be installed from inside rynx (press `U`).
+Copies of earlier betas need this one installed by hand.
 
 ### Changed
 - A picture without a description now shows as `[image]` (so it can be loaded), unless it's

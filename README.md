@@ -3,7 +3,7 @@
 A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**, with absolutely
 **zero JavaScript**.
 
-> **Status: beta.** Version 0.2.0-beta.5 is the latest release. rynx is under active development:
+> **Status: beta.** Version 0.2.0-beta.6 is the latest release. rynx is under active development:
 > security protections and fixes keep arriving as issues are found, and some protections (the
 > filesystem sandbox on Linux and macOS in particular) are preliminary and haven't yet been checked on a wide
 > range of systems. Please report problems, and anything that looks like a security issue, as
@@ -46,7 +46,7 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
 With [Rust](https://rustup.rs) 1.90 or newer installed:
 
 ```sh
-cargo install rynx --version 0.2.0-beta.5
+cargo install rynx --version 0.2.0-beta.6
 ```
 
 Then run `rynx`. (Cargo skips beta versions unless you name one with `--version`.)
@@ -417,7 +417,7 @@ build with the oldest supported Rust (1.90). Dependabot proposes dependency and 
 weekly. Actions are pinned to commit hashes.
 
 To make a release, set the version in `Cargo.toml`, add its section to `CHANGELOG.md`, and push a
-matching tag (`git tag v0.2.0-beta.5 && git push origin v0.2.0-beta.5`). The release workflow runs
+matching tag (`git tag v0.2.0-beta.6 && git push origin v0.2.0-beta.6`). The release workflow runs
 the checks, tests and builds every platform, publishes the GitHub release with checksums and
 build provenance attestations, then publishes the crate to crates.io by trusted publishing, with
 no stored token. Tags containing `-` become pre-releases. The checksum list is signed with the
