@@ -444,8 +444,14 @@ impl BrowserTab {
         let sanitized_name = App::download_filename(&url);
         let target_path = download_dir.join(&sanitized_name);
         let file_exists = App::path_taken(&target_path);
+        let resume_from = downloads::partial_download(&target_path, &url);
 
-        self.download_prompt =
-            Some(crate::models::DownloadPrompt { url, filename: sanitized_name, target_path, file_exists });
+        self.download_prompt = Some(crate::models::DownloadPrompt {
+            url,
+            filename: sanitized_name,
+            target_path,
+            file_exists,
+            resume_from,
+        });
     }
 }

@@ -662,6 +662,8 @@ fn render_download_prompt(f: &mut Frame, app: &App) {
                 Span::styled("WARNING: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
                 Span::from("File exists and will be overwritten!"),
             ]));
+        } else if let Some(saved) = prompt.resume_from {
+            text.push(Line::from(format!("Resumes the earlier download ({:.1} MB saved)", saved as f64 / 1048576.0)));
         } else {
             text.push(Line::from("Save to Downloads folder?"));
         }

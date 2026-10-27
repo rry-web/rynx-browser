@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 134 (26 priority).
+Total checks: 135 (27 priority).
 
 
 ## Automated checks
@@ -150,6 +150,7 @@ Total checks: 134 (26 priority).
 | DL-05 | One download per tab |  |  |  |  |
 | DL-06 | Gatekeeper checks downloads (macOS) | Yes |  |  |  |
 | DL-07 | HTTP download links are upgraded |  |  |  |  |
+| DL-09 | Resuming over I2P | Yes |  |  |  |
 
 ## Clipboard
 

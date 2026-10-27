@@ -109,4 +109,6 @@ pub struct DownloadPrompt {
     pub filename: String,
     pub target_path: std::path::PathBuf,
     pub file_exists: bool,
+    /// Bytes an earlier, interrupted download of this link already saved
+    pub resume_from: Option<u64>,
 }

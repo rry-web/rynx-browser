@@ -27,6 +27,17 @@
   chooses). Images go through the cache; lazy-loading `data-src`/`srcset` addresses are found;
   tracking pixels are skipped. Decoding uses pure-Rust decoders with size limits, big images are
   scaled down, SVG isn't supported, and public pages can't load images from the local network.
+  Decoded images use at most 192 MB, least recently used out (decoded again from the cache when
+  needed on screen).
+- Resumable downloads. A download is written to `<name>.part` and renamed when complete; when the
+  connection breaks it resumes from where it stopped (a range request, up to five times), and a
+  download that still failed resumes the next time the same link is downloaded (the prompt says
+  how much was saved). The ETag or Last-Modified goes with each resume (If-Range), so a file that
+  changed on the server is downloaded afresh rather than spliced.
+- CI: `cargo deny` (vulnerabilities, licences compatible with the GPL, crates.io only) replaces
+  `cargo audit`; a Rust 1.88 job checks the minimum version; releases run formatting, lints and
+  `cargo deny` before building, and publish to crates.io by trusted publishing (no stored token);
+  Dependabot proposes dependency and action updates weekly.
 
 ### Fixed
 - Reload on a page shown under an `about:` address reloads the page itself.

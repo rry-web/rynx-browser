@@ -342,6 +342,11 @@ Worth repeating after any dependency upgrade.
 
 ## Downloads
 
+- [ ] **DL-09 (priority) Resuming over I2P.** In I2P mode, start downloading a large file, then
+      stop the I2P router briefly (or switch Wi-Fi off and on).
+      *Expected:* "Download interrupted ...; resuming, attempt 1 of 5..." and the download
+      continues from where it was. If it gives up, downloading the same link again shows
+      "Resumes the earlier download (N MB saved)" and finishes it; the file opens correctly.
 - [ ] **DL-01 Speed and filename.** Download a large file (tens of MB).
       *Expected:* it downloads at normal network speed, and the popup shows the real
       filename, not "Downloading...".

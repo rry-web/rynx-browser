@@ -276,6 +276,7 @@ async fn test_download_popups_render_in_tiny_terminal() {
         filename: "file.zip".to_string(),
         target_path: std::path::PathBuf::from("file.zip"),
         file_exists: false,
+        resume_from: None,
     });
 
     // Heights below the tab bar + URL bar + popup sizes

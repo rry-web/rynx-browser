@@ -172,121 +172,250 @@ impl App {
         let tab_id = tab.id;
         tab.download_state = Some(crate::models::Download {
             filename: prompt.filename,
-            bytes_downloaded: 0,
+            bytes_downloaded: prompt.resume_from.unwrap_or(0),
             total_size: None,
             status: crate::models::DownloadStatus::Active,
         });
-        tab.status_message = String::from("Download starting...");
+        tab.status_message = String::from(if prompt.resume_from.is_some() {
+            "Resuming the download..."
+        } else {
+            "Download starting..."
+        });
 
-        let url = prompt.url;
-        let target_path = prompt.target_path;
         let tx = self.tx.clone();
         let use_i2p = self.i2p_mode;
         let nm = Arc::clone(&self.network_manager);
-
         tokio::spawn(async move {
             let client = nm.get_download_client(use_i2p);
-
-            // 1. Send request
-            let res = match crate::network::get_following_redirects(client, &url, use_i2p).await {
-                Ok(r) => r,
-                Err(e) => {
-                    let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Connection failed: {}", e))).await;
-                    return;
-                }
+            let message = match download(client, &prompt.url, &prompt.target_path, use_i2p, &tx, tab_id).await {
+                Ok(path) => NetworkResponse::DownloadFinished(tab_id, path),
+                Err(e) => NetworkResponse::DownloadError(tab_id, e),
             };
-
-            // Don't save a server's error page as if it were the file
-            if !res.status().is_success() {
-                let _ =
-                    tx.send(NetworkResponse::DownloadError(tab_id, format!("Server returned {}", res.status()))).await;
-                return;
-            }
-
-            let total = res.content_length();
-            let mut stream = res.bytes_stream();
-            let mut downloaded: u64 = 0;
-            let mut file_handle: Option<(tokio::fs::File, String)> = None;
-            // Throttle progress updates so the UI channel never limits download speed
-            let progress_interval = Duration::from_millis(DOWNLOAD_PROGRESS_INTERVAL_MS);
-            let mut last_progress: Option<Instant> = None;
-
-            while let Some(item) = stream.next().await {
-                let chunk = match item {
-                    Ok(chunk) => chunk,
-                    Err(e) => {
-                        let _ = tx
-                            .send(NetworkResponse::DownloadError(tab_id, format!("Download interrupted: {}", e)))
-                            .await;
-                        return;
-                    }
-                };
-                if file_handle.is_none() {
-                    // 2. Create Downloads Directory
-                    if let Some(dir) = target_path.parent()
-                        && let Err(e) = tokio::fs::create_dir_all(dir).await
-                    {
-                        let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Folder error: {}", e))).await;
-                        return;
-                    }
-
-                    // 3. Sniff Extension; only the confirmed path may be overwritten
-                    let mut file_path = target_path.clone();
-                    if file_path.extension().is_none()
-                        && let Some(ext) = crate::network::sniff_extension(&chunk)
-                    {
-                        file_path = Self::unused_path(&file_path.with_extension(ext));
-                    }
-
-                    // 4. Safe File Creation (No unwraps). Never write through a symbolic link: one
-                    // planted in Downloads could point the write at e.g. ~/.bashrc
-                    let is_symlink =
-                        tokio::fs::symlink_metadata(&file_path).await.is_ok_and(|meta| meta.file_type().is_symlink());
-                    if is_symlink {
-                        let _ = tx
-                            .send(NetworkResponse::DownloadError(
-                                tab_id,
-                                "Refusing to save over a symbolic link".to_string(),
-                            ))
-                            .await;
-                        return;
-                    }
-                    let file = match tokio::fs::File::create(&file_path).await {
-                        Ok(f) => f,
-                        Err(e) => {
-                            let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("File error: {}", e))).await;
-                            return;
-                        }
-                    };
-                    // Tag before writing, so even a partial download is checked on first open.
-                    // Best effort: some filesystems (e.g. FAT USB drives) can't store the tag.
-                    let _ = Self::mark_downloaded(&file_path, &url);
-                    file_handle = Some((file, file_path.display().to_string()));
-                }
-
-                if let Some((ref mut file, _)) = file_handle {
-                    if let Err(e) = file.write_all(&chunk).await {
-                        let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Write failed: {}", e))).await;
-                        return;
-                    }
-                    downloaded += chunk.len() as u64;
-                    if last_progress.is_none_or(|t| t.elapsed() >= progress_interval) {
-                        last_progress = Some(Instant::now());
-                        let _ = tx.send(NetworkResponse::DownloadProgress(tab_id, downloaded, total)).await;
-                    }
-                }
-            }
-
-            if let Some((mut file, path)) = file_handle {
-                // tokio completes writes in the background; flush so the file is whole before reporting done
-                if let Err(e) = file.flush().await {
-                    let _ = tx.send(NetworkResponse::DownloadError(tab_id, format!("Write failed: {}", e))).await;
-                    return;
-                }
-                let _ = tx.send(NetworkResponse::DownloadFinished(tab_id, path)).await;
-            } else {
-                let _ = tx.send(NetworkResponse::DownloadError(tab_id, "Download stream was empty".to_string())).await;
-            }
+            let _ = tx.send(message).await;
         });
     }
+}
+
+/// Times an interrupted download is resumed by itself before giving up (it can still be resumed
+/// later, by downloading the same link again)
+const RESUME_ATTEMPTS: u32 = 5;
+
+/// Where a download in progress is written, and the note of what's needed to resume it
+fn partial_paths(target: &Path) -> (PathBuf, PathBuf) {
+    let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    (target.with_file_name(format!("{}.part", name)), target.with_file_name(format!("{}.part.json", name)))
+}
+
+/// The bytes already downloaded of `url` into `target` by an earlier, interrupted download
+pub(crate) fn partial_download(target: &Path, url: &str) -> Option<u64> {
+    let (part, note) = partial_paths(target);
+    let note: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(note).ok()?).ok()?;
+    if note.get("url")?.as_str()? != url {
+        return None;
+    }
+    let length = std::fs::symlink_metadata(&part).ok().filter(|m| m.is_file())?.len();
+    (length > 0).then_some(length)
+}
+
+/// Why a download attempt stopped: worth resuming, or not
+enum Stopped {
+    Resumable(String),
+    Fatal(String),
+}
+
+/// "bytes 400-999/1000": the first byte and the total
+fn content_range(response: &reqwest::Response) -> Option<(u64, Option<u64>)> {
+    let value = response.headers().get(reqwest::header::CONTENT_RANGE)?.to_str().ok()?;
+    let (range, total) = value.strip_prefix("bytes ")?.split_once('/')?;
+    let start = range.split_once('-').map(|(s, _)| s).unwrap_or(range).parse().ok();
+    Some((start.unwrap_or(0), total.parse().ok()))
+}
+
+/// Download `url` to `target`, through `target.part`, resuming where an earlier attempt stopped
+/// and by itself when the connection breaks. The validator (ETag or Last-Modified) goes with each
+/// resume as If-Range, so a file changed on the server is downloaded afresh, never spliced.
+async fn download(
+    client: &reqwest::Client,
+    url: &str,
+    target: &Path,
+    i2p_mode: bool,
+    tx: &mpsc::Sender<NetworkResponse>,
+    tab_id: usize,
+) -> Result<String, String> {
+    let (part, note) = partial_paths(target);
+    if let Some(dir) = target.parent() {
+        tokio::fs::create_dir_all(dir).await.map_err(|e| format!("Folder error: {}", e))?;
+    }
+    // Never write through a symbolic link: one planted in Downloads could point the write at
+    // e.g. ~/.bashrc
+    for path in [&part, &note, &target.to_path_buf()] {
+        if tokio::fs::symlink_metadata(path).await.is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err("Refusing to save over a symbolic link".to_string());
+        }
+    }
+    let mut have = partial_download(target, url).unwrap_or(0);
+    let mut validator: Option<String> = None;
+    if have > 0 {
+        let saved: Option<serde_json::Value> =
+            std::fs::read_to_string(&note).ok().and_then(|t| serde_json::from_str(&t).ok());
+        validator = saved.and_then(|v| v.get("validator").and_then(|v| v.as_str()).map(str::to_string));
+    } else {
+        // Leftovers of a download of something else
+        let _ = tokio::fs::remove_file(&part).await;
+        let _ = tokio::fs::remove_file(&note).await;
+    }
+
+    let mut attempt = 0;
+    loop {
+        let result = download_attempt(client, url, i2p_mode, &part, &note, &mut have, &mut validator, tx, tab_id).await;
+        match result {
+            Ok(()) => break,
+            Err(Stopped::Resumable(e)) if attempt < RESUME_ATTEMPTS => {
+                attempt += 1;
+                let message =
+                    format!("Download interrupted ({}); resuming, attempt {} of {}...", e, attempt, RESUME_ATTEMPTS);
+                let _ = tx.send(NetworkResponse::Info(tab_id, message)).await;
+                tokio::time::sleep(Duration::from_secs(2 * attempt as u64)).await;
+            }
+            Err(Stopped::Resumable(e)) | Err(Stopped::Fatal(e)) => {
+                return Err(if have > 0 {
+                    format!("{}. What was downloaded is kept: download the link again to resume", e)
+                } else {
+                    e
+                });
+            }
+        }
+    }
+
+    // The file's own extension, when the address didn't give one
+    let mut destination = target.to_path_buf();
+    if destination.extension().is_none() {
+        let mut head = vec![0u8; 64];
+        let read = match tokio::fs::File::open(&part).await {
+            Ok(mut file) => tokio::io::AsyncReadExt::read(&mut file, &mut head).await.unwrap_or(0),
+            Err(_) => 0,
+        };
+        if let Some(ext) = crate::network::sniff_extension(&head[..read]) {
+            destination = App::unused_path(&destination.with_extension(ext));
+        }
+    }
+    if tokio::fs::symlink_metadata(&destination).await.is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err("Refusing to save over a symbolic link".to_string());
+    }
+    // Only the confirmed path, or a new one, is written: the rename replaces only what was agreed
+    tokio::fs::rename(&part, &destination).await.map_err(|e| format!("Couldn't finish the file: {}", e))?;
+    let _ = tokio::fs::remove_file(&note).await;
+    let _ = App::mark_downloaded(&destination, url);
+    Ok(destination.display().to_string())
+}
+
+/// One request: the whole file, or the rest of it from `have`
+#[allow(clippy::too_many_arguments)]
+async fn download_attempt(
+    client: &reqwest::Client,
+    url: &str,
+    i2p_mode: bool,
+    part: &Path,
+    note: &Path,
+    have: &mut u64,
+    validator: &mut Option<String>,
+    tx: &mpsc::Sender<NetworkResponse>,
+    tab_id: usize,
+) -> Result<(), Stopped> {
+    use reqwest::header::{HeaderValue, IF_RANGE, RANGE};
+    let mut headers = reqwest::header::HeaderMap::new();
+    if *have > 0 {
+        if let Ok(range) = HeaderValue::from_str(&format!("bytes={}-", have)) {
+            headers.insert(RANGE, range);
+        }
+        if let Some(value) = validator.as_deref().and_then(|v| HeaderValue::from_str(v).ok()) {
+            headers.insert(IF_RANGE, value);
+        }
+    }
+    let resuming = *have > 0;
+    let response = crate::network::send_with_headers(client, url, i2p_mode, None, headers).await.map_err(|e| {
+        let message = format!("Connection failed: {}", e);
+        if resuming { Stopped::Resumable(message) } else { Stopped::Fatal(message) }
+    })?;
+
+    let status = response.status();
+    let mut total = None;
+    let append = match status {
+        reqwest::StatusCode::PARTIAL_CONTENT if resuming => match content_range(&response) {
+            Some((start, whole)) if start == *have => {
+                total = whole;
+                true
+            }
+            // Not the part asked for: start again rather than splice the wrong bytes
+            _ => return Err(Stopped::Resumable("the server sent the wrong part".to_string())),
+        },
+        // Nothing left to send: it was all there already
+        reqwest::StatusCode::RANGE_NOT_SATISFIABLE if resuming => {
+            if content_range(&response).and_then(|(_, whole)| whole) == Some(*have) {
+                return Ok(());
+            }
+            *have = 0;
+            return Err(Stopped::Resumable("the server couldn't continue".to_string()));
+        }
+        // The whole file: new, or changed since the earlier attempt, or the server can't resume
+        s if s.is_success() => false,
+        // Don't save a server's error page as if it were the file
+        s => return Err(Stopped::Fatal(format!("Server returned {}", s))),
+    };
+    if !append {
+        *have = 0;
+        total = response.content_length();
+    }
+
+    // Remember how to resume this download, in case it's interrupted
+    let headers = response.headers();
+    let text = |name| headers.get(name).and_then(|v: &HeaderValue| v.to_str().ok()).map(str::to_string);
+    *validator =
+        text(reqwest::header::ETAG).filter(|e| !e.starts_with("W/")).or_else(|| text(reqwest::header::LAST_MODIFIED));
+    let saved = serde_json::json!({ "url": url, "validator": validator });
+    tokio::fs::write(note, saved.to_string()).await.map_err(|e| Stopped::Fatal(format!("File error: {}", e)))?;
+
+    let mut file = if append {
+        tokio::fs::OpenOptions::new().append(true).open(part).await
+    } else {
+        tokio::fs::File::create(part).await
+    }
+    .map_err(|e| Stopped::Fatal(format!("File error: {}", e)))?;
+    if !append {
+        // Tag before writing, so even a partial download is checked on first open. Best effort:
+        // some filesystems (e.g. FAT USB drives) can't store the tag.
+        let _ = App::mark_downloaded(part, url);
+    }
+
+    let mut stream = response.bytes_stream();
+    // Throttle progress updates so the UI channel never limits download speed
+    let progress_interval = Duration::from_millis(DOWNLOAD_PROGRESS_INTERVAL_MS);
+    let mut last_progress: Option<Instant> = None;
+    let mut received_any = false;
+    while let Some(item) = stream.next().await {
+        let chunk = match item {
+            Ok(chunk) => chunk,
+            Err(e) => {
+                let _ = file.flush().await;
+                return Err(Stopped::Resumable(format!("interrupted: {}", e)));
+            }
+        };
+        received_any = true;
+        file.write_all(&chunk).await.map_err(|e| Stopped::Fatal(format!("Write failed: {}", e)))?;
+        *have += chunk.len() as u64;
+        if last_progress.is_none_or(|t| t.elapsed() >= progress_interval) {
+            last_progress = Some(Instant::now());
+            let _ = tx.send(NetworkResponse::DownloadProgress(tab_id, *have, total)).await;
+        }
+    }
+    // tokio completes writes in the background; flush so the file is whole before it's renamed
+    file.flush().await.map_err(|e| Stopped::Fatal(format!("Write failed: {}", e)))?;
+    if !received_any && *have == 0 {
+        return Err(Stopped::Fatal("Download stream was empty".to_string()));
+    }
+    // A connection that closed early, without an error, still left the file short
+    if total.is_some_and(|t| *have < t) {
+        return Err(Stopped::Resumable(format!("the connection closed at {} of {} bytes", have, total.unwrap_or(0))));
+    }
+    Ok(())
 }
