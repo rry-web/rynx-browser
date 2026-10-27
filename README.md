@@ -43,7 +43,7 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
 
 ### With Cargo
 
-With [Rust](https://rustup.rs) 1.88 or newer installed:
+With [Rust](https://rustup.rs) 1.90 or newer installed:
 
 ```sh
 cargo install rynx --version 0.2.0-beta.5
@@ -397,7 +397,7 @@ with results recorded in [TEST_LOG.md](TEST_LOG.md). Changes are listed in
 
 CI runs on every push and pull request: the tests on Linux, macOS and Windows, `cargo fmt` and
 `cargo clippy` (warnings fail), extended renderer fuzzing, `cargo deny` (see `deny.toml`), and a
-build with the oldest supported Rust (1.88). Dependabot proposes dependency and action updates
+build with the oldest supported Rust (1.90). Dependabot proposes dependency and action updates
 weekly. Actions are pinned to commit hashes.
 
 To make a release, set the version in `Cargo.toml`, add its section to `CHANGELOG.md`, and push a

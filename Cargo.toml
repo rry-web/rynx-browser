@@ -2,8 +2,8 @@
 name = "rynx"
 version = "0.2.0-beta.5"
 edition = "2024"
-# let-chains (stable in 1.88 for edition 2024)
-rust-version = "1.88"
+# The image decoders need 1.90 (quantette); checked in CI
+rust-version = "1.90"
 license = "GPL-3.0-or-later"
 description = "A private, hardened terminal web browser with no JavaScript: web, Gemini, Gopher, feeds, and site tools over MCP"
 repository = "https://github.com/rry-web/rynx-browser"

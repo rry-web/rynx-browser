@@ -35,7 +35,7 @@
   how much was saved). The ETag or Last-Modified goes with each resume (If-Range), so a file that
   changed on the server is downloaded afresh rather than spliced.
 - CI: `cargo deny` (vulnerabilities, licences compatible with the GPL, crates.io only) replaces
-  `cargo audit`; a Rust 1.88 job checks the minimum version; releases run formatting, lints and
+  `cargo audit`; a Rust 1.90 job checks the minimum version (raised from 1.88: the image decoders need 1.90); releases run formatting, lints and
   `cargo deny` before building, and publish to crates.io by trusted publishing (no stored token);
   Dependabot proposes dependency and action updates weekly.
 
