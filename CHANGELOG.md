@@ -3,11 +3,15 @@
 ## [Unreleased]
 
 ### Added
+- Key bindings can be changed in `keys.conf` (written on first run with every action and its
+  default keys): add keys, replace them (`only`) or remove them (`none`), with Ctrl, Alt and
+  function keys. `about:keys` lists the keys in force and any mistakes in the file; `?` opens the
+  start page.
 - Development: `scripts/check.sh` runs what CI runs (formatting, lints, tests, the fuzz targets'
   build, `cargo deny`, the oldest supported Rust); `scripts/release.sh <version>` makes a release
   start to finish (version, checks, push, waiting for CI, tag).
 - Coverage-guided fuzzing (`fuzz/`, `cargo fuzz`) of pages, Gemini, Gopher, feeds, Anubis pages,
-  cookies, settings and the update list, nightly in CI, with each target's corpus kept between
+  cookies, settings, keys.conf and the update list, nightly in CI, with each target's corpus kept between
   runs, seed inputs, and replay of past crashes from `fuzz/regressions/`.
 - A weekly CI run of the tests that need the internet.
 - CONTRIBUTING.md, SECURITY.md (private vulnerability reports), issue forms and a pull request

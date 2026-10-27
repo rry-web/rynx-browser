@@ -2689,6 +2689,7 @@ dependencies = [
 name = "rynx-fuzz"
 version = "0.0.0"
 dependencies = [
+ "crossterm",
  "libfuzzer-sys",
  "reqwest",
  "rynx",

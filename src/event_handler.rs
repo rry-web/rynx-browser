@@ -65,7 +65,11 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent, terminal_width: u16, termi
     let active_mode = app.current_tab().input_mode;
 
     match active_mode {
-        InputMode::Normal => handle_normal_mode(app, key, terminal_width, terminal_height),
+        // Browsing keys can be rebound (keys.conf): each is handled as its action's default key
+        InputMode::Normal => match app.keymap.translate(key) {
+            Some(key) => handle_normal_mode(app, key, terminal_width, terminal_height),
+            None => Ok(false),
+        },
         InputMode::Editing => handle_editing_mode(app, key),
         InputMode::Visual => handle_visual_mode(app, key, terminal_height),
         InputMode::Search => handle_search_mode(app, key),
@@ -329,6 +333,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
         KeyCode::Char('U') => app.follow_link(crate::update::UPDATE_PAGE.to_string()),
         KeyCode::Char('i') => app.view_image(viewport_height(terminal_height)),
         KeyCode::Char('Z') => app.open_snapshots(),
+        KeyCode::Char('?') => app.follow_link(crate::app::HELP_PAGE.to_string()),
         _ => {}
     }
     Ok(false)

@@ -496,6 +496,16 @@ Worth repeating after any dependency upgrade.
 - [ ] **UPD-03 I2P.** Lock rynx to I2P in settings, restart, and press `U`, then "Check now".
       *Expected:* no check is made; the status line says rynx is locked to I2P.
 
+## Key bindings
+
+- [ ] **KEY-01 (priority) Changed keys in a real terminal.** In `keys.conf` (settings folder),
+      add `reload = F5`, `next_tab = Alt+l` and `quit = Ctrl+q only`, restart, and open two tabs.
+      *Expected:* F5 reloads, Alt+l moves to the next tab, `q` does nothing and Ctrl+q quits.
+      `about:keys` lists them. (macOS Terminal sends Alt only with "Use Option as Meta key" on,
+      in Settings, Profiles, Keyboard.)
+- [ ] **KEY-02 Mistakes in keys.conf.** Add `relaod = F5`, restart.
+      *Expected:* the status line names the problem; `about:keys` lists it; every other key works.
+
 ## Images
 
 - [ ] **IMG-01 (priority) Real images.** In iTerm2, Kitty, Ghostty or WezTerm, open a page with

@@ -78,6 +78,8 @@ pub struct App {
     /// Where releases are listed, and the key their checksums must be signed with (tests change them)
     pub update_api: String,
     pub release_key: [u8; 32],
+    /// The browsing keys, from keys.conf
+    pub keymap: crate::keys::Keymap,
     /// Certificates seen for Gemini hosts (trust on first use)
     pub gemini_hosts: Arc<std::sync::Mutex<crate::gemini::KnownHosts>>,
     /// MCP sessions with the servers whose tools have been used
@@ -142,6 +144,7 @@ impl App {
             update_note: None,
             update_api: crate::update::RELEASES_API.to_string(),
             release_key: crate::update::RELEASE_KEY,
+            keymap: crate::keys::Keymap::default(),
             confirm_clear_history: false,
             confirm_reset_settings: false,
             confirm_delete_snapshots: None,
@@ -339,6 +342,7 @@ impl App {
             || url == HELP_PAGE
             || url == SETTINGS_PAGE
             || url == crate::update::UPDATE_PAGE
+            || url == crate::keys::KEYS_PAGE
             || url.starts_with(crate::snapshots::SNAPSHOTS_PAGE)
             || url.starts_with(crate::snapshots::SNAPSHOT)
             || url.starts_with(crate::mcp::TOOLS_PAGE);

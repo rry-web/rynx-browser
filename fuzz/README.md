@@ -18,6 +18,7 @@ cargo +nightly fuzz run render fuzz/artifacts/render/crash-...   # replay a cras
 | `anubis` | bot-check pages | the answer only goes back to the page's own site |
 | `cookies` | Set-Cookie headers | nothing is sent to another site |
 | `settings` | settings files | written back and read again, nothing changes |
+| `keys` | keys.conf files | no crash |
 | `update_list` | the release list, checksum lists | only newer releases, with this platform's build |
 
 CI runs every target nightly (`.github/workflows/fuzz.yml`) and keeps each one's corpus between

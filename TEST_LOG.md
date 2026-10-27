@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 138 (28 priority).
+Total checks: 140 (29 priority).
 
 
 ## Automated checks
@@ -212,6 +212,13 @@ Total checks: 138 (28 priority).
 | UPD-01 | Updating a release build | Yes |  |  |  |
 | UPD-02 | Cargo installs |  |  |  |  |
 | UPD-03 | I2P |  |  |  |  |
+
+## Key bindings
+
+| ID | Check | Priority | Result | Date | Notes |
+|---|---|---|---|---|---|
+| KEY-01 | Changed keys in a real terminal | Yes |  |  |  |
+| KEY-02 | Mistakes in keys.conf |  |  |  |  |
 
 ## Images
 

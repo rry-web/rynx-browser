@@ -31,7 +31,7 @@ impl App {
         let mut html = String::from(
             "<title>Settings</title><h1>Settings</h1>\
              <p><a href=\"about:history\">History</a> · <a href=\"about:bookmarks\">Bookmarks</a> · \
-             <a href=\"about:snapshots\">Snapshots</a> · <a href=\"about:help\">Keys and help</a></p>\
+             <a href=\"about:snapshots\">Snapshots</a> · <a href=\"about:keys\">Keys</a> · <a href=\"about:help\">Help</a></p>\
              <form action=\"about:settings-save\">",
         );
         // The network lock first: it's the one that matters for privacy

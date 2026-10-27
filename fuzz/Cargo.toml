@@ -13,6 +13,7 @@ libfuzzer-sys = "0.4"
 rynx = { path = ".." }
 reqwest = { version = "0.13", default-features = false, features = ["cookies"] }
 semver = "1"
+crossterm = "0.29"
 url = "2"
 
 # Its own workspace, so the browser's builds and checks don't include it
@@ -64,6 +65,13 @@ bench = false
 [[bin]]
 name = "settings"
 path = "fuzz_targets/settings.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "keys"
+path = "fuzz_targets/keys.rs"
 test = false
 doc = false
 bench = false

@@ -230,7 +230,22 @@ Bookmarks are kept next to it in `bookmarks.txt`, history (when `history = on`) 
 
 ## Key bindings
 
-The same list is on the start page.
+These are the defaults; the start page lists them too (`?`), and `about:keys` shows the keys in
+force. To change them, edit `keys.conf` in the settings folder (the first run writes it, with
+every action and its keys commented out):
+
+```
+reload = F5              # adds F5 to reload's keys
+quit = Ctrl+q only       # makes Ctrl+q the only way to quit
+bookmark = none          # takes b away
+next_tab = Alt+l, Ctrl+n
+```
+
+Keys are written as a character (`r`, `R`, `/`), `Ctrl+x`, `Alt+x`, `F1`-`F24`, or a name
+(`Enter`, `Esc`, `Tab`, `Shift+Tab`, `Backspace`, `Delete`, `Insert`, arrows, `Home`, `End`,
+`PageUp`, `PageDown`, `Space`). Typing in fields, the address bar and find, and copy mode, keep
+their own keys. Mistakes are named on the status line and on `about:keys`, and the rest of the
+file still applies.
 
 ### Moving around
 | Key | Action |
@@ -295,6 +310,7 @@ The same list is on the start page.
 | **`Shift+V`** | Show the page source |
 | **`p`** | Switch I2P mode on or off (through the proxy at `127.0.0.1:4444`), unless settings lock it |
 | **`S`** | Settings |
+| **`?`** | The start page, with these keys |
 | **`q`** | Quit |
 
 ## Security and privacy
@@ -393,7 +409,7 @@ rynx is a beta. What's missing or rough today:
   pages shows the converted HTML, not the original.
 - **Site tools (MCP):** no sign-in (OAuth), and servers can't ask questions while a tool runs.
 - **Smaller things:** the history page shows times in UTC; a public site whose name points at
-  your local network isn't caught (only addresses are); key bindings can't be changed yet.
+  your local network isn't caught (only addresses are).
 - **Untested by hand:** [TEST_LOG.md](TEST_LOG.md) lists the checks still waiting for a person
   with the right system (I2P, other terminals, Linux distributions, Windows).
 
@@ -443,13 +459,13 @@ Done:
 - [x] **Page cache**, **snapshots** of tracked sites, **resumable downloads**
 - [x] **Sandbox** on Linux and macOS
 - [x] **Signed in-app updates**, coverage-guided fuzzing, release and check scripts
+- [x] **Customisable key bindings** (`keys.conf`)
 
 Next:
 
 - [ ] **A bundled I2P router** (i2pd, or the Rust router emissary), so I2P works without setting
       one up separately
 - [ ] **Your own MCP servers**: tools from servers you configure, usable on any page
-- [ ] **Customisable key bindings** (`keys.conf`)
 
 Later:
 

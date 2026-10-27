@@ -196,6 +196,15 @@ async fn run(
     if !sandbox_note.is_empty() {
         app.current_tab().status_message = format!("Ready ({})", sandbox_note);
     }
+    if let Some(dir) = &config_dir {
+        let (keymap, problems) = rynx::keys::Keymap::load_or_create(dir);
+        app.keymap = keymap;
+        if let Some(problem) = problems.first() {
+            let more = if problems.len() > 1 { " (and more)" } else { "" };
+            app.current_tab().status_message =
+                format!("Problem in keys.conf, {}{} (about:keys lists them)", problem, more);
+        }
+    }
     if let Some(problem) = settings_problems.first() {
         let more = if settings_problems.len() > 1 { " (and more)" } else { "" };
         app.current_tab().status_message = format!("Problem in settings.conf, {}{}", problem, more);
