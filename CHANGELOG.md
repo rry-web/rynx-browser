@@ -13,7 +13,8 @@
 - Coverage-guided fuzzing (`fuzz/`, `cargo fuzz`) of pages, Gemini, Gopher, feeds, Anubis pages,
   cookies, settings, keys.conf and the update list, nightly in CI, with each target's corpus kept between
   runs, seed inputs, and replay of past crashes from `fuzz/regressions/`.
-- A weekly CI run of the tests that need the internet.
+- A weekly CI run of the tests that need the internet, and a test coverage report on every CI
+  run (failing below 80% of lines).
 - CONTRIBUTING.md, SECURITY.md (private vulnerability reports), issue forms and a pull request
   checklist.
 

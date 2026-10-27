@@ -427,7 +427,7 @@ and the release process; [SECURITY.md](SECURITY.md) how to report a vulnerabilit
 [CHANGELOG.md](CHANGELOG.md) lists the changes.
 
 CI tests every push and pull request on Linux, macOS and Windows, with lints, renderer fuzzing,
-`cargo deny` (`deny.toml`) and the oldest supported Rust (1.90); coverage-guided fuzzing runs
+`cargo deny` (`deny.toml`), the oldest supported Rust (1.90) and test coverage (about 87% of lines); coverage-guided fuzzing runs
 nightly and the tests that need the internet weekly. Dependabot proposes updates weekly, and
 actions are pinned to commit hashes.
 

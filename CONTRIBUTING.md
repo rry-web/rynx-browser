@@ -22,7 +22,11 @@ cargo test -- --ignored                 # tests that need the internet (TLS serv
 FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render
 cargo +nightly fuzz run render -- -max_total_time=60    # coverage-guided fuzzing: fuzz/README.md
 cargo run --example render_file -- page.html 100        # see how rynx lays out a saved page
+cargo llvm-cov --open        # test coverage, in the browser (needs cargo-llvm-cov and llvm-tools-preview)
 ```
+
+If another Rust (Homebrew's, say) comes first on PATH, run rustup's tools by path, as
+`scripts/check.sh` does: `PATH="$(dirname "$(rustup which cargo)"):$PATH" cargo llvm-cov`.
 
 [TESTING.md](TESTING.md) lists the checks that need a person (terminals, platforms, I2P), with
 results in [TEST_LOG.md](TEST_LOG.md).
@@ -58,7 +62,7 @@ and the crate (trusted publishing). Tags with a `-` are pre-releases.
 
 | Workflow | When | What |
 | :--- | :--- | :--- |
-| `ci.yml` | every push and pull request, and weekly | tests (Linux, macOS, Windows), lints, renderer fuzzing, cargo deny, Rust 1.90 |
+| `ci.yml` | every push and pull request, and weekly | tests (Linux, macOS, Windows), lints, renderer fuzzing, cargo deny, Rust 1.90, test coverage (on the run's summary page; below 80% fails) |
 | `fuzz.yml` | nightly | coverage-guided fuzzing of every target, keeping their corpora |
 | `live.yml` | weekly | the tests that need the internet |
 | `release.yml` | a `v*` tag | checks, builds, signing, the GitHub release, crates.io |
