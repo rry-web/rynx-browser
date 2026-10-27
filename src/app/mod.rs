@@ -30,6 +30,7 @@ mod downloads;
 mod fetch;
 mod pages;
 mod settings_page;
+mod snapshot_pages;
 mod tab;
 mod tools;
 
@@ -58,6 +59,11 @@ pub struct App {
     pub settings: Settings,
     pub bookmarks: Bookmarks,
     pub history: History,
+    /// Pages kept for Back/Forward, for not downloading unchanged pages, and for when a site can't
+    /// be reached
+    pub cache: Arc<crate::cache::Cache>,
+    /// Dated copies of tracked sites' pages
+    pub snapshots: Arc<crate::snapshots::Snapshots>,
     /// Certificates seen for Gemini hosts (trust on first use)
     pub gemini_hosts: Arc<std::sync::Mutex<crate::gemini::KnownHosts>>,
     /// MCP sessions with the servers whose tools have been used
@@ -67,6 +73,8 @@ pub struct App {
     /// Recent tool results, shown at about:tool-result?id=<n>: (n, title, page)
     pub tool_results: std::collections::VecDeque<(u64, String, String)>,
     next_result_id: u64,
+    /// The site whose Delete snapshots button was pressed once; a second press deletes them
+    pub confirm_delete_snapshots: Option<String>,
     /// Restore defaults was pressed once on the settings page; a second press restores them
     pub confirm_reset_settings: bool,
     /// `x` was pressed once on the history page; a second press clears it
@@ -111,8 +119,11 @@ impl App {
             bookmarks: Bookmarks::default(),
             history: History::default(),
             gemini_hosts: Arc::default(),
+            cache: Arc::default(),
+            snapshots: Arc::default(),
             confirm_clear_history: false,
             confirm_reset_settings: false,
+            confirm_delete_snapshots: None,
             mcp: Arc::default(),
             mcp_tools: HashMap::new(),
             tool_results: std::collections::VecDeque::new(),
@@ -303,6 +314,8 @@ impl App {
             || url == HISTORY_PAGE
             || url == HELP_PAGE
             || url == SETTINGS_PAGE
+            || url.starts_with(crate::snapshots::SNAPSHOTS_PAGE)
+            || url.starts_with(crate::snapshots::SNAPSHOT)
             || url.starts_with(crate::mcp::TOOLS_PAGE);
         if !internal && self.reject_unsupported_link(&url) {
             return;
@@ -341,6 +354,7 @@ impl App {
     fn revisit(&mut self, entry: HistoryEntry) {
         let tab = self.current_tab();
         tab.url_input = entry.url;
+        tab.pending_cache_use = fetch::CacheUse::History;
         tab.pending_restore = Some((entry.scroll, entry.cursor_line));
         self.load_url_input(true);
     }
@@ -403,6 +417,10 @@ impl App {
             self.save_settings_form(form, submitter);
             return;
         }
+        if tab.page_url.is_none() && tab.url_input == crate::snapshots::SNAPSHOTS_PAGE {
+            self.delete_snapshots_form(form);
+            return;
+        }
         // Forms on the browser's tools page run tools; a web page's forms can never reach them
         if tab.page_url.is_none() && tab.url_input.starts_with(crate::mcp::TOOLS_PAGE) {
             let tool = tab
@@ -438,11 +456,14 @@ impl App {
     /// Fetch the current page again, keeping the scroll position
     pub fn reload(&mut self) {
         let tab = self.current_tab();
-        if tab.page_url.is_none() {
+        let Some(page) = tab.page_url.clone() else {
             // The start page or an error page; nothing to fetch
             return;
-        }
+        };
         tab.pending_restore = Some((tab.scroll, tab.cursor_line));
+        // The page's own address: on a snapshot, the address bar holds the snapshot's
+        tab.url_input = page;
+        tab.pending_cache_use = fetch::CacheUse::Reload;
         self.submit_request();
     }
 
@@ -474,6 +495,7 @@ impl App {
 
     pub fn submit_request(&mut self) {
         let i2p_mode = self.i2p_mode;
+        let solve_anubis = self.settings.solve_anubis;
         let url = fetch::address_for(&self.tabs[self.active_tab_index].url_input, &self.settings, i2p_mode);
         let tab = self.current_tab();
         tab.url_input = url.clone();
@@ -484,10 +506,16 @@ impl App {
             url,
             form_body: tab.pending_post.take(),
             i2p_mode,
-            solve_anubis: self.settings.solve_anubis,
+            solve_anubis,
+            cache_use: std::mem::take(&mut tab.pending_cache_use),
         };
-        let network = Arc::clone(&self.network_manager);
-        let gemini_hosts = Arc::clone(&self.gemini_hosts);
-        tokio::spawn(fetch::fetch(request, network, gemini_hosts, self.tx.clone()));
+        let shared = fetch::Shared {
+            network: Arc::clone(&self.network_manager),
+            gemini_hosts: Arc::clone(&self.gemini_hosts),
+            cache: Arc::clone(&self.cache),
+            snapshots: Arc::clone(&self.snapshots),
+            tx: self.tx.clone(),
+        };
+        tokio::spawn(fetch::fetch(request, shared));
     }
 }

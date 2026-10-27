@@ -166,7 +166,7 @@ impl History {
 }
 
 /// "YYYY-MM-DD" and "HH:MM" for a time in seconds since 1970
-fn utc_date_time(seconds: u64) -> (String, String) {
+pub(crate) fn utc_date_time(seconds: u64) -> (String, String) {
     let days = (seconds / 86_400) as i64;
     let in_day = seconds % 86_400;
     // Civil date from days since 1970 (Howard Hinnant's algorithm)

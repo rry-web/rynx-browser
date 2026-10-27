@@ -6,6 +6,9 @@ use super::*;
 impl App {
     /// Show a page the browser makes itself (about:bookmarks, about:history, about:help)
     pub(super) fn show_internal_page(&mut self, address: &str) -> bool {
+        if self.show_snapshot_page(address) {
+            return true;
+        }
         if let Some(server) = crate::mcp::server_of(address) {
             self.open_tools(&server);
             return true;

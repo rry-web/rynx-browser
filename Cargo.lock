@@ -2587,6 +2587,7 @@ dependencies = [
  "encoding_rs",
  "flate2",
  "futures-util",
+ "httpdate",
  "landlock",
  "percent-encoding",
  "quick-xml",

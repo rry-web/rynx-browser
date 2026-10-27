@@ -31,7 +31,8 @@ impl App {
         let mut html = String::from(
             "<title>Settings</title><h1>Settings</h1>\
              <p><a href=\"about:history\">History</a> · <a href=\"about:bookmarks\">Bookmarks</a> · \
-             <a href=\"about:help\">Keys and help</a></p><form action=\"about:settings-save\">",
+             <a href=\"about:snapshots\">Snapshots</a> · <a href=\"about:help\">Keys and help</a></p>\
+             <form action=\"about:settings-save\">",
         );
         // The network lock first: it's the one that matters for privacy
         let network = s.network;
@@ -97,12 +98,30 @@ impl App {
             "Save history to disk (otherwise it's kept until you quit; I2P visits are never saved)",
         ));
         html.push_str(&checkbox(
+            "cache",
+            s.disk_cache,
+            "Keep pages on disk, so Back, unchanged pages and unreachable sites load from there \
+             (otherwise they're kept in memory until you quit)",
+        ));
+        html.push_str(&checkbox(
+            "cache_i2p",
+            s.disk_cache_i2p,
+            "Keep I2P pages on disk too (faster on slow I2P connections, but a record of I2P visits)",
+        ));
+        let used = self.cache.disk_usage() as f64 / 1024.0 / 1024.0;
+        html.push_str(&format!(
+            "<p><b>Disk cache size (MB)</b>: the oldest pages are removed beyond it. Using {:.1} MB now.<br>\
+             <input type=\"text\" name=\"cache_size\" size=\"10\" value=\"{}\"></p>",
+            used, s.cache_size_mb
+        ));
+        html.push_str(&checkbox(
             "anubis",
             s.solve_anubis,
             "Pass Anubis bot checks by doing their proof of work, without JavaScript",
         ));
         html.push_str(
             "<p><input type=\"submit\" value=\"Save settings\"> \
+             <input type=\"submit\" name=\"clear_cache\" value=\"Clear cache\"> \
              <input type=\"submit\" name=\"reset\" value=\"Restore defaults\"></p></form>",
         );
         match &self.config_dir {
@@ -120,7 +139,17 @@ impl App {
     /// puts every setting back to its default instead.
     pub(super) fn save_settings_form(&mut self, form: usize, submitter: Option<usize>) {
         let tab = &self.tabs[self.active_tab_index];
-        if submitter.and_then(|i| tab.controls.get(i)).is_some_and(|c| c.name == "reset") {
+        let pressed = submitter.and_then(|i| tab.controls.get(i)).map(|c| c.name.clone()).unwrap_or_default();
+        if pressed == "clear_cache" {
+            let message = match self.cache.clear() {
+                Ok(()) => String::from("Cache cleared, in memory and on disk"),
+                Err(e) => e,
+            };
+            self.show_internal_page(SETTINGS_PAGE);
+            self.current_tab().status_message = message;
+            return;
+        }
+        if pressed == "reset" {
             if !std::mem::replace(&mut self.confirm_reset_settings, true) {
                 self.current_tab().status_message =
                     String::from("Press Restore defaults again to put every setting back to its default");
@@ -132,6 +161,8 @@ impl App {
         let mut lines = Vec::new();
         let mut history = false;
         let mut anubis = false;
+        let mut cache = false;
+        let mut cache_i2p = false;
         let mut engine = None;
         for (control, value) in tab.controls.iter().zip(&tab.control_values) {
             if control.form != Some(form) {
@@ -140,6 +171,8 @@ impl App {
             match (control.name.as_str(), value) {
                 ("history", ControlValue::Checked(on)) => history = *on,
                 ("anubis", ControlValue::Checked(on)) => anubis = *on,
+                ("cache", ControlValue::Checked(on)) => cache = *on,
+                ("cache_i2p", ControlValue::Checked(on)) => cache_i2p = *on,
                 ("search_engine", ControlValue::Selected(i)) => {
                     if let ControlKind::Select { options } = &control.kind {
                         engine = options.get(*i).map(|o| o.value.clone());
@@ -170,6 +203,8 @@ impl App {
         }
         lines.push(format!("history = {}", if history { "on" } else { "off" }));
         lines.push(format!("anubis = {}", if anubis { "on" } else { "off" }));
+        lines.push(format!("cache = {}", if cache { "on" } else { "off" }));
+        lines.push(format!("cache_i2p = {}", if cache_i2p { "on" } else { "off" }));
 
         let (settings, problems) = crate::settings::Settings::parse(&lines.join("\n"));
         if let Some(problem) = problems.first() {
@@ -210,6 +245,7 @@ impl App {
                 .map_err(|e| format!("Settings saved, but they couldn't be applied: {}", e))?;
             self.network_manager = Arc::new(network);
         }
+        self.cache.configure(new.disk_cache, new.disk_cache_i2p, new.cache_size_mb);
         match new.network {
             NetworkMode::I2p => self.i2p_mode = true,
             NetworkMode::Clearweb => self.i2p_mode = false,

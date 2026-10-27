@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 127 (24 priority).
+Total checks: 131 (25 priority).
 
 
 ## Automated checks
@@ -203,6 +203,15 @@ Total checks: 127 (24 priority).
 | SMALL-05 | Not in I2P mode |  |  |  |  |
 | SMALL-06 | Feeds |  |  |  |  |
 | SMALL-07 | Bookmarks and history |  |  |  |  |
+
+## Cache and snapshots
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| CACHE-01 | Back is instant |  |  |  |  |
+| CACHE-02 | I2P site gone | Yes |  |  |  |
+| CACHE-03 | Disk cache |  |  |  |  |
+| CACHE-04 | Snapshots |  |  |  |  |
 
 ## Reader mode
 

@@ -121,6 +121,25 @@ objects are typed as JSON) and the `readOnlyHint` / `destructiveHint` annotation
 Results can contain text, links and text resources. Sign-in (OAuth), server requests to the
 user, and the older HTTP+SSE transport aren't supported yet.
 
+### The cache and snapshots
+
+Pages you visit are kept in memory until you quit, so **Back** and **Forward** show them
+instantly, and over slow I2P connections that matters a lot. rynx follows each site's caching
+rules: a page the site says is still fresh is shown without asking, an older one is checked with
+the site ("has this changed?") instead of downloaded again, and pages marked not to be stored
+never are. **`r`** always checks with the site. If a site can't be reached (or the I2P router
+reports it unreachable), the copy kept is shown, saying when it was saved.
+
+On the settings page you can also keep pages **on disk**, gzip-compressed in rynx's cache
+folder with a size limit, so they last between sessions, with a separate switch for I2P pages.
+Both are off by default, since a file per page visited is a record of where you've been.
+
+To keep dated **snapshots** of a site, press **`T`** on one of its pages to track it (again to
+stop). From then on, each visit to one of its pages saves a snapshot whenever the page changed.
+**`Z`** lists the current page's snapshots (or every tracked site's): open any of them to see the
+page as it was, and press `r` there for the live page. Snapshots are kept in rynx's data folder
+until you delete them from the snapshots page.
+
 Press **`A`** to open the [Internet Archive](https://web.archive.org)'s latest copy of a page:
 handy when a site is down, gone, or behind a CAPTCHA or a JavaScript wall. It works on a page that
 failed to load, too. The Archive learns which address you looked up.
@@ -151,6 +170,9 @@ download_dir = /path/to/folder
 history = on
 user_agent = Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0
 anubis = off
+cache = on
+cache_i2p = on
+cache_size = 500
 ```
 
 rynx introduces itself honestly to websites, as `rynx/<version> (+<project page>)`. Bot walls
@@ -226,6 +248,8 @@ The same list is on the start page.
 | **`/`** | Find on the page (live highlighting) |
 | **`>`** / **`<`** | Next / previous match |
 | **`v`** | Copy mode: select text with `h` `j` `k` `l` or the arrow keys, **`y`** copies it, **`Esc`** cancels |
+| **`T`** | Track this site: keep a dated snapshot whenever one of its pages changes (again to stop) |
+| **`Z`** | Snapshots of this page (or of every tracked site) |
 | **`A`** | Open the Internet Archive's latest copy of the page (also for pages that failed to load) |
 | **`R`** | Reader mode: only the page's main text (stays on as you follow links; `R` again for the whole page) |
 | **`Shift+V`** | Show the page source |
@@ -243,7 +267,8 @@ that:
   only to the site that set them, and forgotten when you quit (with separate ones for I2P). In I2P mode the
   browser always identifies itself as `MYOB/6.66 (AN/ON)`, the generic name the I2P proxy uses, so
   its visits don't stand out (even over HTTPS, where the proxy can't rewrite it). History is saved
-  only if you turn it on, and never for I2P sites.
+  only if you turn it on, and never for I2P sites. Pages are kept on disk only if you turn the disk
+  cache on (I2P pages only with a separate switch), and snapshots only for sites you track.
 - **HTTPS everywhere:** addresses, redirects, downloads and form submissions are upgraded to HTTPS
   (except `localhost` and `.i2p` sites). Certificates are checked by your operating system,
   including revocation on macOS and Windows, with TLS 1.2 or newer.

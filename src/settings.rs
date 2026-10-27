@@ -61,6 +61,24 @@ const DOCUMENTED: &[Documented] = &[
         examples: &["off"],
     },
     Documented {
+        key: "cache",
+        about: "Keep pages on disk (compressed, in rynx's cache folder), so Back, unchanged pages and sites\n\
+                that can't be reached are served from it. Off by default: pages are then kept only in memory,\n\
+                until you quit. A file per page visited is a record of the visit.",
+        examples: &["on"],
+    },
+    Documented {
+        key: "cache_i2p",
+        about: "Keep I2P pages on disk too, where they help most on slow connections. Off by default,\n\
+                separately from cache, since a disk record of I2P visits is more sensitive.",
+        examples: &["on"],
+    },
+    Documented {
+        key: "cache_size",
+        about: "Most disk space the cache may use, in megabytes; the oldest pages are removed beyond it.",
+        examples: &["200"],
+    },
+    Documented {
         key: "history",
         about: "Save the pages you visit to history.txt, so the history page (s) keeps them after you quit.\n\
                 Off by default: history is then kept only until you quit. Pages visited in I2P mode are never saved.",
@@ -103,6 +121,11 @@ pub struct Settings {
     /// Pass Anubis bot checks by doing their proof of work
     pub solve_anubis: bool,
     pub network: NetworkMode,
+    /// Keep pages on disk, for the clearweb and for I2P
+    pub disk_cache: bool,
+    pub disk_cache_i2p: bool,
+    /// The disk cache's limit, in megabytes
+    pub cache_size_mb: u64,
 }
 
 impl Default for Settings {
@@ -116,6 +139,9 @@ impl Default for Settings {
             user_agent: crate::constants::USER_AGENT.to_string(),
             solve_anubis: true,
             network: NetworkMode::Switchable,
+            disk_cache: false,
+            disk_cache_i2p: false,
+            cache_size_mb: crate::cache::DEFAULT_DISK_MB,
         }
     }
 }
@@ -123,6 +149,16 @@ impl Default for Settings {
 /// The folder holding settings and bookmarks
 pub fn config_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("", "", "rynx-browser").map(|dirs| dirs.config_dir().to_path_buf())
+}
+
+/// The folder the disk cache goes in (which the system may clear)
+pub fn cache_dir() -> Option<PathBuf> {
+    directories::ProjectDirs::from("", "", "rynx-browser").map(|dirs| dirs.cache_dir().to_path_buf())
+}
+
+/// The folder snapshots are kept in: the user's own data, unlike the cache
+pub fn snapshots_dir() -> Option<PathBuf> {
+    directories::ProjectDirs::from("", "", "rynx-browser").map(|dirs| dirs.data_dir().join("snapshots"))
 }
 
 fn is_web_url(value: &str) -> bool {
@@ -155,6 +191,11 @@ impl Settings {
                 "download_dir" if !value.is_empty() => settings.download_dir = Some(PathBuf::from(value)),
                 "history" if matches!(value, "on" | "off") => settings.save_history = value == "on",
                 "anubis" if matches!(value, "on" | "off") => settings.solve_anubis = value == "on",
+                "cache" if matches!(value, "on" | "off") => settings.disk_cache = value == "on",
+                "cache_i2p" if matches!(value, "on" | "off") => settings.disk_cache_i2p = value == "on",
+                "cache_size" if value.parse::<u64>().is_ok_and(|mb| (1..=1_000_000).contains(&mb)) => {
+                    settings.cache_size_mb = value.parse().unwrap_or(crate::cache::DEFAULT_DISK_MB)
+                }
                 "network" => match value {
                     "switchable" => settings.network = NetworkMode::Switchable,
                     "clearweb" => settings.network = NetworkMode::Clearweb,
@@ -171,7 +212,8 @@ impl Settings {
                 {
                     settings.user_agent = value.to_string()
                 }
-                "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" | "user_agent" | "anubis" => {
+                "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" | "user_agent" | "anubis"
+                | "cache" | "cache_i2p" | "cache_size" => {
                     problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
                 }
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),
@@ -207,6 +249,9 @@ impl Settings {
             "user_agent" => changed(self.user_agent.clone(), default.user_agent),
             "anubis" => (!self.solve_anubis).then(|| "off".to_string()),
             "history" => self.save_history.then(|| "on".to_string()),
+            "cache" => self.disk_cache.then(|| "on".to_string()),
+            "cache_i2p" => self.disk_cache_i2p.then(|| "on".to_string()),
+            "cache_size" => changed(self.cache_size_mb.to_string(), default.cache_size_mb.to_string()),
             _ => None,
         }
     }

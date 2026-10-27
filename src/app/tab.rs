@@ -26,6 +26,8 @@ pub struct BrowserTab {
     pub search_state: Option<SearchState>,
     pub download_prompt: Option<crate::models::DownloadPrompt>,
     pub tool_prompt: Option<crate::models::ToolPrompt>,
+    /// How the next load may use the cache (Back/Forward show the cached copy; Reload asks)
+    pub(super) pending_cache_use: fetch::CacheUse,
     /// Address bar contents when Edit mode was entered, for history and cancelling
     pub url_before_edit: Option<String>,
     /// Line index of each in-page link target on the displayed page
@@ -316,6 +318,7 @@ impl BrowserTab {
             search_state: None,
             download_prompt: None,
             tool_prompt: None,
+            pending_cache_use: fetch::CacheUse::Normal,
             url_before_edit: None,
             anchors: renderer.anchors,
             page_url: None,

@@ -124,9 +124,10 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
     if key.code != KeyCode::Char('x') {
         app.confirm_clear_history = false;
     }
-    // Restoring default settings needs the button pressed twice in a row
+    // Restoring default settings or deleting snapshots needs the button pressed twice in a row
     if key.code != KeyCode::Enter {
         app.confirm_reset_settings = false;
+        app.confirm_delete_snapshots = None;
     }
     match key.code {
         // --- PAGING ---
@@ -313,6 +314,8 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
         KeyCode::Char('p') => app.toggle_i2p_mode(),
         KeyCode::Char('S') => app.follow_link(crate::app::SETTINGS_PAGE.to_string()),
         KeyCode::Char('A') => app.open_archived_copy(),
+        KeyCode::Char('T') => app.toggle_tracking(),
+        KeyCode::Char('Z') => app.open_snapshots(),
         _ => {}
     }
     Ok(false)

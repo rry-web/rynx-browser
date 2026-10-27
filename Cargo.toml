@@ -40,6 +40,9 @@ quick-xml = "0.42.0"
 serde_json = "1.0.154"
 # Anubis argon2id challenges: the same version (and so the same default parameters) Anubis uses
 argon2 = { version = "0.5", default-features = false, features = ["alloc"] }
+# The page cache and snapshots: gzip (pure Rust) and HTTP dates
+flate2 = "1.1.10"
+httpdate = "1.0.3"
 
 # Tagging downloads with their origin (macOS quarantine, Linux xdg origin)
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
@@ -51,5 +54,4 @@ landlock = "0.4.7"
 
 [dev-dependencies]
 wiremock = "0.6.5"
-flate2 = "1.1.10"
 rcgen = { version = "0.14.10", default-features = false, features = ["ring", "crypto"] }

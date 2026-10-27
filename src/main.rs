@@ -90,7 +90,12 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // must exist first, since nothing outside them can be created later.
     let sandbox = if sandbox_enabled {
         let mut writable: Vec<&std::path::Path> = Vec::new();
-        for dir in [Some(&download_dir), config_dir.as_ref()].into_iter().flatten() {
+        // The cache and snapshot folders are made now even if unused (they stay empty), so turning
+        // the cache on or tracking a site works without restarting
+        let (cache_dir, snapshots_dir) = (rynx::settings::cache_dir(), rynx::settings::snapshots_dir());
+        for dir in
+            [Some(&download_dir), config_dir.as_ref(), cache_dir.as_ref(), snapshots_dir.as_ref()].into_iter().flatten()
+        {
             if !dir.as_os_str().is_empty() && std::fs::create_dir_all(dir).is_ok() {
                 writable.push(dir);
             }
@@ -130,6 +135,12 @@ async fn run(
     let (tx, rx) = tokio::sync::mpsc::channel(rynx::constants::CHANNEL_CAPACITY);
     let mut app = App::with_settings(tx, rx, settings)?;
     app.config_dir = config_dir.clone();
+    app.cache = std::sync::Arc::new(rynx::cache::Cache::new(rynx::settings::cache_dir()));
+    app.cache.configure(app.settings.disk_cache, app.settings.disk_cache_i2p, app.settings.cache_size_mb);
+    app.snapshots = std::sync::Arc::new(rynx::snapshots::Snapshots::load(
+        rynx::settings::snapshots_dir(),
+        config_dir.as_ref().map(|d| d.join(rynx::snapshots::TRACKED_FILE)),
+    ));
     if let Some(dir) = &config_dir {
         app.bookmarks = Bookmarks::load(dir.join(rynx::bookmarks::BOOKMARKS_FILE));
         app.gemini_hosts = std::sync::Arc::new(std::sync::Mutex::new(rynx::gemini::KnownHosts::load(

@@ -3,6 +3,7 @@
 pub mod anubis;
 pub mod app;
 pub mod bookmarks;
+pub mod cache;
 pub mod constants;
 pub mod event_handler;
 pub mod feeds;
@@ -16,4 +17,5 @@ pub mod network;
 pub mod renderer;
 pub mod sandbox;
 pub mod settings;
+pub mod snapshots;
 pub mod ui;

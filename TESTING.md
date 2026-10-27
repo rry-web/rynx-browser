@@ -478,6 +478,24 @@ Worth repeating after any dependency upgrade.
 - [ ] **SMALL-07 Bookmarks and history.** Bookmark a Gemini page (`b`), then check `B` and `s`.
       *Expected:* both list the page by its first heading, and selecting it opens it again.
 
+## Cache and snapshots
+
+- [ ] **CACHE-01 Back is instant.** Open a page, follow a link, press Backspace.
+      *Expected:* the first page appears at once, without "Loading".
+- [ ] **CACHE-02 (priority) I2P site gone.** In I2P mode, open an `.i2p` site, then stop your
+      I2P router (or wait for the site to be down) and open it again.
+      *Expected:* the copy from the first visit, with "this is the copy saved ..." in the status
+      line, instead of the router's error page.
+- [ ] **CACHE-03 Disk cache.** On the settings page (`S`) tick "Keep pages on disk", save, visit a
+      few pages, quit, start rynx again, and open one of them with the network off.
+      *Expected:* the saved copy appears. The settings page shows the space used; Clear cache
+      empties it.
+- [ ] **CACHE-04 Snapshots.** On a site that changes often (a news front page), press `T`, then
+      visit the page again later and press `Z`.
+      *Expected:* "Tracking ..." at first; later "Saved a snapshot"; `Z` lists dated snapshots,
+      and opening an older one shows the page as it was, with a banner. `r` there loads the live
+      page.
+
 ## Reader mode
 
 - [ ] **READ-01 News article.** Open an article on a news site (BBC News, Ars Technica) and press

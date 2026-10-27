@@ -25,7 +25,7 @@ pub enum NetworkResponse {
 }
 
 /// A fetched page, ready to show
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Page {
     pub title: String,
     pub body: String,
@@ -397,7 +397,19 @@ pub async fn send_following_redirects(
     client: &Client,
     url: &str,
     i2p_mode: bool,
+    form_body: Option<String>,
+) -> Result<reqwest::Response, String> {
+    send_with_headers(client, url, i2p_mode, form_body, reqwest::header::HeaderMap::new()).await
+}
+
+/// send_following_redirects with extra request headers on each hop (e.g. If-None-Match, to ask
+/// whether a cached page changed)
+pub async fn send_with_headers(
+    client: &Client,
+    url: &str,
+    i2p_mode: bool,
     mut form_body: Option<String>,
+    headers: reqwest::header::HeaderMap,
 ) -> Result<reqwest::Response, String> {
     let mut current = Url::parse(&enforce_https(url, i2p_mode)).map_err(|e| format!("Invalid URL: {}", e))?;
     for _ in 0..=MAX_REDIRECTS {
@@ -412,7 +424,8 @@ pub async fn send_following_redirects(
                 .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
                 .body(body.clone()),
             None => client.get(current.clone()),
-        };
+        }
+        .headers(headers.clone());
         let response = request.send().await.map_err(|e| e.to_string())?;
         // A 3xx without Location (e.g. 304) is returned as-is
         let location = match response.headers().get(reqwest::header::LOCATION) {

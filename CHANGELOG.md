@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- A page cache. Pages are kept in memory for the session: Back and Forward show them at once, a
+  page the site says is fresh isn't fetched again, an older one is checked with the site
+  (If-None-Match / If-Modified-Since) rather than downloaded, and no-store pages are never kept.
+  When a site can't be reached, or answers with a server error (as the I2P router does for an
+  unreachable site), the kept copy is shown with when it was saved. `r` always checks.
+- An opt-in disk cache (`cache = on`, and `cache_i2p = on` for I2P pages), gzip-compressed in the
+  cache folder, limited to `cache_size` megabytes (200 by default), oldest first out. On the
+  settings page, with a Clear cache button.
+- Snapshots of tracked sites: `T` tracks the current page's site, and each visit to one of its
+  pages then keeps a dated, compressed snapshot when the page changed. `Z` lists a page's
+  snapshots; opening one shows the page as it was, with working links, and `r` loads the live
+  page. Snapshots can be deleted per site (asks twice).
+
+### Fixed
+- Reload on a page shown under an `about:` address reloads the page itself.
+
 ## [0.2.0-beta.5]
 
 A settings page, with a lock to keep rynx on I2P (or off it), and archived copies of pages.
