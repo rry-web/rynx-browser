@@ -400,33 +400,28 @@ rynx is a beta. What's missing or rough today:
 ## Development
 
 ```sh
-cargo test                                   # unit, integration and randomised renderer tests
-cargo test --test live_tls -- --ignored      # TLS checks against public test servers
-cargo test --test smallweb --test feeds --test mcp -- --ignored   # real Gemini, Gopher, feed and MCP servers
-FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render
-cargo run --example render_file -- page.html 100   # print a saved page as rynx lays it out
+scripts/check.sh --quick     # formatting, lints and tests: before every commit
+scripts/check.sh             # everything CI checks
+scripts/release.sh 0.2.0-beta.7    # a release, start to finish
 ```
 
-[TESTING.md](TESTING.md) has a checklist of hands-on checks (terminals, touchpads, platforms, I2P)
-with results recorded in [TEST_LOG.md](TEST_LOG.md). Changes are listed in
-[CHANGELOG.md](CHANGELOG.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) covers building, testing, fuzzing (`fuzz/`), the conventions
+and the release process; [SECURITY.md](SECURITY.md) how to report a vulnerability privately.
+[TESTING.md](TESTING.md) has the hands-on checks, with results in [TEST_LOG.md](TEST_LOG.md), and
+[CHANGELOG.md](CHANGELOG.md) lists the changes.
 
-CI runs on every push and pull request: the tests on Linux, macOS and Windows, `cargo fmt` and
-`cargo clippy` (warnings fail), extended renderer fuzzing, `cargo deny` (see `deny.toml`), and a
-build with the oldest supported Rust (1.90). Dependabot proposes dependency and action updates
-weekly. Actions are pinned to commit hashes.
+CI tests every push and pull request on Linux, macOS and Windows, with lints, renderer fuzzing,
+`cargo deny` (`deny.toml`) and the oldest supported Rust (1.90); coverage-guided fuzzing runs
+nightly and the tests that need the internet weekly. Dependabot proposes updates weekly, and
+actions are pinned to commit hashes.
 
-To make a release, set the version in `Cargo.toml`, add its section to `CHANGELOG.md`, and push a
-matching tag (`git tag v0.2.0-beta.6 && git push origin v0.2.0-beta.6`). The release workflow runs
-the checks, tests and builds every platform, publishes the GitHub release with checksums and
-build provenance attestations, then publishes the crate to crates.io by trusted publishing, with
-no stored token. Tags containing `-` become pre-releases. The checksum list is signed with the
-release key (the `RELEASE_SIGNING_KEY` secret; its public half is `RELEASE_KEY` in
-`src/update.rs` and `.github/release-signing-key.pub.pem`), and the workflow checks the signature
-against the public key before publishing. If the key is ever replaced, older copies of rynx can't
-verify newer releases and need one manual update. (Trusted publishing is set up once on
-crates.io: the crate's Settings, Trusted Publishing, repository `rry-web/rynx-browser`, workflow
-`release.yml`.)
+A release (`scripts/release.sh <version>`, or a pushed `v*` tag) is checked and tested, built for
+every platform, published on GitHub with checksums, build provenance attestations and a signature
+of the checksums, and published to crates.io by trusted publishing. Tags containing `-` become
+pre-releases. The checksums are signed with the release key (the `RELEASE_SIGNING_KEY` secret; its
+public half is `RELEASE_KEY` in `src/update.rs` and `.github/release-signing-key.pub.pem`), and the
+workflow checks the signature before publishing. If the key is ever replaced, older copies of rynx
+can't verify newer releases and need one manual update.
 
 ## Roadmap
 
@@ -447,6 +442,7 @@ Done:
 - [x] **Reader mode**, **Anubis** bot checks without JavaScript, a **settings page**
 - [x] **Page cache**, **snapshots** of tracked sites, **resumable downloads**
 - [x] **Sandbox** on Linux and macOS
+- [x] **Signed in-app updates**, coverage-guided fuzzing, release and check scripts
 
 Next:
 
@@ -454,7 +450,6 @@ Next:
       one up separately
 - [ ] **Your own MCP servers**: tools from servers you configure, usable on any page
 - [ ] **Customisable key bindings** (`keys.conf`)
-- [ ] **Coverage-guided fuzzing** of every parser of untrusted input, run nightly
 
 Later:
 

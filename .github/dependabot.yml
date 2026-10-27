@@ -13,6 +13,15 @@ updates:
         update-types: [minor, patch]
     open-pull-requests-limit: 5
 
+  # The fuzz targets' own dependencies (libfuzzer-sys)
+  - package-ecosystem: cargo
+    directory: /fuzz
+    schedule:
+      interval: weekly
+    groups:
+      fuzz:
+        patterns: ["*"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

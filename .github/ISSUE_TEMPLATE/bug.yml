@@ -1,0 +1,40 @@
+name: Bug report
+description: Something doesn't work, looks wrong, or crashes
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: For a security problem, please report it privately instead (see SECURITY.md).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: Steps to see it, if you can. A page address that shows it helps a lot.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: rynx version
+      description: "`rynx --version`"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Terminal and operating system
+      placeholder: e.g. iTerm2 3.6 on macOS 27, or Kitty on Ubuntu 26.04
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How rynx was installed
+      options: [Release download, cargo install, Built from source, Other]
+  - type: checkboxes
+    id: mode
+    attributes:
+      label: When it happens
+      options:
+        - label: In I2P mode
+        - label: With --no-sandbox only (it doesn't happen with the sandbox on)

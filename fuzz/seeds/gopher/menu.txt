@@ -1,0 +1,6 @@
+iWelcome		error.host	1
+1Phlog	/phlog	example.org	70
+0About	/about.txt	example.org	7070
+7Search	/search	example.org	70
+hWeb	URL:https://example.com/	example.org	70
+.

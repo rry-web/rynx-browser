@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<channel>
+  <title>Tom &amp; Jerry's Blog</title>
+  <link>https://blog.example/</link>
+  <description>Notes on cats &amp; mice</description>
+  <image><title>Logo title</title><url>https://blog.example/logo.png</url><link>https://blog.example/</link></image>
+  <item>
+    <title>First &lt;em&gt;post&lt;/em&gt;</title>
+    <link>https://blog.example/first</link>
+    <pubDate>Mon, 26 Oct 2026 09:00:00 GMT</pubDate>
+    <description>&lt;p&gt;Short &lt;b&gt;summary&lt;/b&gt;&lt;/p&gt;</description>
+    <content:encoded><![CDATA[<p>The <a href="/full">full</a> text &amp; more</p><script>alert(1)</script>]]></content:encoded>
+  </item>
+  <item>
+    <title>Second</title>
+    <link>https://blog.example/second</link>
+    <description>Plain &#8220;quoted&#8221; summary</description>
+  </item>
+</channel>
+</rss>

@@ -1,0 +1,12 @@
+# Capsule
+
+Hello <b>world</b>
+=> /about About me
+=> gemini://other.example/
+* one
+* two
+> quoted
+```art
+  /\_/\
+```
+## Sub

@@ -1,0 +1,16 @@
+name: Feature or idea
+description: Something rynx could do, or do better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you'd like
+      description: What you're trying to do, and how rynx could help. Sites or examples help.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and security
+      description: Would it send anything new over the network, or store anything? (Leave empty if unsure.)

@@ -54,6 +54,9 @@ jobs:
         run: cargo fmt --check
       - name: Lints
         run: cargo clippy --locked --all-targets -- -D warnings
+      # The fuzz targets (fuzz/) use the browser's API; keep them building between nightly runs
+      - name: Fuzz targets still build
+        run: cargo check --locked --manifest-path fuzz/Cargo.toml
 
   fuzz:
     name: Extended renderer fuzzing

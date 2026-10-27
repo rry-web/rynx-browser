@@ -1,0 +1,3 @@
+techaro.lol-anubis-cookie-verification=id1; Path=/; Secure
+techaro.lol-anubis-auth=jwt; Domain=site.example; Max-Age=600
+tracker=1; Domain=other.example

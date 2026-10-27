@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title type="text">Atom Example</title>
+  <subtitle>All about atoms</subtitle>
+  <link rel="self" href="https://atom.example/feed.xml"/>
+  <link href="https://atom.example/"/>
+  <entry>
+    <title>Entry one</title>
+    <link rel="alternate" href="https://atom.example/1"/>
+    <updated>2026-10-25T12:00:00Z</updated>
+    <summary type="text">Less than &lt; greater than &gt; as text</summary>
+  </entry>
+  <entry>
+    <title type="html">Entry &lt;i&gt;two&lt;/i&gt;</title>
+    <link href="https://atom.example/2"/>
+    <content type="html">&lt;ul&gt;&lt;li&gt;one&lt;/li&gt;&lt;li&gt;two&lt;/li&gt;&lt;/ul&gt;</content>
+  </entry>
+</feed>

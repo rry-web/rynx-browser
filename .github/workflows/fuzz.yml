@@ -1,0 +1,66 @@
+name: Fuzz
+
+# Coverage-guided fuzzing of everything rynx reads from the network or disk (see fuzz/README.md).
+# Nightly, and on demand. Each target keeps what it has learned (its corpus) in the cache between
+# runs; a crash fails the run and uploads the input that caused it.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: How long to fuzz each target
+        default: "300"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [render, gemtext, gopher, feed, anubis, cookies, settings, update_list]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: nightly
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: fuzz
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+
+      - name: Replay past crashes
+        run: |
+          mkdir -p fuzz/regressions/${{ matrix.target }}
+          if [ -n "$(ls -A fuzz/regressions/${{ matrix.target }})" ]; then
+            cargo fuzz run ${{ matrix.target }} fuzz/regressions/${{ matrix.target }} -- -runs=0
+          fi
+      - name: Fuzz
+        env:
+          SECONDS_EACH: ${{ github.event.inputs.seconds || '300' }}
+        run: |
+          mkdir -p fuzz/corpus/${{ matrix.target }}
+          cargo fuzz run ${{ matrix.target }} fuzz/corpus/${{ matrix.target }} fuzz/seeds/${{ matrix.target }} -- \
+            -max_total_time="$SECONDS_EACH" -rss_limit_mb=2048
+
+      - name: Keep the crash
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}

@@ -1,0 +1,39 @@
+name: Live tests
+
+# The tests that need the internet (TLS test servers, real Gemini, Gopher, feed and MCP servers,
+# GitHub's release list), weekly and on demand, so a change out in the world is noticed. They're
+# allowed to fail without blocking anything; a failure here is a prompt to look, not a broken build.
+on:
+  schedule:
+    - cron: "0 7 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  live:
+    name: Live (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The macOS sandbox's everyday test needs a clipboard, which runners may not have
+      - name: Tests that need the internet
+        run: cargo test --locked -- --ignored --skip the_browser_works_inside_the_macos_sandbox
+      - name: The browser inside the macOS sandbox
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: cargo test --locked --test sandbox -- --ignored
