@@ -1,7 +1,9 @@
 
 ## Installing
 
-Download the archive for your platform below, extract it, and run `rynx` from a terminal.
+Download the archive for your platform below, extract it, and run `rynx` from a terminal. From
+then on rynx can update itself: it says when a new version is out, and `U` installs it. (The
+files named just `rynx-<version>-<platform>` are the bare programs the updater downloads.)
 
 | Platform | Archive |
 |---|---|
@@ -19,18 +21,22 @@ The binaries are **not code-signed**, so the OS will warn the first time:
 
 ## Verifying
 
-Every archive is listed in `SHA256SUMS`, and has a build provenance attestation proving it was built
-from this repository by GitHub Actions:
+Every file is listed in `SHA256SUMS`, which is signed with the release key
+(`SHA256SUMS.sig`, Ed25519; rynx's updater refuses anything it doesn't vouch for), and has a build
+provenance attestation proving it was built from this repository by GitHub Actions:
 
 ```sh
+# The signature, with the public key from the repository (.github/release-signing-key.pub.pem)
+openssl pkeyutl -verify -pubin -inkey release-signing-key.pub.pem -rawin -in SHA256SUMS -sigfile SHA256SUMS.sig
 sha256sum -c SHA256SUMS --ignore-missing          # macOS: shasum -a 256 -c SHA256SUMS
 gh attestation verify <archive> --repo rry-web/rynx-browser
 ```
 
 ## Platform notes
 
-- **Linux:** the browser sandboxes itself with Landlock (kernel 5.13 or newer): it can only write to
-  your Downloads folder and can't read the rest of your home directory. The status line shows
+- **Linux and macOS:** the browser sandboxes itself (Landlock on kernel 5.13 or newer; Seatbelt on
+  macOS): it can only write to your Downloads, settings and cache folders and can't read the rest
+  of your home directory. The status line shows
   whether the sandbox is active; `--no-sandbox` turns it off for troubleshooting.
 - **All platforms:** downloads are tagged as coming from the internet (macOS quarantine, Windows
   Mark of the Web, Linux `user.xdg.origin.url`), so the OS checks them before they're opened.

@@ -34,6 +34,7 @@ mod settings_page;
 mod snapshot_pages;
 mod tab;
 mod tools;
+mod update_page;
 
 pub use images::draws_images;
 pub use settings_page::SETTINGS_PAGE;
@@ -68,6 +69,15 @@ pub struct App {
     pub snapshots: Arc<crate::snapshots::Snapshots>,
     /// Images: decoded, loading, and how they're drawn on this terminal
     pub images: images::Images,
+    /// How this copy was installed (set at startup, before the sandbox), and the newest release
+    /// found; where updates are downloaded to; a note from installing one at startup
+    pub installed: crate::update::Installed,
+    pub update_found: Option<crate::update::Release>,
+    pub update_dir: Option<PathBuf>,
+    pub update_note: Option<String>,
+    /// Where releases are listed, and the key their checksums must be signed with (tests change them)
+    pub update_api: String,
+    pub release_key: [u8; 32],
     /// Certificates seen for Gemini hosts (trust on first use)
     pub gemini_hosts: Arc<std::sync::Mutex<crate::gemini::KnownHosts>>,
     /// MCP sessions with the servers whose tools have been used
@@ -126,6 +136,12 @@ impl App {
             cache: Arc::default(),
             snapshots: Arc::default(),
             images: images::Images::default(),
+            installed: crate::update::Installed::Elsewhere(String::from("not checked")),
+            update_found: None,
+            update_dir: None,
+            update_note: None,
+            update_api: crate::update::RELEASES_API.to_string(),
+            release_key: crate::update::RELEASE_KEY,
             confirm_clear_history: false,
             confirm_reset_settings: false,
             confirm_delete_snapshots: None,
@@ -322,6 +338,7 @@ impl App {
             || url == HISTORY_PAGE
             || url == HELP_PAGE
             || url == SETTINGS_PAGE
+            || url == crate::update::UPDATE_PAGE
             || url.starts_with(crate::snapshots::SNAPSHOTS_PAGE)
             || url.starts_with(crate::snapshots::SNAPSHOT)
             || url.starts_with(crate::mcp::TOOLS_PAGE);
@@ -423,6 +440,10 @@ impl App {
         // own page can do this, never a web page's form
         if tab.page_url.is_none() && tab.url_input == SETTINGS_PAGE {
             self.save_settings_form(form, submitter);
+            return;
+        }
+        if tab.page_url.is_none() && tab.url_input == crate::update::UPDATE_PAGE {
+            self.update_form(submitter);
             return;
         }
         if tab.page_url.is_none() && tab.url_input == crate::snapshots::SNAPSHOTS_PAGE {

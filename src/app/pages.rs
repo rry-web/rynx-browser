@@ -27,6 +27,10 @@ impl App {
             BOOKMARKS_PAGE => ("Bookmarks", self.bookmarks.page_html()),
             HISTORY_PAGE => ("History", self.history.page_html()),
             SETTINGS_PAGE => ("Settings", self.settings_page_html()),
+            crate::update::UPDATE_PAGE => {
+                self.show_update_page();
+                return true;
+            }
             HELP_PAGE | "about:home" => ("Start", include_str!("../../assets/help.html").to_string()),
             _ => return false,
         };

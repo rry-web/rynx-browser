@@ -77,6 +77,19 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         }
     }
 
+    // How this copy was installed decides how it's updated; a waiting update is installed now,
+    // before the sandbox keeps rynx from writing to its own program file, and then started
+    let installed = rynx::update::installed();
+    let update_dir = rynx::settings::cache_dir().map(|d| d.join("update"));
+    let mut update_note = std::env::var("RYNX_UPDATED").ok().map(|v| format!("Updated to rynx {}", v));
+    if let (rynx::update::Installed::Updatable(program), Some(dir)) = (&installed, &update_dir) {
+        match rynx::update::install_pending(dir, None) {
+            Ok(Some(version)) => restart(program, &version),
+            Ok(None) => {}
+            Err(e) => update_note = Some(format!("The update wasn't installed: {}", e)),
+        }
+    }
+
     // Settings are read (and the settings folder created) before sandboxing
     let config_dir = rynx::settings::config_dir();
     let (settings, problems) = match &config_dir {
@@ -105,10 +118,36 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         SandboxStatus::Disabled
     };
 
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()?
-        .block_on(run(settings, problems, config_dir, sandbox))
+    tokio::runtime::Builder::new_multi_thread().enable_all().build()?.block_on(run(
+        settings,
+        problems,
+        config_dir,
+        sandbox,
+        (installed, update_dir, update_note),
+    ))
+}
+
+/// Start the newly installed version in place of this one, with the same arguments
+fn restart(program: &std::path::Path, version: &str) -> ! {
+    let mut command = std::process::Command::new(program);
+    command.args(std::env::args_os().skip(1)).env("RYNX_UPDATED", version);
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let error = command.exec();
+        eprintln!("rynx: updated to {}, but couldn't start it ({}); start rynx again", version, error);
+        std::process::exit(1);
+    }
+    #[cfg(not(unix))]
+    {
+        match command.status() {
+            Ok(status) => std::process::exit(status.code().unwrap_or(0)),
+            Err(error) => {
+                eprintln!("rynx: updated to {}, but couldn't start it ({}); start rynx again", version, error);
+                std::process::exit(1);
+            }
+        }
+    }
 }
 
 async fn run(
@@ -116,6 +155,7 @@ async fn run(
     settings_problems: Vec<String>,
     config_dir: Option<std::path::PathBuf>,
     sandbox: SandboxStatus,
+    (installed, update_dir, update_note): (rynx::update::Installed, Option<std::path::PathBuf>, Option<String>),
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // This hook catches panics and restores the terminal before printing the error
     let original_hook = std::panic::take_hook();
@@ -160,7 +200,14 @@ async fn run(
         let more = if settings_problems.len() > 1 { " (and more)" } else { "" };
         app.current_tab().status_message = format!("Problem in settings.conf, {}{}", problem, more);
     }
+    app.installed = installed;
+    app.update_dir = update_dir;
+    if let Some(note) = &update_note {
+        app.current_tab().status_message = note.clone();
+    }
+    app.update_note = update_note;
     app.open_home_page();
+    app.check_for_updates_if_due();
 
     // Run App
     let res = run_app(&mut terminal, app).await;

@@ -137,6 +137,20 @@ impl App {
                 ("blocks", "Coloured text blocks"),
             ]),
         ));
+        html.push_str("<h2>Updates</h2>");
+        html.push_str(&checkbox(
+            "updates",
+            s.check_updates,
+            "Check for a new rynx once a day (never in I2P mode); nothing is installed unless you agree. U shows updates.",
+        ));
+        html.push_str(&format!(
+            "<p><b>Update to</b>:<br>{}</p>",
+            choice(
+                "update_channel",
+                if s.beta_updates { "beta" } else { "stable" },
+                &[("beta", "Betas too, while rynx is in beta"), ("stable", "Stable releases only")]
+            )
+        ));
         html.push_str("<h2>Privacy</h2>");
         html.push_str(&checkbox(
             "history",
@@ -209,6 +223,7 @@ impl App {
         let mut anubis = false;
         let mut cache = false;
         let mut cache_i2p = false;
+        let mut updates = false;
         let mut engine = None;
         for (control, value) in tab.controls.iter().zip(&tab.control_values) {
             if control.form != Some(form) {
@@ -218,6 +233,7 @@ impl App {
                 ("history", ControlValue::Checked(on)) => history = *on,
                 ("anubis", ControlValue::Checked(on)) => anubis = *on,
                 ("cache", ControlValue::Checked(on)) => cache = *on,
+                ("updates", ControlValue::Checked(on)) => updates = *on,
                 ("cache_i2p", ControlValue::Checked(on)) => cache_i2p = *on,
                 ("search_engine", ControlValue::Selected(i)) => {
                     if let ControlKind::Select { options } = &control.kind {
@@ -250,6 +266,7 @@ impl App {
         lines.push(format!("history = {}", if history { "on" } else { "off" }));
         lines.push(format!("anubis = {}", if anubis { "on" } else { "off" }));
         lines.push(format!("cache = {}", if cache { "on" } else { "off" }));
+        lines.push(format!("updates = {}", if updates { "daily" } else { "off" }));
         lines.push(format!("cache_i2p = {}", if cache_i2p { "on" } else { "off" }));
 
         let (settings, problems) = crate::settings::Settings::parse(&lines.join("\n"));

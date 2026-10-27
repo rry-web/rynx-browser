@@ -326,6 +326,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
         KeyCode::Char('A') => app.open_archived_copy(),
         KeyCode::Char('T') => app.toggle_tracking(),
         KeyCode::Char('I') => app.load_images(app.active_tab_index, true),
+        KeyCode::Char('U') => app.follow_link(crate::update::UPDATE_PAGE.to_string()),
         KeyCode::Char('i') => app.view_image(viewport_height(terminal_height)),
         KeyCode::Char('Z') => app.open_snapshots(),
         _ => {}
@@ -602,6 +603,8 @@ pub fn handle_network_event(app: &mut App, response: NetworkResponse, terminal_w
         NetworkResponse::ToolsListed(id, ..) => *id,
         NetworkResponse::ToolFinished(id, ..) => *id,
         NetworkResponse::ImageLoaded(id, ..) => *id,
+        NetworkResponse::UpdateChecked(id, ..) => *id,
+        NetworkResponse::UpdateDownloaded(id, ..) => *id,
     };
 
     if let Some(index) = app.tabs.iter().position(|t| t.id == target_id) {
@@ -677,6 +680,12 @@ pub fn handle_network_event(app: &mut App, response: NetworkResponse, terminal_w
             }
             NetworkResponse::ImageLoaded(_, url, result) => {
                 app.finish_image(index, url, result);
+            }
+            NetworkResponse::UpdateChecked(_, asked, result) => {
+                app.finish_update_check(index, asked, result);
+            }
+            NetworkResponse::UpdateDownloaded(_, result) => {
+                app.finish_update_download(index, result);
             }
             NetworkResponse::DownloadError(_, msg) => {
                 let tab = &mut app.tabs[index];

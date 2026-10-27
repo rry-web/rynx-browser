@@ -61,6 +61,17 @@ const DOCUMENTED: &[Documented] = &[
         examples: &["off"],
     },
     Documented {
+        key: "updates",
+        about: "Check GitHub for a new rynx once a day (\"daily\", the default) or never (\"off\"; U still checks).\n\
+                Never while locked to I2P or started in I2P mode. An update is only installed when you agree.",
+        examples: &["off"],
+    },
+    Documented {
+        key: "update_channel",
+        about: "Which releases to update to: \"beta\" (the default, while rynx is in beta) or \"stable\".",
+        examples: &["stable"],
+    },
+    Documented {
         key: "images",
         about: "Which images load by themselves: \"ask\" (the default: none; I loads a page's images),\n\
                 \"site\" (those from the page's own site; others are often trackers), or \"all\".",
@@ -176,6 +187,10 @@ pub struct Settings {
     pub images: ImageLoading,
     pub image_display: ImageDisplay,
     pub image_protocol: ImageProtocol,
+    /// Check for updates once a day
+    pub check_updates: bool,
+    /// Update to pre-releases (betas) too
+    pub beta_updates: bool,
 }
 
 impl Default for Settings {
@@ -195,6 +210,8 @@ impl Default for Settings {
             images: ImageLoading::Ask,
             image_display: ImageDisplay::Inline,
             image_protocol: ImageProtocol::Auto,
+            check_updates: true,
+            beta_updates: true,
         }
     }
 }
@@ -263,6 +280,8 @@ impl Settings {
                         _ => ImageProtocol::Auto,
                     }
                 }
+                "updates" if matches!(value, "daily" | "off") => settings.check_updates = value == "daily",
+                "update_channel" if matches!(value, "beta" | "stable") => settings.beta_updates = value == "beta",
                 "cache" if matches!(value, "on" | "off") => settings.disk_cache = value == "on",
                 "cache_i2p" if matches!(value, "on" | "off") => settings.disk_cache_i2p = value == "on",
                 "cache_size" if value.parse::<u64>().is_ok_and(|mb| (1..=1_000_000).contains(&mb)) => {
@@ -285,9 +304,8 @@ impl Settings {
                     settings.user_agent = value.to_string()
                 }
                 "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" | "user_agent" | "anubis"
-                | "cache" | "cache_i2p" | "cache_size" | "images" | "image_display" | "image_protocol" => {
-                    problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
-                }
+                | "cache" | "cache_i2p" | "cache_size" | "images" | "image_display" | "image_protocol" | "updates"
+                | "update_channel" => problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value)),
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),
             }
         }
@@ -334,6 +352,8 @@ impl Settings {
                 ImageProtocol::Sixel => Some("sixel".to_string()),
                 ImageProtocol::Blocks => Some("blocks".to_string()),
             },
+            "updates" => (!self.check_updates).then(|| "off".to_string()),
+            "update_channel" => (!self.beta_updates).then(|| "stable".to_string()),
             "cache" => self.disk_cache.then(|| "on".to_string()),
             "cache_i2p" => self.disk_cache_i2p.then(|| "on".to_string()),
             "cache_size" => changed(self.cache_size_mb.to_string(), default.cache_size_mb.to_string()),

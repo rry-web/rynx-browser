@@ -22,6 +22,10 @@ pub enum NetworkResponse {
     ToolsListed(usize, String, String, Result<Vec<crate::mcp::Tool>, String>),
     /// A tool finished: tab_id, server, tool title, result
     ToolFinished(usize, String, String, Result<serde_json::Value, String>),
+    /// An update check finished: tab_id, whether the user asked, the newer release (if any)
+    UpdateChecked(usize, bool, Result<Option<crate::update::Release>, String>),
+    /// An update was downloaded and checked (its version), or not: tab_id
+    UpdateDownloaded(usize, Result<String, String>),
     /// An image was fetched and decoded (or failed): tab_id, address, image
     ImageLoaded(usize, String, Result<std::sync::Arc<image::DynamicImage>, String>),
 }

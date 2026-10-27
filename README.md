@@ -143,6 +143,15 @@ rough picture made of coloured text blocks. The settings page can force a method
 gets it wrong. Images are fetched like pages, through the cache, and a public page can never load
 images from your local network. SVG images aren't supported yet.
 
+### Updates
+
+rynx checks GitHub for a new version once a day (never in I2P mode) and says so in the status line.
+**`U`** shows what's new, and, if you agree, downloads it; it's installed the next time rynx
+starts. Before installing, rynx checks the release's signature against the release key built into
+it, and the download against the signed checksum, so a tampered release or download is refused.
+Copies installed with `cargo install` or Homebrew are updated with those tools; the update page
+gives the command. The settings page turns daily checks off or limits updates to stable releases.
+
 ### The cache and snapshots
 
 Pages you visit are kept in memory until you quit, so **Back** and **Forward** show them
@@ -199,6 +208,8 @@ cache_i2p = on
 cache_size = 500
 images = site
 image_display = inline
+updates = daily
+update_channel = beta
 ```
 
 rynx introduces itself honestly to websites, as `rynx/<version> (+<project page>)`. Bot walls
@@ -274,6 +285,7 @@ The same list is on the start page.
 | **`/`** | Find on the page (live highlighting) |
 | **`>`** / **`<`** | Next / previous match |
 | **`v`** | Copy mode: select text with `h` `j` `k` `l` or the arrow keys, **`y`** copies it, **`Esc`** cancels |
+| **`U`** | Updates: what's new, and installing it |
 | **`I`** | Load this page's images |
 | **`i`** | View the selected image (or the first on screen) full screen; `Esc` closes |
 | **`T`** | Track this site: keep a dated snapshot whenever one of its pages changes (again to stop) |
@@ -337,6 +349,10 @@ that:
   image from your local network (a request that can make a router or printer act).
 - **I2P:** in I2P mode all traffic goes through the I2P proxy, and `.i2p` addresses are never looked
   up outside it.
+- **Signed updates:** releases' checksum lists are signed with an Ed25519 release key kept only as a
+  GitHub Actions secret; rynx installs an update only if the signature matches the public key built
+  into it and the download matches the signed checksum. Update checks go to GitHub over the
+  clearweb, never in I2P mode.
 - **Maintained dependencies:** `cargo deny` checks every change, and weekly, for known
   vulnerabilities, licences and where dependencies come from; Dependabot proposes updates. Images
   and every other untrusted format are handled by memory-safe Rust code only.
@@ -404,7 +420,11 @@ To make a release, set the version in `Cargo.toml`, add its section to `CHANGELO
 matching tag (`git tag v0.2.0-beta.5 && git push origin v0.2.0-beta.5`). The release workflow runs
 the checks, tests and builds every platform, publishes the GitHub release with checksums and
 build provenance attestations, then publishes the crate to crates.io by trusted publishing, with
-no stored token. Tags containing `-` become pre-releases. (Trusted publishing is set up once on
+no stored token. Tags containing `-` become pre-releases. The checksum list is signed with the
+release key (the `RELEASE_SIGNING_KEY` secret; its public half is `RELEASE_KEY` in
+`src/update.rs` and `.github/release-signing-key.pub.pem`), and the workflow checks the signature
+against the public key before publishing. If the key is ever replaced, older copies of rynx can't
+verify newer releases and need one manual update. (Trusted publishing is set up once on
 crates.io: the crate's Settings, Trusted Publishing, repository `rry-web/rynx-browser`, workflow
 `release.yml`.)
 

@@ -483,6 +483,19 @@ Worth repeating after any dependency upgrade.
 - [ ] **SMALL-07 Bookmarks and history.** Bookmark a Gemini page (`b`), then check `B` and `s`.
       *Expected:* both list the page by its first heading, and selecting it opens it again.
 
+## Updates
+
+- [ ] **UPD-01 (priority) Updating a release build.** Install the release before the newest one
+      from its archive (not with Cargo), start it, and press `U`.
+      *Expected:* the newer version is shown with its notes. Choose "Download it": "downloaded and
+      checked". Quit and start rynx again: the status line says "Updated to rynx ..." and
+      `rynx --version` shows the new version.
+- [ ] **UPD-02 Cargo installs.** With rynx installed by `cargo install`, press `U`.
+      *Expected:* the page gives the `cargo install rynx --version ...` command, with no download
+      button.
+- [ ] **UPD-03 I2P.** Lock rynx to I2P in settings, restart, and press `U`, then "Check now".
+      *Expected:* no check is made; the status line says rynx is locked to I2P.
+
 ## Images
 
 - [ ] **IMG-01 (priority) Real images.** In iTerm2, Kitty, Ghostty or WezTerm, open a page with

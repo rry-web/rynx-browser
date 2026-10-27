@@ -11,7 +11,7 @@ readme = "README.md"
 keywords = ["browser", "terminal", "tui", "gemini", "gopher"]
 categories = ["command-line-utilities", "network-programming"]
 # What is needed to build, test and read about it; the manual test checklists and CI stay on GitHub
-include = ["/src", "/assets", "/examples", "/tests", "/README.md", "/CHANGELOG.md", "/LICENSE.txt", "/Cargo.lock"]
+include = ["/src", "/build.rs", "/assets", "/examples", "/tests", "/README.md", "/CHANGELOG.md", "/LICENSE.txt", "/Cargo.lock"]
 
 [dependencies]
 # rustls without a bundled crypto provider: network.rs supplies ring and every TLS config
@@ -47,6 +47,8 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 # The page cache and snapshots: gzip (pure Rust) and HTTP dates
 flate2 = "1.1.10"
 httpdate = "1.0.3"
+self-replace = "1.5.1"
+semver = "1.0.28"
 
 # Tagging downloads with their origin (macOS quarantine, Linux xdg origin)
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]

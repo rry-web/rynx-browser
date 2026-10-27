@@ -34,6 +34,14 @@
   download that still failed resumes the next time the same link is downloaded (the prompt says
   how much was saved). The ETag or Last-Modified goes with each resume (If-Range), so a file that
   changed on the server is downloaded afresh rather than spliced.
+- Updates. rynx checks GitHub once a day (`updates = daily`, the default; never in I2P mode) and
+  says when a newer version is out; `U` shows the release notes and, if you agree, downloads this
+  platform's build, which is installed at the next start (before the sandbox) and started at once.
+  The update is installed only if the release's `SHA256SUMS` carries a valid signature from the
+  release key built into rynx and the download matches its signed checksum. Copies installed with
+  Cargo or Homebrew get the command to update instead. `update_channel = stable` skips betas.
+- Releases are signed: `SHA256SUMS.sig` (Ed25519), and each platform's bare program is published
+  alongside the archives, for the updater.
 - CI: `cargo deny` (vulnerabilities, licences compatible with the GPL, crates.io only) replaces
   `cargo audit`; a Rust 1.90 job checks the minimum version (raised from 1.88: the image decoders need 1.90); releases run formatting, lints and
   `cargo deny` before building, and publish to crates.io by trusted publishing (no stored token);

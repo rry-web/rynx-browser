@@ -19,3 +19,4 @@ pub mod sandbox;
 pub mod settings;
 pub mod snapshots;
 pub mod ui;
+pub mod update;
