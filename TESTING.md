@@ -1,389 +1,52 @@
-# Manual Testing Checklist
+# Testing
 
-Hands-on checks for the bug fixes and security hardening done in October 2026. Run `cargo test`
-first; most of these behaviours also have automated tests. This list covers what tests can't
-fully show: real terminals, touchpads, live sites, macOS Finder and I2P.
+Almost everything here is checked by scripts: `cargo test` runs them, CI runs them on Linux,
+macOS and Windows for every push, and weekly against real sites. The **terminal tests**
+(`tests/terminal/`) run the real program in a pseudo-terminal, typing and clicking as a person
+would and reading the screen back, against local web, Gemini, Gopher and MCP servers and a fake
+I2P proxy; each is named after the check below it covers.
 
-Record results in [TEST_LOG.md](TEST_LOG.md) using the IDs below.
-
-Tip: `cargo run --release` renders large pages about 6× faster than a debug build.
-
-Items marked **(priority)** could not be checked at all during development, or only partly.
-
-## Automated checks
-
-These run in CI (`.github/workflows/ci.yml`) on every push and weekly, but can be run locally.
-
-- [ ] **AUTO-01 Test suite.** `cargo test`: all tests pass, including 100 randomised renderer cases.
-- [ ] **AUTO-02 Dependency audit.** `cargo audit`: no known vulnerabilities in dependencies.
-- [ ] **AUTO-03 Live TLS checks.** `cargo test --test live_tls -- --ignored` (needs internet): expired,
-      self-signed, wrong-host, untrusted and (on macOS/Windows) revoked certificates are
-      rejected; TLS 1.0/1.1 are refused; HTTP/2 still works.
-- [ ] **AUTO-06 I2P TLS settings.** `cargo test --lib -- --ignored` (needs internet): the TLS
-      configuration used for I2P connections (bundled root certificates) connects over HTTP/2
-      and rejects bad certificates and TLS 1.1, checked without needing an I2P router.
-- [ ] **AUTO-07 Live Gemini, Gopher and feeds.** `cargo test --test smallweb --test feeds -- --ignored`
-      (needs internet): geminiprotocol.net, gopher.floodgap.com and the Rust blog's feed load and
-      convert.
-- [ ] **AUTO-08 Live MCP server.** `cargo test --test mcp -- --ignored` (needs internet): lists
-      DeepWiki's public MCP tools and runs one.
-- [ ] **AUTO-04 Extended fuzzing.** `FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render`: randomised
-      renderer and UI cases (about 4 minutes). Reproduce a failure with `FUZZ_SEED=<seed>`.
-- [ ] **AUTO-05 (priority) CI runs on GitHub.** After pushing to GitHub, open the repository's **Actions** tab.
-      *Expected:* the CI workflow runs and all jobs (Linux and macOS tests, fuzzing, audit)
-      pass. It has never run, and the Linux build has not been tried.
-
-## Local test servers
-
-Some checks need deliberately hostile pages. These serve them from your own machine.
-`localhost` is allowed over plain HTTP, so the browser can reach them.
+What's left by hand is what needs a particular terminal, operating system, website, account or
+network. Record those results in [TEST_LOG.md](TEST_LOG.md).
 
 ```sh
-mkdir -p /tmp/rynx-test && cd /tmp/rynx-test
-
-# A page with terminal escape codes and non-web links
-printf '<title>Evil\033]0;TITLE CHANGED\007</title><p>Before\033]52;c;cHduZWQ=\007 after\033[2J</p><p><a href="mailto:someone@example.com">mail link</a> <a href="javascript:alert(1)">js link</a> <a href="http://secret-site.i2p/">i2p link</a></p>' > evil.html
-
-# 60 nested lists: used to freeze the browser at any terminal width
-python3 -c 'print("<ul>" * 60 + "<li>deep item" + "</ul>" * 60)' > nested.html
-
-# 20,000 nested elements: used to crash the browser with a stack overflow
-python3 -c 'print("<span>" * 20000 + "deep text" + "</span>" * 20000)' > deep.html
-
-# 50,000 nested <div>s: takes seconds to parse, and used to freeze the UI meanwhile
-python3 -c 'print("<div>" * 50000 + "slow page" + "</div>" * 50000)' > slow.html
-
-# A plain-text file with a URL, and a "binary" file
-printf '<b>not markup</b>\n\n    indented line\nSee https://example.com/docs.\n' > notes.txt
-cp /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericDocumentIcon.icns icon.icns 2>/dev/null || head -c 2048 /dev/urandom > icon.icns
-
-# A "compression bomb": ~20KB on the wire that expands to ~20MB, sent without Content-Length
-cat > bomb_server.py <<'EOF'
-import gzip, http.server
-body = gzip.compress(b"<p>" + b"a " * (10 * 1024 * 1024) + b"</p>")
-class Handler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html")
-        self.send_header("Content-Encoding", "gzip")
-        self.end_headers()
-        self.wfile.write(body)
-print("serving on http://localhost:8001/", flush=True)
-http.server.HTTPServer(("127.0.0.1", 8001), Handler).serve_forever()
-EOF
-
-python3 -m http.server 8000 --bind 127.0.0.1 &   # serves the files above
-python3 bomb_server.py &                          # serves the bomb
+cargo test                                   # everything, including the terminal tests (about 30 s)
+cargo test --test terminal -- smoke_01       # one check, by its ID
+cargo test -- --ignored                      # the ones that need the internet (live sites, TLS, Gemini...)
 ```
 
-Stop them afterwards with `kill %1 %2` (or `pkill -f http.server; pkill -f bomb_server.py`).
+## Still by hand
 
-## General smoke test
+Items marked **(priority)** haven't been checked by a person yet.
 
-Worth repeating after any dependency upgrade.
-
-- [ ] **SMOKE-01 Key bindings.** Every key binding in the README does what it says: tabs (`n`, `t`, `w`,
-      `[`, `]`), Edit mode (`e`), search (`/`, `>`, `<`), visual mode (`v`, `y`), source view
-      (`Shift+V`), I2P toggle (`p`), quit (`q`).
-- [ ] **SMOKE-02 Mouse.** scroll wheel scrolls; clicking a link follows it; `Ctrl`+click
-      opens it in a new tab.
-- [ ] **SMOKE-03 Resizing.** Resizing the terminal re-wraps the page without glitches.
-- [ ] **SMOKE-04 Terminal restored on exit.** After quitting, the terminal is back to normal (cursor visible, typing
-      echoes, no leftover colours).
-
-## Rendering
-
-- [ ] **RENDER-01 Documentation pages.** Open a page with inline code and code blocks, e.g.
-      `https://doc.rust-lang.org/std/vec/struct.Vec.html`.
-      *Expected:* sentences with `inline code` read as normal sentences (no line break at each
-      code word); code blocks keep their lines and indentation, one line of code per line.
-- [ ] **RENDER-02 Data tables.** Open a Wikipedia article with an infobox or table, e.g.
-      `https://en.wikipedia.org/wiki/Rust_(programming_language)`.
-      *Expected:* table cells line up in columns separated by `│`, header rows are bold with a
-      `─┼─` rule underneath, and long cells wrap inside their column.
-- [ ] **RENDER-03 Narrow tables.** Shrink the terminal to about 30 columns on the same page.
-      *Expected:* tables that no longer fit switch to `Header: value` lines per row.
-- [ ] **RENDER-04 Layout tables.** Open `https://news.ycombinator.com/`.
-      *Expected:* ranked titles with their points/comments line underneath; the header reads
-      "Hacker News new | past | ..." (words not glued together).
-- [ ] **RENDER-05 Lists and quotes.** Find a page with numbered lists, nested lists and
-      blockquotes (Wikipedia talk pages, mailing-list archives or GitHub READMEs).
-      *Expected:* numbered lists show `1.`, `2.` (right-aligned past 9), nested bullets change
-      (•, ◦, ▪), wrapped items line up under their text, and quotes have a `│` bar.
-- [ ] **RENDER-06 Plain-text files.** Open `https://www.rfc-editor.org/rfc/rfc1149.txt`, and
-      `http://localhost:8000/notes.txt` with the test servers running.
-      *Expected:* the RFC keeps its indentation and layout; in notes.txt, `<b>not markup</b>`
-      shows literally and the URL is a selectable link (without the trailing period).
-- [ ] **RENDER-07 JSON.** Open `https://httpbin.org/json`.
-      *Expected:* the JSON keeps its line breaks and indentation.
-- [ ] **RENDER-08 Non-text files.** Open `http://localhost:8000/icon.icns` (or any image URL).
-      *Expected:* a page naming the file and its type with a download link, instead of garbage;
-      selecting the link and pressing `d` offers to save it.
-- [ ] **RENDER-11 Site menus.** Open `https://www.bbc.com/news` and `https://en.wikipedia.org/`.
-      *Expected:* the navigation menus at the top are compact lines like
-      `Home · News · Sport · …` (submenus as `News: US & Canada · UK · …`) rather than long
-      columns of single links, and each entry is still selectable with Tab. Lists in the article
-      itself (e.g. "See also", infobox entries) are still drawn as bulleted lists.
-- [ ] **RENDER-09 Full width.** On any text-heavy page, check the right edge.
-      *Expected:* text runs to within a column of the right border (it used to stop 2 short).
-- [ ] **RENDER-10 No-JavaScript notices.** Visit a site that relies on JavaScript.
-      *Expected:* its `<noscript>` message shows as normal text, not as raw `<p>` tags.
-
-## Crashes and stability
-
-- [ ] **CRASH-01 Stale link selection.** On a long page, press `Tab` many times to select a
-      link far down. Press `e`, type a URL for a short page, and press Enter.
-      *Expected:* the new page loads; no crash.
-- [ ] **CRASH-02 Tiny terminal.** Start a download (`d` on a file link, then `y`), then shrink
-      the terminal window as small as it goes.
-      *Expected:* no crash; the popup is clipped.
-- [ ] **CRASH-03 Visual mode on an empty page.** In a new tab (`n`), press `Shift+V` for
-      source view, then `v` and `j`/`k`/`l`.
-      *Expected:* no crash.
-- [ ] **CRASH-04 Deeply nested lists.** With the test servers running, open
-      `http://localhost:8000/nested.html`.
-      *Expected:* "deep item" appears promptly; the browser stays responsive.
-- [ ] **CRASH-05 Extremely narrow terminal.** On any page, drag the terminal window as narrow
-      as it goes (2 columns or less), then widen it again.
-      *Expected:* the browser stays responsive and recovers. It used to freeze.
-- [ ] **CRASH-06 Extremely deep nesting.** With the test servers running, open
-      `http://localhost:8000/deep.html`.
-      *Expected:* "deep text" appears; no crash.
-
-## Navigation and history
-
-- [ ] **NAV-01 Back after typing a URL.** Load a page, press `e`, type a different URL,
-      Enter, then `Backspace`.
-      *Expected:* you return to the first page, not a reload of the second.
-- [ ] **NAV-02 Esc cancels editing.** Press `e`, type some junk, press `Esc`.
-      *Expected:* the address bar shows the original address again.
-- [ ] **NAV-03 Redirects update the address bar.** Open
-      `https://www.gutenberg.org/ebooks/2701.html.images`.
-      *Expected:* the address bar ends up showing
-      `https://www.gutenberg.org/cache/epub/2701/pg2701-images.html` (note `https`; the
-      site's redirect actually points to `http://`).
-- [ ] **NAV-04 Chapter links jump within the page.** On that Moby Dick page, select a chapter
-      link in the table of contents and press Enter (or click it).
-      *Expected:* the view jumps straight to that chapter's heading with no reload. The
-      address bar ends in `#link2HCH...`, and `Tab` selects the next link after the heading.
-- [ ] **NAV-05 Back from a chapter.** After jumping to a chapter, press `Backspace`.
-      *Expected:* back to the top of the page instantly, with no reload.
-      (Known limitation: it returns to the top, not to where you were scrolled.)
-- [ ] **NAV-06 Fragment on another page.** Open a URL with a `#section` that points into a
-      different page, by typing one or following a link from another site.
-      *Expected:* once it loads, the view starts at that section.
-- [ ] **NAV-07 Fragment link in a new tab.** On the Moby Dick page, select a chapter link
-      and press `t` (or `Ctrl`+click it).
-      *Expected:* a new tab opens, loads the book and starts at that chapter.
-- [ ] **NAV-08 Redirects within a local server.** With the test servers running, run
-      `mkdir /tmp/rynx-test/dir` and open `http://localhost:8000/dir` (the server redirects it
-      to `/dir/`).
-      *Expected:* the directory listing loads and the address bar ends in `/dir/`.
-      Local-to-local redirects used to be blocked.
-- [ ] **NAV-09 HTTP-only sites are not downgraded.** Open `http://` followed by a site that
-      only serves plain HTTP, such as `http://neverssl.com`.
-      *Expected:* the browser tries `https://` and shows an error, rather than loading the
-      page over plain HTTP.
-
-## Forms
-
-- [ ] **FORM-01 Search box.** Open `https://en.wikipedia.org/`, press `Tab` until the search field
-      is selected, press Enter, type a word, press Enter.
-      *Expected:* the bottom bar showed `Text field "search" → sends to …/w/index.php` before you
-      typed; the search results page loads.
-- [ ] **FORM-02 Search in a table.** On `https://news.ycombinator.com/`, scroll to the bottom and
-      search with the "Search:" field.
-      *Expected:* hn.algolia.com opens with your query.
-- [ ] **FORM-03 Checkboxes, options and choices.** On a page with a form that has them (e.g. a
-      search engine's advanced search), use Enter on each.
-      *Expected:* checkboxes toggle `[x]`, picking an option clears the others in its group,
-      choices cycle through their options.
-- [ ] **FORM-04 Passwords.** On any login form, type into the password field.
-      *Expected:* only `•` characters are shown. (Logging in won't stick: there are no cookies.)
-- [ ] **FORM-06 Forms can't reach your local network.** Open your router's admin page (e.g.
-      `http://192.168.1.1/`) and use a form there.
-      *Expected:* it works: local pages may submit to local addresses. (The other direction, a
-      public site's form aimed at your router or `localhost`, is refused with "can't send data to
-      your local network"; that needs a hostile public page, so automated tests cover it.)
-- [ ] **FORM-07 Disguised links.** Open a page containing a link like
-      `https://paypal.com@example.com/` (e.g. add one to `evil.html` on the test server).
-      *Expected:* the bottom bar warns "⚠ really goes to example.com"; Enter refuses to follow it
-      and names the real site.
-- [ ] **FORM-08 Passwords in typed addresses.** Type `https://user:secret@example.com/` into the
-      address bar and press Enter, then press `b`.
-      *Expected:* the address bar shows `user:••••@`, and the bookmark is saved without the
-      user name or password.
-- [ ] **FORM-05 Typing keeps up.** Type quickly into a field on a large page (e.g. Wikipedia).
-      *Expected:* characters appear immediately.
-
-## History and paging
-
-- [ ] **HIST-01 Back keeps your place.** Scroll partway down a long page, follow a link, then go
-      back.
-      *Expected:* you return to the same place on the first page, not its top.
-- [ ] **HIST-02 Forward and reload.** After going back, press `Right` (or `L`); then press `r`.
-      *Expected:* forward returns to the second page where you left it; reload keeps your place.
-- [ ] **HIST-03 Paging keys.** On a long page, try `PageDown`/`PageUp`, `Ctrl+d`/`Ctrl+u`, `G`,
-      `g`.
-      *Expected:* screen / half-screen moves, bottom and top; `Ctrl+d` never starts a download.
-- [ ] **HIST-04 Links to /files/ pages.** Click an ordinary link whose address contains `/files/`
-      or `/download/` but ends in `.html` or `/`.
-      *Expected:* the page opens (no download prompt). Links ending in `.zip`, `.pdf` etc. still go
-      to the download prompt.
-
-## Settings and bookmarks
-
-- [ ] **SET-01 Settings template.** After the first run, open `settings.conf` in your config
-      folder (see the README).
-      *Expected:* it exists with every option commented out.
-- [ ] **SET-02 Search engine.** Press `e`, type some words and press Enter; then on the settings
-      page (`S`) choose DuckDuckGo, save, and search again.
-      *Expected:* Marginalia's results appear at the top of the page, then DuckDuckGo's. "Restore
-      defaults" asks to be pressed again, then puts Marginalia back.
-- [ ] **SET-03 Home page.** Set `home_page`, restart, and press `n`.
-      *Expected:* the browser and new tabs open the home page.
-- [ ] **SET-04 Bad settings.** Add a line `colour = blue` and restart.
-      *Expected:* the status line reports the problem; everything else works.
-- [ ] **SET-05 Bookmarks.** Press `b` on a page, then `B`.
-      *Expected:* the bookmarks page lists it; selecting it opens the page. Restart and press `B`:
-      it's still there. Pressing `b` on that page again removes it.
-- [ ] **SET-06 (priority) Bookmarks under the Linux sandbox.** On Linux with the sandbox active,
-      add a bookmark and restart.
-      *Expected:* the bookmark was saved (the settings folder is writable in the sandbox).
-- [ ] **SET-11 User-Agent.** Open `https://git.kernel.org/`.
-      *Expected:* the repository list, not an Anubis "Making sure you're not a bot" page. Then set
-      `user_agent` to a browser's string (see the template in settings.conf), restart, and open
-      it again: now the challenge page appears. Remove the setting afterwards.
+### Settings and bookmarks
 - [ ] **SET-12 (priority) Anubis.** Open `https://www.royalroad.com/` and a story page there.
       *Expected:* "Passing www.royalroad.com's bot check (Anubis), without JavaScript..." for a
       moment, then the real page (not "Making sure you're not a bot"). Later pages on the site
       load straight away. With `anubis = off`, the check's page shows and the status line says
       passing is turned off. This has only been tested against a simulated Anubis.
-- [ ] **SET-13 Copy mode.** On any page press `v`, then the arrow keys, then `y`.
-      *Expected:* the address bar's title reads COPY MODE (black on cyan) with the number of
-      characters selected, the bar explains the keys, and the selection is black on cyan and easy
-      to read. `y` reports "Copied N characters to the clipboard"; the address comes back.
-- [ ] **SET-14 Settings page.** Press `S`, change the home page and search engine, tick "Save
-      history", and choose Save settings.
-      *Expected:* "Settings saved"; settings.conf now has those lines; `n` opens the new home
-      page; a search uses the new engine. A home page like `javascript:x` is refused with "Not
-      saved: invalid home_page".
-- [ ] **SET-15 (priority) I2P lock.** On the settings page choose "Always I2P" and save, then press
-      `p`, restart rynx, and press `p` again.
-      *Expected:* I2P mode turns on at once; `p` says it's locked; after restarting, rynx starts
-      in I2P mode. "Always the clearweb" makes `p` do nothing the other way.
-- [ ] **SET-16 Archived copy.** Open an address that doesn't exist any more (or a site behind a
-      CAPTCHA) and press `A`.
-      *Expected:* the Internet Archive's latest copy opens (or the Archive says it has none).
-- [ ] **SET-07 Session history.** With no `history` setting, visit a few pages and press `s`.
-      *Expected:* the history page lists them newest first, under a date heading, with their
-      titles; selecting one opens it. Restart and press `s`: it's empty, and no `history.txt`
-      exists in the config folder.
-- [ ] **SET-08 Saved history.** Set `history = on`, restart, visit a few pages, quit and restart.
-      *Expected:* `s` still lists them. Visit one in I2P mode too: it's listed until you quit,
-      but never appears in `history.txt`.
-- [ ] **SET-09 Clearing history.** On the history page press `x`, then another key, then `x`
-      twice.
-      *Expected:* the first `x` asks to press again; the other key cancels; two `x` presses in a
-      row empty the page and `history.txt`.
-- [ ] **SET-10 (priority) History under the Linux sandbox.** On Linux with the sandbox active and
-      `history = on`, visit a page and restart.
-      *Expected:* the page is still in the history.
 
-## Scrolling and input
-
+### Scrolling and input
 - [ ] **SCROLL-01 (priority) Touchpad scrolling keeps up.** On the Moby Dick page, scroll
       hard with the touchpad, then stop.
       *Expected:* scrolling stops when your fingers stop. (A short glide can be macOS
       momentum scrolling, which the terminal sends itself.)
-- [ ] **SCROLL-02 Scrolling stops at the end.** Scroll to the very bottom of the book with
-      the wheel, then with the `Down` arrow.
-      *Expected:* both stop with the last line at the bottom of the view; scrolling back up
-      responds immediately.
-- [ ] **SCROLL-03 `j`/`k` continue from the view.** Scroll down a long way with the wheel,
-      then press `j` and `k`.
-      *Expected:* the cursor moves from what's on screen; the view doesn't jump to the top.
-- [ ] **SCROLL-04 Visual mode follows the cursor.** Press `v`, then hold `j` past the bottom
-      of the screen.
-      *Expected:* the view scrolls and the selection keeps extending.
-- [ ] **SCROLL-05 Wheel scrolling in visual mode.** Press `v`, then scroll down with the
-      wheel.
-      *Expected:* the selection extends with the view.
-- [ ] **SCROLL-06 Clicking below the page.** On a short page, click in the empty area below
-      the last line, then press `k`.
-      *Expected:* the cursor is on the last line and moves up from there.
-- [ ] **SCROLL-07 (priority) Quitting while moving the mouse.** Move your finger on the
-      touchpad and press `q` at the same time.
-      *Expected:* the browser exits immediately, with no `35;…M` garbage in your shell.
-- [ ] **SCROLL-08 Search survives a typo.** Press `/`, type something not on the page.
-      *Expected:* the search bar shows `[0/0]`. `Backspace` and retyping still works.
-- [ ] **SCROLL-09 Search jumps.** Search for a common word, press Enter, then `>` and `<`
-      several times.
-      *Expected:* the current match (green) moves and the view scrolls to keep it visible.
-- [ ] **SCROLL-10 Source view cursor.** Press `Shift+V`, then move with `h`/`j`/`k`/`l`.
-      *Expected:* the cursor highlights a single character, not the whole line.
 
-## Performance and memory
-
-- [ ] **PERF-01 Large pages.** With `cargo run --release`, open the Moby Dick page and scroll
-      through it.
-      *Expected:* it loads in well under a second and scrolls smoothly.
-- [ ] **PERF-02 Memory use.** With the Moby Dick page open, check the browser's memory in
-      Activity Monitor (or `top`).
-      *Expected:* tens of MB, not hundreds. In testing, rendering it used about 19MB (93MB
-      before the fix).
-- [ ] **PERF-03 Slow pages don't freeze the UI.** With the test servers running, open
-      `http://localhost:8000/slow.html` and, while the status reads "Rendering...", press
-      `Tab`, scroll, switch tabs, or press `q`.
-      *Expected:* everything responds immediately; "slow page" appears after a few seconds
-      (unless you quit, which exits at once).
-- [ ] **PERF-04 Help page after resizing.** In a new tab (`n`), resize the window.
-      *Expected:* the help text re-wraps to the new width instead of disappearing.
-
-## Downloads
-
-- [ ] **DL-01 Speed and filename.** Download a large file (tens of MB).
-      *Expected:* it downloads at normal network speed, and the popup shows the real
-      filename, not "Downloading...".
-- [ ] **DL-02 Query strings.** Download a link like `.../file.zip?token=abc`.
-      *Expected:* saved as `file.zip`.
-- [ ] **DL-03 Error pages aren't saved.** Download a link that returns 404.
-      *Expected:* "Download Failed" with the status code; no file in `~/Downloads`; the page
-      you were on stays visible.
-- [ ] **DL-04 No silent overwrite.** Download a file whose URL has no extension (e.g. an
-      image at `/photo`) while a file with the detected name (e.g. `photo.png`) already
-      exists in `~/Downloads`.
-      *Expected:* the new file is saved as `photo_1.png`; the existing file is untouched.
-- [ ] **DL-05 One download per tab.** Start a large download, then press `d` on another link
-      in the same tab.
-      *Expected:* "A download is already in progress in this tab".
+### Downloads
 - [ ] **DL-06 (priority) Gatekeeper checks downloads (macOS).** Download a small unsigned app
       or script (e.g. a `.zip` containing a `.app` from a GitHub release), then open it from
       Finder.
       *Expected:* macOS shows its "downloaded from the internet" warning.
       `xattr -l ~/Downloads/<file>` shows `com.apple.quarantine: 0081;...;rynx;`.
-- [ ] **DL-07 HTTP download links are upgraded.** Download a file from an `http://` link to a
-      public site.
-      *Expected:* it's fetched over `https://`. If the site has no HTTPS, it fails instead of
-      downloading over plain HTTP.
+      *Automated already:* the quarantine attribute is checked automatically (downloads::dl_06...);
+      macOS's warning when opening needs a person.
 
-- [ ] **DL-08 (priority) Resuming over I2P.** In I2P mode, start downloading a large file, then
-      stop the I2P router briefly (or switch Wi-Fi off and on).
-      *Expected:* "Download interrupted ...; resuming, attempt 1 of 5..." and the download
-      continues from where it was. If it gives up, downloading the same link again shows
-      "Resumes the earlier download (N MB saved)" and finishes it; the file opens correctly.
-## Clipboard
-
+### Clipboard
 - [ ] **CLIP-01 Copy and paste still work.** In Edit mode: `Ctrl+y` copies the address,
       `Ctrl+v` pastes, `Ctrl+k` replaces the address with the clipboard. In visual mode, `y`
       copies the selection.
-- [ ] **CLIP-02 (priority) No clipboard available (Linux).** Run with no display:
-      `DISPLAY= WAYLAND_DISPLAY= cargo run`, or over SSH.
-      *Expected:* the browser starts. Copying shows "Clipboard unavailable", and `Ctrl+k`
-      leaves the address alone.
 
-## Security
-
+### Security
 - [ ] **SEC-01 (priority) Escape codes are neutralised.** With the test servers running, open
       `http://localhost:8000/evil.html`. Best done in iTerm2, kitty or WezTerm, which honour
       clipboard escape codes.
@@ -391,58 +54,30 @@ Worth repeating after any dependency upgrade.
       cleared, and your clipboard is **not** replaced with "pwned". The page shows
       `Before]52;c;cHduZWQ= after[2J`, i.e. the escape characters removed and the rest as
       plain text.
-- [ ] **SEC-02 Link destinations are shown.** On any page, press `Tab` to select links.
-      *Expected:* the bottom border of the page shows `Link: <full URL>` for the selected
-      link, with relative links resolved. Look-alike domains appear as `xn--...` punycode.
-- [ ] **SEC-03 Non-web links are refused.** On `evil.html`, follow "mail link" and "js link"
-      with Enter, `t` and click.
-      *Expected:* "Unsupported link type: mailto" / "javascript"; no request, no new tab.
-- [ ] **SEC-04 `.i2p` blocked outside I2P mode.** With I2P mode off, follow "i2p link" on
-      `evil.html`.
-      *Expected:* an error page saying "Enable I2P mode (press p) to visit .i2p sites".
-- [ ] **SEC-05 Compression bomb rejected.** Open `http://localhost:8001/`.
-      *Expected:* "Page too large (over 10 MB)" without a big memory spike.
-- [ ] **SEC-06 Non-UTF-8 pages still render.** Visit an older site that declares
-      `charset=windows-1252` or `ISO-8859-1`.
-      *Expected:* accented characters display correctly.
-- [ ] **SEC-07 Revoked certificates are rejected.** Open `https://revoked.badssl.com/`.
-      *Expected:* an error mentioning the certificate is revoked (macOS and Windows).
+      *Automated already:* automated through a terminal emulator (security::sec_01...); iTerm2,
+      kitty or WezTerm themselves are worth a look.
 - [ ] **SEC-08 (priority) Names on your own network.** Open your router's or another device's
       local name (e.g. `http://router.lan/`, or a `.local` name), then `http://localtest.me/` (a
       public name that points at 127.0.0.1).
       *Expected:* the local name opens; localtest.me is refused with "points at 127.0.0.1 (or ::1),
       on this computer or your local network" and the hint about `local_names`.
-
+      *Automated already:* localtest.me is refused automatically (tests/dns.rs, live); a real local
+      name needs your network.
 - [ ] **SEC-09 (priority) Staying signed in.** On a site you have an account with, press `C` on
       its sign-in page, sign in, and follow a few links; quit and start rynx again.
       *Expected:* you stay signed in across pages, and after the restart if the site's sign-in
       offers "remember me". `about:cookies` lists the site; Forget there (or `C` on its page)
       signs you out. Without `C`, the sign-in page's status line says to press it first.
-
-- [ ] **SEC-10 Look-alike names.** Open `https://xn--pple-43d.com/` (Cyrillic а + "pple"; it may
-      not exist, which doesn't matter) and `https://xn--bcher-kva.de/`.
-      *Expected:* the first stays encoded in the address bar, with a red warning saying it passes
-      for аpple.com; the second shows as bücher.de, with no warning.
-
 - [ ] **SEC-11 (priority) Cookies encrypted in the keychain.** After SEC-09, look at
       `about:cookies`, the settings folder, and (macOS) Keychain Access, searching "rynx-browser".
       *Expected:* the page says "encrypted, with a key in the system keychain"; the folder has
       `cookies.enc` and no `cookies.json`; the keychain has a "rynx-browser" entry. Start rynx
       again: still signed in. On Linux, the same with GNOME Keyring or KWallet running; without
       one, the page says they're not encrypted and why.
+      *Automated already:* Linux is automated (CI's linux-system job); macOS's Keychain and its
+      prompt need a person.
 
-## Platform security
-
-- [ ] **PLAT-01 (priority) Linux sandbox status.** On Linux, start the browser.
-      *Expected:* the status line reads "Ready (filesystem sandbox active)". On kernels older than
-      5.13 it says the kernel lacks Landlock instead.
-- [ ] **PLAT-02 (priority) Linux sandbox doesn't break browsing.** With the sandbox active, browse
-      a few HTTPS sites, download a file, and copy text with `v`/`y`.
-      *Expected:* all of it works; the download lands in `~/Downloads`. If anything fails, note
-      the distribution, then retry with `--no-sandbox` to confirm the sandbox is the cause.
-- [ ] **PLAT-09 (priority) macOS sandbox status.** On macOS, start the browser.
-      *Expected:* the status line reads "Ready (filesystem sandbox active)". (Checked on macOS 27
-      during development; other versions untested.)
+### Platform security
 - [ ] **PLAT-10 (priority) macOS sandbox doesn't break browsing.** With the sandbox active, browse
       a few HTTPS sites, download a file, bookmark a page, copy text with `v`/`y`, and open a
       Gemini site.
@@ -450,28 +85,14 @@ Worth repeating after any dependency upgrade.
       from an unpacked release archive. If anything fails, note the macOS version and retry with
       `--no-sandbox`. `cargo test --test sandbox -- --ignored` checks HTTPS, certificate
       rejection, the clipboard and download tagging inside the sandbox automatically.
-- [ ] **PLAT-03 Linux download origin.** After a download, run
-      `getfattr -n user.xdg.origin.url ~/Downloads/<file>`.
-      *Expected:* it prints the URL the file came from.
+      *Automated already:* the suite runs sandboxed; a cargo install and a release archive need a
+      person.
 - [ ] **PLAT-04 (priority) Windows Mark of the Web.** On Windows, download a file, then in
       PowerShell run `Get-Content <file> -Stream Zone.Identifier`.
       *Expected:* it shows `ZoneId=3` and the download URL; opening a downloaded program
       triggers a SmartScreen check.
-- [ ] **PLAT-05 macOS "Where from".** On macOS, download a file and open Finder's Get Info on it.
-      *Expected:* "Where from" shows the download URL.
-- [ ] **PLAT-06 Device-name downloads.** Download a link whose file is named `con.txt` or `NUL`.
-      *Expected:* it's saved as `_con.txt` / `_NUL`.
-- [ ] **PLAT-07 Command-line options.** Run `rynx --version` and `rynx --help`.
-      *Expected:* the version (`0.2.0-beta.1`) and a usage summary; an unknown option prints an
-      error and the usage.
 
-## Releases
-
-- [ ] **REL-01 (priority) First beta release.** Push the version tag:
-      `git tag v0.2.0-beta.1 && git push origin main v0.2.0-beta.1`, then watch the **Release**
-      workflow in the Actions tab.
-      *Expected:* all six builds pass (tests run on five), and a **pre-release** appears on the
-      releases page with six archives, `SHA256SUMS`, and notes from CHANGELOG.md.
+### Releases
 - [ ] **REL-02 (priority) Verify a downloaded build.** Download your platform's archive and
       `SHA256SUMS`, then run `sha256sum -c SHA256SUMS --ignore-missing` and
       `gh attestation verify <archive> --repo rry-web/rynx-browser`.
@@ -480,57 +101,16 @@ Worth repeating after any dependency upgrade.
       binary, following the release notes for the unsigned-binary warning.
       *Expected:* it starts and browses normally.
 
-## Gemini, Gopher and feeds
-
-- [ ] **SMALL-01 Gemini.** Press `e`, type `gemini://geminiprotocol.net/` and press Enter.
-      *Expected:* the page shows with `⇒` before each link, one per line; `Tab` and Enter follow
-      them, and Back returns.
-- [ ] **SMALL-02 (priority) Gemini input.** Open a Gemini search engine such as
-      `gemini://geminispace.info/search`.
-      *Expected:* a page with the prompt and a text field. Press Enter, type some words, press
-      Enter: the results appear, and the address ends in `?your%20words`.
-- [ ] **SMALL-03 Gemini certificates.** After SMALL-01, open `gemini_known_hosts.txt` in the
-      config folder. Change the fingerprint after `geminiprotocol.net:1965` to zeros, save,
-      and reload the page (`r`).
-      *Expected:* the host was listed. With the changed fingerprint the page is refused with
-      "certificate has changed" (unless the site's certificate is CA-signed, in which case it
-      loads and the fingerprint is corrected). Delete the line to visit it normally again.
-- [ ] **SMALL-04 Gopher.** Open `gopher://gopher.floodgap.com/`.
-      *Expected:* the menu's text art lines up, items are marked `[DIR]`, `[TXT]`, `[ ? ]`;
-      a `[TXT]` item opens as text; a `[ ? ]` search item asks for words and shows results.
-- [ ] **SMALL-05 Not in I2P mode.** Press `p`, then open a `gemini://` or `gopher://` address.
-      *Expected:* "Gemini and Gopher aren't available in I2P mode", and nothing is fetched.
-- [ ] **SMALL-06 Feeds.** Open `https://blog.rust-lang.org/feed.xml`.
-      *Expected:* the blog's title, "Feed with N items", then each post with its date and text.
-      Open `https://blog.rust-lang.org/`: the first line reads `Feeds:` with a link to the feed.
-- [ ] **SMALL-07 Bookmarks and history.** Bookmark a Gemini page (`b`), then check `B` and `s`.
-      *Expected:* both list the page by its first heading, and selecting it opens it again.
-
-## Updates
-
-- [ ] **UPD-01 (priority) Updating a release build.** Install the release before the newest one
-      from its archive (not with Cargo), start it, and press `U`.
-      *Expected:* the newer version is shown with its notes. Choose "Download it": "downloaded and
-      checked". Quit and start rynx again: the status line says "Updated to rynx ..." and
-      `rynx --version` shows the new version.
-- [ ] **UPD-02 Cargo installs.** With rynx installed by `cargo install`, press `U`.
-      *Expected:* the page gives the `cargo install rynx --version ...` command, with no download
-      button.
-- [ ] **UPD-03 I2P.** Lock rynx to I2P in settings, restart, and press `U`, then "Check now".
-      *Expected:* no check is made; the status line says rynx is locked to I2P.
-
-## Key bindings
-
+### Key bindings
 - [ ] **KEY-01 (priority) Changed keys in a real terminal.** In `keys.conf` (settings folder),
       add `reload = F5`, `next_tab = Alt+l` and `quit = Ctrl+q only`, restart, and open two tabs.
       *Expected:* F5 reloads, Alt+l moves to the next tab, `q` does nothing and Ctrl+q quits.
       `about:keys` lists them. (macOS Terminal sends Alt only with "Use Option as Meta key" on,
       in Settings, Profiles, Keyboard.)
-- [ ] **KEY-02 Mistakes in keys.conf.** Add `relaod = F5`, restart.
-      *Expected:* the status line names the problem; `about:keys` lists it; every other key works.
+      *Automated already:* the keys are automated (settings::key_01_changed_keys); macOS Terminal's
+      Option-as-Meta setting is yours to check.
 
-## Images
-
+### Images
 - [ ] **IMG-01 (priority) Real images.** In iTerm2, Kitty, Ghostty or WezTerm, open a page with
       pictures (a Wikipedia article) and press `I`.
       *Expected:* "Loading N images...", then the pictures appear in the page under their
@@ -539,91 +119,165 @@ Worth repeating after any dependency upgrade.
 - [ ] **IMG-02 macOS Terminal.** The same in macOS Terminal.
       *Expected:* rynx starts normally (it doesn't ask this terminal about images), and pictures
       appear as rough coloured blocks.
-- [ ] **IMG-03 Loading settings.** Set "Load images" to "Those from the page's own site" and open
-      a news article.
-      *Expected:* the site's own pictures load by themselves; third-party ones stay placeholders
-      until `I`.
 
-## Cache and snapshots
-
-- [ ] **CACHE-01 Back is instant.** Open a page, follow a link, press Backspace.
-      *Expected:* the first page appears at once, without "Loading".
-- [ ] **CACHE-02 (priority) I2P site gone.** In I2P mode, open an `.i2p` site, then stop your
-      I2P router (or wait for the site to be down) and open it again.
-      *Expected:* the copy from the first visit, with "this is the copy saved ..." in the status
-      line, instead of the router's error page.
-- [ ] **CACHE-03 Disk cache.** On the settings page (`S`) tick "Keep pages on disk", save, visit a
-      few pages, quit, start rynx again, and open one of them with the network off.
-      *Expected:* the saved copy appears. The settings page shows the space used; Clear cache
-      empties it.
-- [ ] **CACHE-04 Snapshots.** On a site that changes often (a news front page), press `T`, then
-      visit the page again later and press `Z`.
-      *Expected:* "Tracking ..." at first; later "Saved a snapshot"; `Z` lists dated snapshots,
-      and opening an older one shows the page as it was, with a banner. `r` there loads the live
-      page.
-
-## Reader mode
-
+### Reader mode
 - [ ] **READ-01 News article.** Open an article on a news site (BBC News, Ars Technica) and press
       `R`.
       *Expected:* the headline, byline and story only; no site menus, related stories, share
       buttons or comments. The address bar shows READER. Each picture's description appears once.
-- [ ] **READ-02 Wikipedia.** Open a Wikipedia article and press `R`.
-      *Expected:* the article from its title to its references, without the side menus and the
-      table of contents tools.
-- [ ] **READ-03 Stays on.** With reader mode on, follow a link to another article, then open a
-      home page.
-      *Expected:* the second article opens in reader mode; the home page is shown whole, with
-      "Reader mode: no article found here" in the status line. `R` turns it off.
 
-## Site tools (MCP)
+### The real I2P network
 
-- [ ] **MCP-01 Listing tools.** Press `e` and type `https://mcp.deepwiki.com/mcp`.
-      *Expected:* a page saying it's an MCP server, with an "Open its tools" link (not a "Not
-      Acceptable" error). Following it shows "Tools from mcp.deepwiki.com" with three tools, each with a description, its
-      fields marked "(required)" where needed, and a Run button.
-- [ ] **MCP-02 (priority) Confirming a call.** In "read_wiki_structure", type `rust-lang/rust`
-      into repoName and press Enter.
-      *Expected:* a "Run a tool" box shows `"repoName": "rust-lang/rust"` and a warning that the
-      tool may change things (DeepWiki doesn't mark it read-only). Clicking and other keys do
-      nothing; `n` cancels with "nothing was sent". Enter again, then `y`: the list of wiki pages
-      appears, with nested items indented.
-- [ ] **MCP-03 Back and forward.** From the result press Backspace, then Right.
-      *Expected:* Back shows the tools again; Forward shows the same result without running the
-      tool again.
-- [ ] **MCP-04 Validation.** Run a tool with a required field empty.
-      *Expected:* the status line says to fill it in, and no box appears.
-- [ ] **MCP-05 Download prompt.** Press `d` on a link, then press `q` and `j`.
-      *Expected:* the download box stays open and nothing else happens; `n` closes it.
+- [ ] **I2P-05 (priority) Real I2P sites.** With i2pd installed, tick "Start i2pd when rynx
+      starts" in settings, restart, wait for "The I2P router is ready", then after 5 to 10
+      minutes press `p` and open `http://stats.i2p/`, and an `https://` clearweb site.
+      *Expected:* both load (the second through the router's outproxy); `pgrep i2pd` finds
+      nothing after quitting.
+      *Automated already:* everything about I2P mode against a fake proxy (`i2p::*`), the router
+      started and stopped with the real i2pd (`tests/i2pd.rs`, CI's Linux job too); only the
+      real network needs a person.
 
-## I2P (needs a local I2P router on 127.0.0.1:4444)
+## Automated
 
-- [ ] **I2P-01 (priority) Browsing in I2P mode.** Press `p` and load an `.i2p` site.
-      *Expected:* it loads through the proxy, and the URL bar shows `[I2P MODE ON]`.
-- [ ] **I2P-02 (priority) HTTPS through I2P.** In I2P mode, load an `https://` site (via an
-      outproxy, or an I2P site that offers HTTPS).
-      *Expected:* it loads. This connection uses rustls with TLS 1.2 minimum and the bundled
-      root certificates, and has not been tested against a real router.
-- [ ] **I2P-03 (priority) Jump services.** In I2P mode, open an `.i2p` address your router
-      doesn't know yet.
-      *Expected:* "Requesting Jump Helper..." and the jump services are tried in turn.
-      Clearweb sites with server errors never trigger a jump lookup.
-- [ ] **I2P-04 (priority) Toggling back.** Press `p` again and load a clearweb site.
-      *Expected:* it loads directly (URL bar shows `[Clearweb]`), over HTTPS.
+Each check and the test that covers it (`tests/terminal/` unless named otherwise).
 
-## I2P router (needs i2pd installed, and no other router running)
-
-- [ ] **ROUTER-01 (priority) Starting and stopping with rynx.** Tick "Start i2pd when rynx
-      starts" in settings, quit and start rynx.
-      *Expected:* the status line says the router is starting, then (within a few minutes) that
-      it's ready; the settings page shows its progress. After 5 to 10 minutes, `stats.i2p` loads
-      in I2P mode. Quit: `pgrep i2pd` finds nothing.
-- [ ] **ROUTER-02 Kept running.** Also tick "Keep it running", restart rynx, then quit.
-      *Expected:* i2pd is still running after quitting; starting rynx again says nothing about
-      starting it, and I2P sites load straight away.
-- [ ] **ROUTER-03 Another router.** With a router already running on 127.0.0.1:4444 (a hand-made
-      i2pd, or Java I2P), start rynx with the setting on.
-      *Expected:* the settings page says one was already running and rynx left it alone.
-- [ ] **ROUTER-04 Linux.** ROUTER-01 on Linux with i2pd from the distribution's packages, the
-      sandbox on.
-      *Expected:* as ROUTER-01; closing the terminal window while rynx runs also stops i2pd.
+| Check | What | Test |
+|---|---|---|
+| AUTO-01 | Test suite | CI (`.github/workflows/`) |
+| AUTO-02 | Dependency audit | CI (`.github/workflows/`) |
+| AUTO-03 | Live TLS checks | CI (`.github/workflows/`) |
+| AUTO-06 | I2P TLS settings | CI (`.github/workflows/`) |
+| AUTO-07 | Live Gemini, Gopher and feeds | CI (`.github/workflows/`) |
+| AUTO-08 | Live MCP server | CI (`.github/workflows/`) |
+| AUTO-04 | Extended fuzzing | CI (`.github/workflows/`) |
+| AUTO-05 | CI runs on GitHub | CI (`.github/workflows/`) |
+| SMOKE-01 | Key bindings | browsing::smoke_01_key_bindings |
+| SMOKE-02 | Mouse | browsing::smoke_02_mouse |
+| SMOKE-03 | Resizing | browsing::smoke_03_resizing_rewraps |
+| SMOKE-04 | Terminal restored on exit | main::it_starts_sandboxed_shows_the_start_page_and_quits_cleanly |
+| RENDER-01 | Documentation pages | pages::render_01_code; tests/live_sites::render_01_rust_documentation |
+| RENDER-02 | Data tables | pages::render_02_03_tables; tests/live_sites::render_02_read_02_wikipedia |
+| RENDER-03 | Narrow tables | pages::render_02_03_tables |
+| RENDER-04 | Layout tables | tests/live_sites::render_04_hacker_news |
+| RENDER-05 | Lists and quotes | pages::render_05_lists_and_quotes |
+| RENDER-06 | Plain-text files | pages::render_06_plain_text |
+| RENDER-07 | JSON | pages::render_07_json |
+| RENDER-08 | Non-text files | pages::render_08_non_text_files |
+| RENDER-11 | Site menus | pages::render_10_11_noscript_and_menus; tests/live_sites::render_11_site_menus |
+| RENDER-09 | Full width | pages::render_09_full_width |
+| RENDER-10 | No-JavaScript notices | pages::render_10_11_noscript_and_menus |
+| CRASH-01 | Stale link selection | browsing::crash_01_stale_link_selection |
+| CRASH-02 | Tiny terminal | browsing::crash_02_05_tiny_and_narrow_terminals |
+| CRASH-03 | Visual mode on an empty page | browsing::crash_03_copy_mode_on_an_empty_page |
+| CRASH-04 | Deeply nested lists | browsing::crash_04_06_deep_nesting |
+| CRASH-05 | Extremely narrow terminal | browsing::crash_02_05_tiny_and_narrow_terminals |
+| CRASH-06 | Extremely deep nesting | browsing::crash_04_06_deep_nesting |
+| NAV-01 | Back after typing a URL | browsing::nav_01_02_back_after_typing_and_esc |
+| NAV-02 | Esc cancels editing | browsing::nav_01_02_back_after_typing_and_esc |
+| NAV-03 | Redirects update the address bar | tests/live_sites::nav_03_redirects_upgraded |
+| NAV-04 | Chapter links jump within the page | browsing::nav_04_05_07_jumps_within_a_page |
+| NAV-05 | Back from a chapter | browsing::nav_04_05_07_jumps_within_a_page |
+| NAV-06 | Fragment on another page | browsing::nav_06_fragment_on_another_page |
+| NAV-07 | Fragment link in a new tab | browsing::nav_04_05_07_jumps_within_a_page |
+| NAV-08 | Redirects within a local server | browsing::nav_08_redirects_within_a_local_server |
+| NAV-09 | HTTP-only sites are not downgraded | tests/live_sites::nav_09_http_only_sites_arent_downgraded |
+| FORM-01 | Search box | forms::form_01_search_box |
+| FORM-02 | Search in a table | forms in tables and search fields: forms::form_01_search_box, pages::render_02_03_tables |
+| FORM-03 | Checkboxes, options and choices | forms::form_03_checkboxes_radios_and_choices |
+| FORM-04 | Passwords | forms::form_04_passwords_show_as_dots |
+| FORM-06 | Forms can't reach your local network | forms::form_06_local_pages_may_send_locally |
+| FORM-07 | Disguised links | forms::form_07_disguised_links |
+| FORM-08 | Passwords in typed addresses | forms::form_08_passwords_in_typed_addresses |
+| FORM-05 | Typing keeps up | forms::form_05_typing_keeps_up_on_a_large_page |
+| HIST-01 | Back keeps your place | browsing::hist_01_02_back_forward_and_reload_keep_your_place |
+| HIST-02 | Forward and reload | browsing::hist_01_02_back_forward_and_reload_keep_your_place |
+| HIST-03 | Paging keys | browsing::hist_03_paging_keys |
+| HIST-04 | Links to /files/ pages | browsing::hist_04_files_links_that_are_pages |
+| SET-01 | Settings template | settings::set_01_settings_template |
+| SET-02 | Search engine | settings::set_02_search_engine |
+| SET-03 | Home page | settings::set_03_home_page |
+| SET-04 | Bad settings | settings::set_04_bad_settings |
+| SET-05 | Bookmarks | settings::set_05_bookmarks |
+| SET-06 | Bookmarks under the Linux sandbox | CI's Linux job runs the terminal suite inside Landlock (settings::set_05_bookmarks) |
+| SET-11 | User-Agent | tests/live_sites::set_11_honest_identity_passes |
+| SET-13 | Copy mode | settings::set_13_copy_mode |
+| SET-14 | Settings page | settings::set_14_settings_page |
+| SET-15 | I2P lock | settings::set_15_network_lock |
+| SET-16 | Archived copy | tests/live_sites::set_16_archived_copy |
+| SET-07 | Session history | settings::set_07_session_history |
+| SET-08 | Saved history | i2p::set_08_i2p_visits_never_reach_history_txt; settings::set_08_09_saved_and_cleared_history |
+| SET-09 | Clearing history | settings::set_08_09_saved_and_cleared_history |
+| SET-10 | History under the Linux sandbox | CI's Linux job runs the terminal suite inside Landlock (settings::set_08_09_saved_and_cleared_history) |
+| SCROLL-02 | Scrolling stops at the end | scrolling::scroll_02_scrolling_stops_at_the_end |
+| SCROLL-03 | `j`/`k` continue from the view | scrolling::scroll_03_j_and_k_continue_from_the_view |
+| SCROLL-04 | Visual mode follows the cursor | scrolling::scroll_04_05_copy_mode_follows_the_cursor |
+| SCROLL-05 | Wheel scrolling in visual mode | scrolling::scroll_04_05_copy_mode_follows_the_cursor |
+| SCROLL-06 | Clicking below the page | scrolling::scroll_06_clicking_below_the_page |
+| SCROLL-07 | Quitting while moving the mouse | scrolling::scroll_07_quitting_while_the_mouse_moves |
+| SCROLL-08 | Search survives a typo | scrolling::scroll_08_search_survives_a_typo |
+| SCROLL-09 | Search jumps | scrolling::scroll_09_search_jumps |
+| SCROLL-10 | Source view cursor | scrolling::scroll_10_source_view_cursor |
+| PERF-01 | Large pages | browsing::perf_01_02_large_pages |
+| PERF-02 | Memory use | browsing::perf_01_02_large_pages |
+| PERF-03 | Slow pages don't freeze the UI | browsing::perf_03_slow_pages_dont_freeze |
+| PERF-04 | Help page after resizing | browsing::smoke_03_resizing_rewraps |
+| DL-01 | Speed and filename | downloads::dl_01_02_speed_filename_and_query_strings |
+| DL-02 | Query strings | downloads::dl_01_02_speed_filename_and_query_strings |
+| DL-03 | Error pages aren't saved | downloads::dl_03_error_pages_arent_saved |
+| DL-04 | No silent overwrite | downloads::dl_04_no_silent_overwrite |
+| DL-05 | One download per tab | downloads::dl_05_one_download_per_tab |
+| DL-06 | Gatekeeper checks downloads (macOS) | downloads::dl_06_plat_03_05_downloads_are_tagged |
+| DL-07 | HTTP download links are upgraded | the same https:// upgrade as NAV-09 (tests/live_sites.rs) and tests/integration_test.rs |
+| DL-08 | Resuming over I2P | i2p::dl_08_resuming_over_i2p |
+| CLIP-02 | No clipboard available (Linux) | linux::clip_02_no_clipboard |
+| SEC-01 | Escape codes are neutralised | security::sec_01_escape_codes_are_neutralised |
+| SEC-02 | Link destinations are shown | security::sec_02_link_destinations_are_shown |
+| SEC-03 | Non-web links are refused | security::sec_03_04_non_web_and_i2p_links |
+| SEC-04 | `.i2p` blocked outside I2P mode | security::sec_03_04_non_web_and_i2p_links |
+| SEC-05 | Compression bomb rejected | security::sec_05_compression_bomb |
+| SEC-06 | Non-UTF-8 pages still render | security::sec_06_non_utf8_pages |
+| SEC-07 | Revoked certificates are rejected | tests/live_tls.rs (weekly; macOS runners skip it, run it locally on a Mac) |
+| SEC-08 | Names on your own network | localtest.me is refused automatically (tests/dns.rs, live); a real local name needs your network |
+| SEC-10 | Look-alike names | security::sec_10_lookalike_names |
+| SEC-11 | Cookies encrypted in the keychain | Linux is automated (CI's linux-system job); macOS's Keychain and its prompt need a person |
+| PLAT-01 | Linux sandbox status | linux::plat_01_linux_sandbox_status |
+| PLAT-02 | Linux sandbox doesn't break browsing | CI's Linux job runs the whole terminal suite inside Landlock |
+| PLAT-09 | macOS sandbox status | the terminal suite runs sandboxed on macOS (main::it_starts_sandboxed...) |
+| PLAT-10 | macOS sandbox doesn't break browsing | the suite runs sandboxed; a cargo install and a release archive need a person |
+| PLAT-03 | Linux download origin | downloads::dl_06_plat_03_05_downloads_are_tagged |
+| PLAT-05 | macOS "Where from" | downloads::dl_06_plat_03_05_downloads_are_tagged |
+| PLAT-06 | Device-name downloads | downloads::plat_06_device_names |
+| PLAT-07 | Command-line options | downloads::plat_07_command_line_options |
+| REL-01 | First beta release | done: every release since beta.1 has run the workflow |
+| SMALL-01 | Gemini | small_web::small_01_07_gemini_pages |
+| SMALL-02 | Gemini input | small_web::small_02_gemini_input |
+| SMALL-03 | Gemini certificates | small_web::small_03_gemini_certificates |
+| SMALL-04 | Gopher | small_web::small_04_gopher |
+| SMALL-05 | Not in I2P mode | small_web::small_05_not_in_i2p_mode |
+| SMALL-06 | Feeds | small_web::small_06_feeds |
+| SMALL-07 | Bookmarks and history | small_web::small_01_07_gemini_pages |
+| UPD-01 | Updating a release build | main::an_update_is_found_downloaded_and_installed_at_the_next_start |
+| UPD-02 | Cargo installs | settings::upd_02_cargo_installs |
+| UPD-03 | I2P | settings::upd_03_no_checks_locked_to_i2p |
+| KEY-01 | Changed keys in a real terminal | settings::key_01_changed_keys |
+| KEY-02 | Mistakes in keys.conf | main::a_mistake_in_keys_conf_is_named |
+| IMG-03 | Loading settings | pages::img_03_own_images_load_by_themselves |
+| CACHE-01 | Back is instant | browsing::cache_01_back_is_instant |
+| CACHE-02 | I2P site gone | i2p::cache_02_i2p_site_gone |
+| CACHE-03 | Disk cache | pages::cache_03_disk_cache |
+| CACHE-04 | Snapshots | pages::cache_04_snapshots |
+| READ-02 | Wikipedia | tests/live_sites::render_02_read_02_wikipedia |
+| READ-03 | Stays on | browsing::read_03_reader_mode_stays_on |
+| MCP-01 | Listing tools | tools::mcp_01_listing_tools |
+| MCP-02 | Confirming a call | tools::mcp_02_03_confirming_a_call; tools::mcp_02_a_tool_that_may_change_things_says_so |
+| MCP-03 | Back and forward | tools::mcp_02_03_confirming_a_call |
+| MCP-04 | Validation | tools::mcp_04_validation |
+| MCP-05 | Download prompt | tools::mcp_05_download_box_keeps_its_keys |
+| I2P-01 | Browsing in I2P mode | i2p::i2p_01_04_browsing_through_the_proxy_and_back |
+| I2P-02 | HTTPS through I2P | i2p::i2p_02_https_goes_through_the_proxy |
+| I2P-03 | Jump services | i2p::i2p_03_jump_services |
+| I2P-04 | Toggling back | i2p::i2p_01_04_browsing_through_the_proxy_and_back |
+| ROUTER-01 | Starting and stopping with rynx | main::the_router_starts_with_rynx_and_stops_when_it_quits |
+| ROUTER-02 | Kept running | main::a_router_kept_running_outlives_rynx |
+| ROUTER-03 | Another router | main::a_router_already_running_is_left_alone |
+| ROUTER-04 | Linux | CI's linux-system job: the distribution's i2pd, tests/i2pd::the_real_i2pd_starts_reports_and_stops |

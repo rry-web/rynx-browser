@@ -5,3 +5,5 @@
 /fuzz/corpus
 /fuzz/artifacts
 /fuzz/coverage
+# cargo mutants output
+/mutants.out*

@@ -28,8 +28,12 @@ cargo llvm-cov --open        # test coverage, in the browser (needs cargo-llvm-c
 If another Rust (Homebrew's, say) comes first on PATH, run rustup's tools by path, as
 `scripts/check.sh` does: `PATH="$(dirname "$(rustup which cargo)"):$PATH" cargo llvm-cov`.
 
-[TESTING.md](TESTING.md) lists the checks that need a person (terminals, platforms, I2P), with
-results in [TEST_LOG.md](TEST_LOG.md).
+The terminal tests (`tests/terminal/`) run the real program in a pseudo-terminal, typing,
+clicking and reading the screen, against local servers; a new feature gets one there too.
+[TESTING.md](TESTING.md) maps every check to its test, and lists the few that need a person
+(real terminals, platforms, accounts, the I2P network), with results in
+[TEST_LOG.md](TEST_LOG.md). `cargo mutants --file src/<module>.rs` shows changes to a module no
+test notices.
 
 ## Changes
 
@@ -82,9 +86,10 @@ signature, and a message signed with the backup key, in `tests/data/`).
 
 | Workflow | When | What |
 | :--- | :--- | :--- |
-| `ci.yml` | every push and pull request, and weekly | tests (Linux, macOS, Windows), lints, renderer fuzzing, cargo deny, Rust 1.90, test coverage (on the run's summary page; below 80% fails) |
+| `ci.yml` | every push and pull request, and weekly | tests (Linux, macOS, Windows, including the terminal tests), the real i2pd and keychain on Linux, lints, renderer fuzzing, cargo deny, Rust 1.90, test coverage (on the run's summary page; below 80% fails) |
 | `fuzz.yml` | nightly | coverage-guided fuzzing of every target, keeping their corpora |
-| `live.yml` | weekly | the tests that need the internet |
+| `live.yml` | weekly | the tests that need the internet, including real sites laid out as rynx does |
+| `mutants.yml` | monthly | mutation testing of the security-critical modules (reports only) |
 | `release.yml` | a `v*` tag | checks, builds, signing, the GitHub release, crates.io |
 
 Dependabot proposes dependency and action updates weekly. Actions are pinned to commit hashes;

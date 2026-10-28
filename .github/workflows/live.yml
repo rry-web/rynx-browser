@@ -1,7 +1,7 @@
 name: Live tests
 
 # The tests that need the internet (TLS test servers, real Gemini, Gopher, feed and MCP servers,
-# GitHub's release list), weekly and on demand, so a change out in the world is noticed. They're
+# GitHub's release list, and real sites laid out as rynx does: tests/live_sites.rs), weekly and on demand, so a change out in the world is noticed. They're
 # allowed to fail without blocking anything; a failure here is a prompt to look, not a broken build.
 on:
   schedule:
@@ -36,7 +36,9 @@ jobs:
       - name: Tests that need the internet
         shell: bash
         run: |
-          skip="--skip the_browser_works_inside_the_macos_sandbox"
+          # The real i2pd and keychain need software these runners lack; CI's linux-system job
+          # installs it and runs them
+          skip="--skip the_browser_works_inside_the_macos_sandbox --skip the_real_i2pd --skip the_system_keychain"
           if [ "$RUNNER_OS" = macOS ]; then skip="$skip --skip revoked_certificate_is_rejected"; fi
           cargo test --locked -- --ignored $skip
       - name: The browser inside the macOS sandbox

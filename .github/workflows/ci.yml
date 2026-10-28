@@ -38,6 +38,34 @@ jobs:
       - name: Test (includes 100 randomised renderer cases)
         run: cargo test --locked
 
+  linux-system:
+    name: Linux with i2pd and a keychain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # The package starts its own router as a service; it's stopped, so the test's router (with
+      # rynx's options, on a free port) is the only one
+      - name: Install i2pd and GNOME Keyring
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y i2pd gnome-keyring dbus-x11
+          sudo systemctl disable --now i2pd || true
+      # ROUTER-04: the distribution's i2pd started, reporting progress and stopped by rynx
+      - name: The real i2pd
+        run: cargo test --locked --test i2pd -- --ignored the_real_i2pd_starts_reports_and_stops
+      # SEC-11 on Linux: the cookie key kept in the Secret Service (an unlocked test keyring)
+      - name: The Secret Service keychain
+        run: |
+          dbus-run-session -- sh -c '
+            echo test | gnome-keyring-daemon --unlock --components=secrets >/dev/null
+            cargo test --locked --test cookies -- --ignored the_system_keychain_keeps_the_key'
+
   lint:
     name: Formatting and lints
     runs-on: ubuntu-latest
