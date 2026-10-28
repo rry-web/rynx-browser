@@ -24,8 +24,14 @@ pub const LOG_FILE: &str = "i2pd.log";
 /// What i2pd prints before its log starts (a bad option, a missing file)
 const START_FILE: &str = "i2pd-start.txt";
 
-/// Where the router's data goes: its identity, what it knows of the network, its address book
+/// Where the router's data goes: its identity, what it knows of the network, its address book.
+/// On Linux it's under ~/.i2pd: distributions confine i2pd with AppArmor to that folder (and
+/// their own), so it couldn't write anywhere else. It's a folder of its own there, apart from a
+/// hand-made i2pd's data.
 pub fn data_dir() -> Option<PathBuf> {
+    if cfg!(target_os = "linux") {
+        return directories::BaseDirs::new().map(|dirs| dirs.home_dir().join(".i2pd").join("rynx-browser"));
+    }
     directories::ProjectDirs::from("", "", "rynx-browser").map(|dirs| dirs.data_dir().join("i2pd"))
 }
 

@@ -264,7 +264,10 @@ async fn the_settings_page_shows_the_router() {
 #[ignore]
 async fn the_real_i2pd_starts_reports_and_stops() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let dir = temp_dir("real");
+    // Where rynx keeps it, so a distribution's AppArmor profile for i2pd (which allows ~/.i2pd
+    // on Linux) lets it write there
+    let dir = rynx::i2pd::data_dir().unwrap().with_file_name(format!("rynx-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
     let port = free_port();
     let (state, router) =
         start_if_wanted(true, false, false, &format!("http://127.0.0.1:{}", port), None, Some(dir.clone()));
