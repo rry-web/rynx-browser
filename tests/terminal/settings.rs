@@ -347,3 +347,30 @@ fn the_keychain_is_asked_only_when_needed() {
     );
     asked.quit();
 }
+
+/// A chosen image method in a terminal not known to draw images: the terminal isn't asked about
+/// images (an unanswered question would take the first keys typed), and typing works at once;
+/// in Kitty it's asked
+#[test]
+fn a_chosen_image_method_doesnt_ask_other_terminals() {
+    let site = Site::new(&[("/", "<h1>Typed straight away</h1>")]);
+    let (_home, mut rynx) = started_with("forced-images", "image_protocol = kitty\n");
+    rynx.wait_for("RYNX BROWSER");
+    rynx.open(&site.url("/"));
+    rynx.wait_for("Typed straight away");
+    let output = rynx.output();
+    assert!(!output.contains("\x1b[5n") && !output.contains("\x1b_Gi="), "the terminal was asked about images");
+    rynx.quit();
+
+    let home = Home::new("kitty-asked");
+    home.settings("image_protocol = kitty\n");
+    let mut kitty = Rynx::start_with(
+        std::path::Path::new(env!("CARGO_BIN_EXE_rynx")),
+        &home,
+        &[],
+        &[("KITTY_WINDOW_ID", "1".to_string())],
+    );
+    kitty.wait_for("RYNX BROWSER");
+    assert!(kitty.output().contains("\x1b_Gi="), "Kitty wasn't asked");
+    kitty.quit();
+}

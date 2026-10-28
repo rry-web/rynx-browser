@@ -134,12 +134,11 @@ impl Images {
     /// question is answered on standard input, and a terminal that never answers would leave the
     /// asking thread waiting there, taking the user's first keys. Others get text blocks.
     pub fn detect(&mut self, setting: ImageProtocol) {
-        let ask = match setting {
-            ImageProtocol::Blocks => false,
-            ImageProtocol::Auto => draws_images(&|name| std::env::var(name).ok()),
-            // Chosen in the settings: the terminal is taken to support it, and so to answer
-            _ => true,
-        };
+        // Only a terminal known to draw images is asked, chosen method or not: the question is
+        // answered on standard input, and one a terminal doesn't answer in full would keep reading
+        // it, taking the first keys typed. A method chosen for another terminal is used with
+        // the usual cell size instead.
+        let ask = setting != ImageProtocol::Blocks && draws_images(&|name| std::env::var(name).ok());
         if ask && let Ok(picker) = Picker::from_query_stdio() {
             self.detected = picker.protocol_type();
             self.picker = picker;

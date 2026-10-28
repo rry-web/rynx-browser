@@ -8,6 +8,9 @@
   characters on screen as you scrolled, in Kitty especially (Wikipedia's language menu). Rows
   with such text are now written cell by cell, each at its own position.
 - When some of a page's images couldn't be shown, the status line named no reason.
+- With an image method chosen in settings, rynx asked any terminal about images at startup, and
+  one that didn't answer in full could take the first keys typed. Only terminals known to draw
+  images are asked now; a chosen method elsewhere is used without asking.
 - rynx asked the system keychain for its cookie key at every start, even if no site had ever been
   allowed cookies, so macOS asked about it (after each update, too) for nothing. The keychain is
   now asked only once a site keeps cookies, and `cookie_encryption = off` (or the settings page)
