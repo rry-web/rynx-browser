@@ -88,9 +88,12 @@ fn the_router_gets_only_what_rynx_needs() {
         keep: false,
     };
     let args = plan.args();
+    // Paths as this system joins them
+    let datadir = format!("--datadir={}", Path::new("/data/i2pd").display());
+    let conf = format!("--conf={}", Path::new("/data/i2pd").join("i2pd.conf").display());
     for expected in [
-        "--datadir=/data/i2pd",
-        "--conf=/data/i2pd/i2pd.conf",
+        datadir.as_str(),
+        conf.as_str(),
         "--httpproxy.address=127.0.0.1",
         "--httpproxy.port=4444",
         "--socksproxy.enabled=0",
