@@ -120,7 +120,8 @@ fn the_router_starts_with_rynx_and_stops_when_it_quits() {
     home.settings(&format!(
         "i2p_router = start\ni2pd_path = {}\ni2p_proxy = http://127.0.0.1:{}\n",
         program.display(),
-        free_port()
+        // Nothing listens on port 1: a "free" port could be taken by another test meanwhile
+        1
     ));
     let mut rynx = Rynx::start(&home);
     rynx.wait_for("Starting the I2P router");
@@ -142,7 +143,8 @@ fn a_router_kept_running_outlives_rynx() {
     home.settings(&format!(
         "i2p_router = start\ni2p_router_keep = on\ni2pd_path = {}\ni2p_proxy = http://127.0.0.1:{}\n",
         program.display(),
-        free_port()
+        // Nothing listens on port 1: a "free" port could be taken by another test meanwhile
+        1
     ));
     let mut rynx = Rynx::start(&home);
     rynx.wait_for("Starting the I2P router");

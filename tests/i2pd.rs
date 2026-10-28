@@ -29,6 +29,10 @@ fn alive(pid: u32) -> bool {
 }
 
 /// A free port on 127.0.0.1
+/// An address nothing listens on (tests never open port 1), for a router that isn't running.
+/// A "free" port wouldn't do: another test running at the same time could take it meanwhile.
+const NOTHING_LISTENING: &str = "http://127.0.0.1:1";
+
 fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
 }
@@ -115,7 +119,7 @@ fn the_router_gets_only_what_rynx_needs() {
 #[test]
 fn nothing_is_started_unless_it_should_be() {
     let dir = temp_dir("decide");
-    let proxy = format!("http://127.0.0.1:{}", free_port());
+    let proxy = NOTHING_LISTENING.to_string();
     let missing = dir.join("no-such-i2pd");
     let decide = |wanted, clearweb, proxy: &str| {
         start_if_wanted(wanted, false, clearweb, proxy, Some(&missing), Some(dir.clone())).0
@@ -151,7 +155,7 @@ fn a_router_rynx_starts_is_stopped_when_rynx_quits() {
     let dir = temp_dir("start");
     let program = fake_i2pd(&dir, "echo \"$@\" > \"$(dirname \"$0\")/args.txt\"\nexec sleep 30");
     let data = dir.join("data");
-    let proxy = format!("http://127.0.0.1:{}", free_port());
+    let proxy = NOTHING_LISTENING.to_string();
     let (state, router) = start_if_wanted(true, false, false, &proxy, Some(&program), Some(data.clone()));
     let RouterState::Started { pid, keep: false, .. } = state else { panic!("{state:?}") };
     let router = router.expect("a router");
@@ -171,7 +175,7 @@ fn a_router_rynx_starts_is_stopped_when_rynx_quits() {
 fn a_router_kept_running_outlives_rynx() {
     let dir = temp_dir("keep");
     let program = fake_i2pd(&dir, "exec sleep 30");
-    let proxy = format!("http://127.0.0.1:{}", free_port());
+    let proxy = NOTHING_LISTENING.to_string();
     let (state, router) = start_if_wanted(true, true, false, &proxy, Some(&program), Some(dir.join("data")));
     let RouterState::Started { pid, keep: true, .. } = state else { panic!("{state:?}") };
     router.unwrap().stop();
@@ -185,7 +189,7 @@ fn a_router_kept_running_outlives_rynx() {
 fn a_router_that_wont_start_says_why() {
     let dir = temp_dir("fail");
     let program = fake_i2pd(&dir, "echo 'missing/unreadable config file: x' >&2\nexit 1");
-    let proxy = format!("http://127.0.0.1:{}", free_port());
+    let proxy = NOTHING_LISTENING.to_string();
     let (state, router) = start_if_wanted(true, false, false, &proxy, Some(&program), Some(dir.join("data")));
     assert!(router.is_none());
     assert_eq!(state, RouterState::Failed("missing/unreadable config file: x".to_string()));
