@@ -362,16 +362,18 @@ impl App {
             self.update_image_sizes(index);
         }
         if done {
-            let failed = self.page_images(index).iter().filter(|(u, _)| self.images.failed.contains_key(u)).count();
+            // Why the page's images failed (the image finished last may not be one of them)
+            let reasons: Vec<String> =
+                self.page_images(index).iter().filter_map(|(u, _)| self.images.failed.get(u).cloned()).collect();
             let tab = &mut self.tabs[index];
-            if tab.status_message.starts_with("Loading") || failed > 0 {
-                tab.status_message = match failed {
+            if tab.status_message.starts_with("Loading") || !reasons.is_empty() {
+                tab.status_message = match reasons.len() {
                     0 => String::from("Images loaded (i views one full screen)"),
-                    n => format!(
-                        "Images loaded; {} couldn't be: {}",
-                        n,
-                        self.images.failed.get(&url).cloned().unwrap_or_default()
-                    ),
+                    n => {
+                        let first = &reasons[0];
+                        let others = if reasons.iter().all(|r| r == first) { "" } else { ", among other reasons" };
+                        format!("Images loaded; {} couldn't be: {}{}", n, first, others)
+                    }
                 };
             }
         }

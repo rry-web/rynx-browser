@@ -3373,6 +3373,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-rustls",
+ "unicode-segmentation",
  "unicode-width",
  "url",
  "vt100",

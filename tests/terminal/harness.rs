@@ -93,7 +93,7 @@ impl vt100::Callbacks for Requests {
 /// rynx running in a pseudo-terminal
 pub struct Rynx {
     pub child: Box<dyn portable_pty::Child + Send + Sync>,
-    writer: Box<dyn Write + Send>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
     master: Box<dyn MasterPty + Send>,
     screen: Arc<Mutex<vt100::Parser<Requests>>>,
     /// Everything it wrote
@@ -128,7 +128,11 @@ impl Rynx {
         let child = pty.slave.spawn_command(command).expect("rynx starts");
         drop(pty.slave);
         let mut reader = pty.master.try_clone_reader().unwrap();
-        let writer = pty.master.take_writer().unwrap();
+        let writer = Arc::new(Mutex::new(pty.master.take_writer().unwrap()));
+        // Asked as Kitty (KITTY_WINDOW_ID set), the terminal answers its image questions as Kitty
+        // does; otherwise, like a terminal without images, only the status question
+        let as_kitty = env.iter().any(|(key, _)| *key == "KITTY_WINDOW_ID");
+        let answerer = Arc::clone(&writer);
         let screen = Arc::new(Mutex::new(vt100::Parser::new_with_callbacks(
             ROWS.try_into().unwrap(),
             COLS.try_into().unwrap(),
@@ -145,6 +149,22 @@ impl Rynx {
                 }
                 into_screen.lock().unwrap().process(&buffer[..n]);
                 into_output.lock().unwrap().extend_from_slice(&buffer[..n]);
+                let chunk = String::from_utf8_lossy(&buffer[..n]);
+                if chunk.contains("\x1b[5n") {
+                    let mut answer = String::new();
+                    if as_kitty {
+                        let id = chunk
+                            .split("\x1b_Gi=")
+                            .nth(1)
+                            .and_then(|r| r.split(|c: char| !c.is_ascii_digit()).next())
+                            .unwrap_or("1");
+                        answer.push_str(&format!("\x1b_Gi={id};OK\x1b\\\x1b[6;20;10t"));
+                    }
+                    answer.push_str("\x1b[?62;22c\x1b[0n");
+                    let mut writer = answerer.lock().unwrap();
+                    let _ = writer.write_all(answer.as_bytes());
+                    let _ = writer.flush();
+                }
             }
         });
         Rynx { child, writer, master: pty.master, screen, output }
@@ -229,8 +249,8 @@ impl Rynx {
 
     /// Type text (each byte as a key press)
     pub fn keys(&mut self, keys: &str) {
-        self.writer.write_all(keys.as_bytes()).unwrap();
-        self.writer.flush().unwrap();
+        self.writer.lock().unwrap().write_all(keys.as_bytes()).unwrap();
+        self.writer.lock().unwrap().flush().unwrap();
         // Time to handle each, as a person typing would give it
         std::thread::sleep(Duration::from_millis(120));
     }
@@ -239,8 +259,8 @@ impl Rynx {
     pub fn type_text(&mut self, text: &str) {
         for ch in text.chars() {
             let mut buffer = [0u8; 4];
-            self.writer.write_all(ch.encode_utf8(&mut buffer).as_bytes()).unwrap();
-            self.writer.flush().unwrap();
+            self.writer.lock().unwrap().write_all(ch.encode_utf8(&mut buffer).as_bytes()).unwrap();
+            self.writer.lock().unwrap().flush().unwrap();
             std::thread::sleep(Duration::from_millis(15));
         }
         std::thread::sleep(Duration::from_millis(100));
@@ -294,11 +314,11 @@ impl Rynx {
         // SGR mouse reports, which rynx asks for: press, then release
         let press = format!("\x1b[<{};{};{}M", button, col + 1, row + 1);
         let release = format!("\x1b[<{};{};{}m", button, col + 1, row + 1);
-        self.writer.write_all(press.as_bytes()).unwrap();
+        self.writer.lock().unwrap().write_all(press.as_bytes()).unwrap();
         if button < 64 {
-            self.writer.write_all(release.as_bytes()).unwrap();
+            self.writer.lock().unwrap().write_all(release.as_bytes()).unwrap();
         }
-        self.writer.flush().unwrap();
+        self.writer.lock().unwrap().flush().unwrap();
         std::thread::sleep(Duration::from_millis(120));
     }
 
@@ -338,9 +358,9 @@ impl Rynx {
         let button = if steps > 0 { 65 } else { 64 };
         for _ in 0..steps.abs() {
             let press = format!("\x1b[<{};{};{}M", button, COLS / 2, ROWS / 2);
-            self.writer.write_all(press.as_bytes()).unwrap();
+            self.writer.lock().unwrap().write_all(press.as_bytes()).unwrap();
         }
-        self.writer.flush().unwrap();
+        self.writer.lock().unwrap().flush().unwrap();
         std::thread::sleep(Duration::from_millis(150));
     }
 

@@ -241,6 +241,22 @@ async fn image_bombs_and_svg_are_refused() {
     assert!(app.current_tab().status_message.contains("couldn't be"), "{}", app.current_tab().status_message);
 }
 
+/// The status line names why a page's images failed, even when the image finishing last loaded
+#[tokio::test]
+async fn the_reason_images_failed_is_named() {
+    let server = picture_site().await;
+    let mut app = test_app(Settings::default());
+    show(
+        &mut app,
+        &format!("{}/", server.uri()),
+        "<img src='/logo.svg' alt='Logo'><img src='/pic.png' alt='A picture'>",
+    );
+    press(&mut app, KeyCode::Char('I'));
+    images_arrive(&mut app, 2).await;
+    let status = app.current_tab().status_message.clone();
+    assert!(status.starts_with("Images loaded; 1 couldn't be: SVG images can't be shown yet"), "{status}");
+}
+
 #[test]
 fn image_settings_are_parsed() {
     let (settings, problems) = Settings::parse("images = all\nimage_display = viewer\nimage_protocol = blocks");

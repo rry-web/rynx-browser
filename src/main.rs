@@ -307,8 +307,24 @@ async fn run_app<B: Backend<Error = io::Error>>(terminal: &mut Terminal<B>, mut 
     let mut size = terminal.size()?;
     // Lay out the start page for the actual terminal width
     app.resize_all_tabs(size.width);
+    let mut exact = rynx::exact_rows::ExactRows::default();
+    let mut drawn_size = size;
     loop {
-        terminal.draw(|f| ui(f, &app))?;
+        let frame = terminal.draw(|f| ui(f, &app))?;
+        // Rows with text terminals disagree on the width of are written again cell by cell
+        if frame.area.width != drawn_size.width || frame.area.height != drawn_size.height {
+            exact.reset();
+            drawn_size = ratatui::layout::Size::new(frame.area.width, frame.area.height);
+        }
+        let rewrite = exact.cells_to_rewrite(frame.buffer);
+        if !rewrite.is_empty() {
+            let backend = terminal.backend_mut();
+            // One cell per call: the backend positions the cursor at the start of each
+            for (x, y, cell) in &rewrite {
+                backend.draw(std::iter::once((*x, *y, cell)))?;
+            }
+            backend.flush()?;
+        }
         // Images the frame needed that had been dropped from memory are decoded again
         app.restore_missing_images();
 

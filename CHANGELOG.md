@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Text in scripts whose width terminals disagree about (Indic and Myanmar vowel signs and
+  conjuncts, emoji sequences, zero-width characters) shifted the rest of its line and left stray
+  characters on screen as you scrolled, in Kitty especially (Wikipedia's language menu). Rows
+  with such text are now written cell by cell, each at its own position.
+- When some of a page's images couldn't be shown, the status line named no reason.
+
 ## [0.2.0-beta.9]
 
 (Tagged as 0.2.0-beta.8 at first, but that release's builds failed and nothing was published.)
