@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0-beta.7]
 
 ### Added
 - rynx can start the I2P router, i2pd, when it starts (`i2p_router = start`, or the settings
