@@ -54,6 +54,8 @@ pub struct BrowserTab {
     pub(super) render_pending_width: Option<u16>,
     /// The page just loaded goes into the history once laid out, when its <title> is known
     pub record_visit_after_render: bool,
+    /// A jump within the page selected the first link after it: Tab goes there, not past it
+    pub tab_from_jump: bool,
     /// #fragment to jump to once the page has been laid out
     jump_after_render: Option<String>,
     /// Scroll and cursor position to return to when the page being loaded arrives (going back,
@@ -166,6 +168,7 @@ impl BrowserTab {
         // Tab continues from the jump target rather than wherever the selection was
         if let Some(i) = self.link_regions.iter().position(|l| l.line_index >= line) {
             self.selected_link_index = i;
+            self.tab_from_jump = true;
         }
         true
     }
@@ -182,6 +185,7 @@ impl BrowserTab {
 
     /// Mark the shown content as changed (e.g. toggling source view)
     pub fn content_changed(&mut self) {
+        self.tab_from_jump = false;
         self.content_version += 1;
         self.rendered_content.clear();
         self.link_regions.clear();
@@ -343,6 +347,7 @@ impl BrowserTab {
             render_in_flight: None,
             render_pending_width: None,
             record_visit_after_render: false,
+            tab_from_jump: false,
             jump_after_render: None,
             pending_restore: None,
             restore_after_render: None,

@@ -291,8 +291,13 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
         // LINK NAVIGATION (Tab)
         KeyCode::Tab | KeyCode::BackTab => {
             let tab = app.current_tab();
+            // After a jump within the page, Tab goes to the first link after the jump target
+            // (already selected, but off screen), and Shift+Tab to the one before it
+            let after_jump = std::mem::take(&mut tab.tab_from_jump);
             if !tab.link_regions.is_empty() {
-                if key.code == KeyCode::Tab {
+                if key.code == KeyCode::Tab && after_jump {
+                    // Selected already
+                } else if key.code == KeyCode::Tab {
                     tab.selected_link_index = (tab.selected_link_index + 1) % tab.link_regions.len();
                 } else {
                     //backward tab traversal
@@ -755,8 +760,16 @@ fn handle_search_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
             tab.clear_search();
         }
         KeyCode::Enter => {
-            // Search is already performed during typing, just exit search mode
+            // Search is already performed during typing, just exit search mode, saying what it found
             tab.input_mode = InputMode::Normal;
+            tab.status_message = match &tab.search_state {
+                Some(s) if s.matches.len() == 1 => format!("1 match for \"{}\"", s.query),
+                Some(s) if !s.matches.is_empty() => {
+                    format!("{} matches for \"{}\": > and < move between them", s.matches.len(), s.query)
+                }
+                Some(s) => format!("No matches for \"{}\"", s.query),
+                None => String::from("Ready"),
+            };
         }
         KeyCode::Char(c) => {
             if let Some(search_state) = &mut tab.search_state {

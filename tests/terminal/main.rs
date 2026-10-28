@@ -4,209 +4,16 @@
 //! and it has no sandbox to check).
 #![cfg(unix)]
 
-use portable_pty::{CommandBuilder, PtySize, native_pty_system};
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+mod harness;
+use harness::*;
 
-const ROWS: u16 = 40;
-const COLS: u16 = 140;
+use std::path::PathBuf;
+use std::time::Duration;
 
-/// A home folder of its own, removed afterwards
-struct Home(PathBuf);
-
-impl Home {
-    fn new(name: &str) -> Home {
-        let dir = std::env::temp_dir().join(format!("rynx-terminal-{}-{}", name, std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join("Downloads")).unwrap();
-        // Canonical, as the sandbox compares real paths (/var is /private/var on macOS)
-        Home(dir.canonicalize().unwrap())
-    }
-
-    /// Where rynx keeps its settings in this home
-    fn config(&self) -> PathBuf {
-        let dir = if cfg!(target_os = "macos") {
-            self.0.join("Library/Application Support/rynx-browser")
-        } else {
-            self.0.join(".config/rynx-browser")
-        };
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
-    }
-
-    /// settings.conf with these lines, plus no update checks unless they're asked for
-    fn settings(&self, lines: &str) {
-        let mut text = format!("download_dir = {}\n", self.0.join("Downloads").display());
-        if !lines.contains("updates =") {
-            text.push_str("updates = off\n");
-        }
-        text.push_str(lines);
-        std::fs::write(self.config().join("settings.conf"), text).unwrap();
-    }
-}
-
-impl Drop for Home {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-/// rynx running in a pseudo-terminal
-struct Rynx {
-    child: Box<dyn portable_pty::Child + Send + Sync>,
-    writer: Box<dyn Write + Send>,
-    screen: Arc<Mutex<vt100::Parser>>,
-    /// Everything it wrote, for a failure's report
-    output: Arc<Mutex<Vec<u8>>>,
-}
-
-impl Rynx {
-    fn start(home: &Home) -> Rynx {
-        Rynx::start_program(Path::new(env!("CARGO_BIN_EXE_rynx")), home, &[])
-    }
-
-    fn start_program(program: &Path, home: &Home, env: &[(&str, String)]) -> Rynx {
-        let pty = native_pty_system()
-            .openpty(PtySize { rows: ROWS, cols: COLS, pixel_width: 0, pixel_height: 0 })
-            .expect("a pseudo-terminal");
-        let mut command = CommandBuilder::new(program);
-        // A clean environment: the terminal running the tests mustn't change what rynx does
-        command.env_clear();
-        command.env("HOME", &home.0);
-        command.env("TERM", "xterm-256color");
-        command.env("LANG", "en_US.UTF-8");
-        command.env("PATH", std::env::var("PATH").unwrap_or_default());
-        for (key, value) in env {
-            command.env(key, value);
-        }
-        command.cwd(&home.0);
-        let child = pty.slave.spawn_command(command).expect("rynx starts");
-        drop(pty.slave);
-        let mut reader = pty.master.try_clone_reader().unwrap();
-        let writer = pty.master.take_writer().unwrap();
-        let screen = Arc::new(Mutex::new(vt100::Parser::new(ROWS.try_into().unwrap(), COLS.try_into().unwrap(), 0)));
-        let output = Arc::new(Mutex::new(Vec::new()));
-        let (into_screen, into_output) = (Arc::clone(&screen), Arc::clone(&output));
-        std::thread::spawn(move || {
-            // Keeps the pty open while it reads
-            let _master = pty.master;
-            let mut buffer = [0u8; 8192];
-            while let Ok(n) = reader.read(&mut buffer) {
-                if n == 0 {
-                    break;
-                }
-                into_screen.lock().unwrap().process(&buffer[..n]);
-                into_output.lock().unwrap().extend_from_slice(&buffer[..n]);
-            }
-        });
-        Rynx { child, writer, screen, output }
-    }
-
-    /// The screen's text, one line per row
-    fn screen(&self) -> String {
-        self.screen.lock().unwrap().screen().contents()
-    }
-
-    /// The screen's text with runs of spaces squeezed, so words wrapped in borders still match
-    fn text(&self) -> String {
-        self.screen().split_whitespace().collect::<Vec<_>>().join(" ")
-    }
-
-    /// Wait until `wanted` is on the screen
-    fn wait_for(&self, wanted: &str) {
-        self.wait_for_within(wanted, Duration::from_secs(15));
-    }
-
-    fn wait_for_within(&self, wanted: &str, limit: Duration) {
-        let start = Instant::now();
-        while start.elapsed() < limit {
-            if self.text().contains(wanted) {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        panic!("\"{wanted}\" never appeared. The screen:\n{}", self.screen());
-    }
-
-    /// Type text (each byte as a key press)
-    fn keys(&mut self, keys: &str) {
-        self.writer.write_all(keys.as_bytes()).unwrap();
-        self.writer.flush().unwrap();
-        // Time to handle each, as a person typing would give it
-        std::thread::sleep(Duration::from_millis(150));
-    }
-
-    /// Type an address into the address bar and go
-    fn open(&mut self, address: &str) {
-        self.keys("e");
-        // Ctrl+U clears what's there
-        self.keys("\u{15}");
-        self.keys(address);
-        self.keys("\r");
-    }
-
-    /// Wait for it to exit, returning whether it exited cleanly
-    fn wait_exit(&mut self) -> bool {
-        let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(10) {
-            if let Ok(Some(status)) = self.child.try_wait() {
-                return status.success();
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        panic!("rynx didn't exit. The screen:\n{}", self.screen());
-    }
-
-    /// Whether the terminal was given back as it was: out of the alternate screen
-    fn left_terminal_as_found(&self) -> bool {
-        // Leaving the alternate screen (?1049l) comes after everything drawn there
-        let output = self.output.lock().unwrap();
-        let text = String::from_utf8_lossy(&output);
-        text.rfind("\x1b[?1049l").is_some_and(|left| text.rfind("\x1b[?1049h").is_some_and(|entered| left > entered))
-    }
-}
-
-impl Drop for Rynx {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-    }
-}
-
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
-}
-
-/// A small local web site, served on another thread for as long as it's kept
-struct Site {
-    server: wiremock::MockServer,
-    _runtime: tokio::runtime::Runtime,
-}
-
-impl Site {
-    fn new(pages: &[(&str, &str)]) -> Site {
-        use wiremock::matchers::{method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let server = runtime.block_on(async {
-            let server = MockServer::start().await;
-            for (at, html) in pages {
-                Mock::given(method("GET"))
-                    .and(path(*at))
-                    .respond_with(ResponseTemplate::new(200).set_body_raw(html.as_bytes().to_vec(), "text/html"))
-                    .mount(&server)
-                    .await;
-            }
-            server
-        });
-        Site { server, _runtime: runtime }
-    }
-
-    fn url(&self, path: &str) -> String {
-        format!("{}{}", self.server.uri(), path)
-    }
-}
+mod browsing;
+mod forms;
+mod security;
+mod settings;
 
 #[test]
 fn it_starts_sandboxed_shows_the_start_page_and_quits_cleanly() {
@@ -299,14 +106,6 @@ fn router_pid(home: &Home) -> u32 {
     panic!("the router never started");
 }
 
-fn alive(pid: u32) -> bool {
-    std::process::Command::new("kill")
-        .args(["-0", &pid.to_string()])
-        .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success())
-}
-
 #[test]
 fn the_router_starts_with_rynx_and_stops_when_it_quits() {
     let home = Home::new("router");
@@ -373,7 +172,7 @@ fn a_file_link_is_downloaded_after_asking() {
     {
         use wiremock::matchers::path;
         use wiremock::{Mock, ResponseTemplate};
-        site._runtime.block_on(
+        site.runtime.block_on(
             Mock::given(path("/files/report.zip"))
                 .respond_with(
                     ResponseTemplate::new(200).set_body_raw(b"PK\x03\x04 zip bytes".to_vec(), "application/zip"),
@@ -416,7 +215,7 @@ fn a_site_allowed_cookies_keeps_you_signed_in_across_restarts() {
         "/login",
         "<form method=post action=/login><input name=user value=me><input type=password name=pw value=x><button>Sign in</button></form>",
     )]);
-    site._runtime.block_on(async {
+    site.runtime.block_on(async {
         Mock::given(method("POST"))
             .and(path("/login"))
             .respond_with(
@@ -501,7 +300,7 @@ fn an_update_is_found_downloaded_and_installed_at_the_next_start() {
             { "name": "SHA256SUMS.sig", "browser_download_url": format!("{base}/sig") },
         ]
     }]);
-    site._runtime.block_on(async {
+    site.runtime.block_on(async {
         for (at, body) in [
             ("/releases", releases.to_string().into_bytes()),
             ("/program", new_program.clone().into_bytes()),
@@ -517,7 +316,7 @@ fn an_update_is_found_downloaded_and_installed_at_the_next_start() {
     let public: String = key.public_key().as_ref().iter().map(|b| format!("{:02x}", b)).collect();
     let env = [("RYNX_TEST_UPDATE_API", format!("{base}/releases")), ("RYNX_TEST_RELEASE_KEY", public)];
 
-    let mut rynx = Rynx::start_program(&program, &home, &env);
+    let mut rynx = Rynx::start_with(&program, &home, &[], &env);
     rynx.wait_for("rynx 99.0.0 is available");
     rynx.keys("U");
     rynx.wait_for("Everything is better.");
@@ -528,7 +327,7 @@ fn an_update_is_found_downloaded_and_installed_at_the_next_start() {
     assert!(rynx.wait_exit());
 
     // The next start installs it before anything else, and starts it
-    let next = Rynx::start_program(&program, &home, &env);
+    let next = Rynx::start_with(&program, &home, &[], &env);
     next.wait_for("the new rynx, 99.0.0");
     assert_eq!(std::fs::read_to_string(&program).unwrap(), new_program);
     drop(next);
