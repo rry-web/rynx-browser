@@ -14,6 +14,9 @@
 - With a site unreachable, the status line cut off the note that the page shown is a saved
   copy; the note now comes first, and request errors give their cause before the address.
 - An `about:` address rynx doesn't have (`about:blank`) was sent to the search engine.
+- On Debian and Ubuntu, the i2pd rynx starts (from the distribution's package) failed at once:
+  their AppArmor profile only lets i2pd write under `~/.i2pd`, so its data is now kept in
+  `~/.i2pd/rynx-browser` on Linux.
 
 ### Added
 - Terminal tests (`tests/terminal/`): the real program run in a pseudo-terminal, with keys,
