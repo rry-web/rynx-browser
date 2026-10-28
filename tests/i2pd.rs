@@ -273,7 +273,9 @@ async fn the_real_i2pd_starts_reports_and_stops() {
         start_if_wanted(true, false, false, &format!("http://127.0.0.1:{}", port), None, Some(dir.clone()));
     let RouterState::Started { pid, console_port: Some(console), .. } = state else { panic!("{state:?}") };
     let mut progress = None;
-    for _ in 0..30 {
+    // Older i2pd versions' consoles can be slow while the router starts (seconds per answer)
+    let start = std::time::Instant::now();
+    while start.elapsed() < std::time::Duration::from_secs(120) {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         progress = rynx::i2pd::progress(console).await;
         if progress.as_ref().is_some_and(|p| p.routers > 0) {
@@ -282,10 +284,15 @@ async fn the_real_i2pd_starts_reports_and_stops() {
     }
     let Some(progress) = progress else {
         // Why: the router's log, and what the console answers, raw
-        let raw = std::process::Command::new("curl").args(["-s", "-m", "5", &format!("http://127.0.0.1:{console}/")]).output();
+        let raw = std::process::Command::new("curl")
+            .args(["-s", "-m", "20", &format!("http://127.0.0.1:{console}/")])
+            .output();
         let raw = raw.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
         let parsed = parse_console(&raw);
-        let around = raw.find("Uptime").map(|i| raw[i.saturating_sub(200)..(i + 600).min(raw.len())].to_string()).unwrap_or_else(|| raw.chars().take(300).collect());
+        let around = raw
+            .find("Uptime")
+            .map(|i| raw[i.saturating_sub(200)..(i + 600).min(raw.len())].to_string())
+            .unwrap_or_else(|| raw.chars().take(300).collect());
         let raw = format!("parsed as {parsed:?}; {} bytes; around Uptime:\n{around}", raw.len());
         let printed = std::fs::read_to_string(dir.join("i2pd-start.txt")).unwrap_or_default();
         panic!(

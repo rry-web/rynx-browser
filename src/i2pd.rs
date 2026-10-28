@@ -434,8 +434,9 @@ pub fn parse_console(html: &str) -> Option<Progress> {
 
 /// Ask the console how far the router has got
 pub async fn progress(port: u16) -> Option<Progress> {
-    // Straight to 127.0.0.1, never through a proxy
-    let client = reqwest::Client::builder().no_proxy().timeout(Duration::from_secs(3)).build().ok()?;
+    // Straight to 127.0.0.1, never through a proxy. A starting router can be slow to answer
+    // (older i2pd versions especially), so it gets most of the time between checks
+    let client = reqwest::Client::builder().no_proxy().timeout(Duration::from_secs(8)).build().ok()?;
     let response = client.get(format!("http://127.0.0.1:{}/", port)).send().await.ok()?;
     let html = crate::network::read_bytes_limited(response, 512 * 1024).await.ok()?;
     parse_console(&String::from_utf8_lossy(&html))
