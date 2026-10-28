@@ -2,7 +2,7 @@
 # Make a release: scripts/release.sh 0.2.0-beta.7
 #
 # On an up-to-date main with the changes listed under "## [Unreleased]" in CHANGELOG.md, this sets
-# the version (Cargo.toml, Cargo.lock, README, CHANGELOG), runs the checks, commits and pushes,
+# the version (Cargo.toml, both Cargo.locks, README, CHANGELOG), runs every check, commits and pushes,
 # waits for CI to pass, then tags. The tag starts the release workflow, which builds, signs and
 # publishes the GitHub release and the crate. Needs the GitHub CLI (gh), signed in.
 set -eu
@@ -29,11 +29,14 @@ echo "Releasing $new (was $old)"
 sed -i.bak "s/^version = \"$old\"/version = \"$new\"/" Cargo.toml && rm Cargo.toml.bak
 sed -i.bak "s/^## \[Unreleased\]/## [$new]/" CHANGELOG.md && rm CHANGELOG.md.bak
 sed -i.bak "s/$old/$new/g" README.md && rm README.md.bak
-cargo check --quiet   # brings Cargo.lock to the new version
+# Brings both lock files to the new version (the fuzz targets' records rynx's version too)
+cargo check --quiet
+cargo check --quiet --manifest-path fuzz/Cargo.toml
 
-scripts/check.sh --quick
+# Everything CI checks, so CI doesn't fail after the push
+scripts/check.sh
 
-git add Cargo.toml Cargo.lock CHANGELOG.md README.md
+git add Cargo.toml Cargo.lock fuzz/Cargo.lock CHANGELOG.md README.md
 git commit --quiet -m "Release $new"
 git push --quiet origin main
 echo "Pushed; waiting for CI..."
