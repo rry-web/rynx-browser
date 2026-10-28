@@ -280,7 +280,17 @@ async fn the_real_i2pd_starts_reports_and_stops() {
             break;
         }
     }
-    let progress = progress.expect("the console answered");
+    let Some(progress) = progress else {
+        // Why: the router's log, and what the console answers, raw
+        let raw = std::process::Command::new("curl").args(["-s", "-m", "5", &format!("http://127.0.0.1:{console}/")]).output();
+        let raw = raw.map(|o| String::from_utf8_lossy(&o.stdout).chars().take(1500).collect::<String>()).unwrap_or_default();
+        let printed = std::fs::read_to_string(dir.join("i2pd-start.txt")).unwrap_or_default();
+        panic!(
+            "the console didn't answer. Alive: {}. Printed: {printed}\nLog:\n{}\nConsole:\n{raw}",
+            alive(pid),
+            rynx::i2pd::log_tail(&dir, 25).join("\n")
+        );
+    };
     println!("{}", progress.describe());
     assert!(progress.routers > 0, "it didn't find any routers: {progress:?}");
     assert!(rynx::i2pd::listening(SocketAddr::from(([127, 0, 0, 1], port))), "the proxy isn't listening");
