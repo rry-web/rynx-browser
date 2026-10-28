@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0-beta.8]
 
 ### Fixed
 - Gemini and Gopher sites with international names can be reached (their names are now

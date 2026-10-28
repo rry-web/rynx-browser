@@ -3,7 +3,7 @@
 A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**, with absolutely
 **zero JavaScript**.
 
-> **Status: beta.** Version 0.2.0-beta.7 is the latest release. rynx is under active development:
+> **Status: beta.** Version 0.2.0-beta.8 is the latest release. rynx is under active development:
 > security protections and fixes keep arriving as issues are found, and some protections (the
 > filesystem sandbox on Linux and macOS in particular) are preliminary and haven't yet been checked on a wide
 > range of systems. Please report problems, and anything that looks like a security issue, as
@@ -46,7 +46,7 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
 With [Rust](https://rustup.rs) 1.90 or newer installed:
 
 ```sh
-cargo install rynx --version 0.2.0-beta.7
+cargo install rynx --version 0.2.0-beta.8
 ```
 
 Then run `rynx`. (Cargo skips beta versions unless you name one with `--version`.)
@@ -486,7 +486,7 @@ rynx is a beta. What's missing or rough today:
 ```sh
 scripts/check.sh --quick     # formatting, lints and tests: before every commit
 scripts/check.sh             # everything CI checks
-scripts/release.sh 0.2.0-beta.7    # a release, start to finish
+scripts/release.sh 0.2.0-beta.8    # a release, start to finish
 ```
 
 [CONTRIBUTING.md](CONTRIBUTING.md) covers building, testing, fuzzing (`fuzz/`), the conventions
