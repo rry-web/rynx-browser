@@ -279,3 +279,96 @@ fn only_terminals_known_to_draw_images_are_asked() {
     assert!(draws_images(&env(&[("TERM_PROGRAM", "ghostty")])));
     assert!(draws_images(&env(&[("TERM_PROGRAM", "WezTerm")])));
 }
+
+fn laid_out(html: &str, sizes: &[(&str, (u16, u16))], width: u16) -> rynx::renderer::RenderedPage {
+    let image_sizes: std::collections::HashMap<String, (u16, u16)> =
+        sizes.iter().map(|(s, d)| (s.to_string(), *d)).collect();
+    let job = rynx::renderer::RenderJob {
+        source: html.into(),
+        kind: rynx::network::PageKind::Html,
+        source_view: false,
+        reader: false,
+        image_sizes: std::sync::Arc::new(image_sizes),
+        width,
+    };
+    rynx::renderer::render_page(&job)
+}
+
+/// A gallery (images with nothing but list items between them) is laid out side by side, each
+/// caption under its image, while they fit; then a new row
+#[test]
+fn galleries_are_laid_out_side_by_side() {
+    let html = "<ul class=gallery><li><img src=a.png alt=Alpha></li><li><img src=b.png alt=Beta></li>\
+                <li><img src=c.png alt=Gamma></li><li><img src=d.png alt=Delta></li></ul><p>After the gallery</p>";
+    let sizes = [("a.png", (20, 4)), ("b.png", (20, 4)), ("c.png", (20, 4)), ("d.png", (20, 4))];
+    // Three fit across 80 columns (20 + 2 + 20 + 2 + 20), the fourth starts a new row
+    let page = laid_out(html, &sizes, 80);
+    let blocks: Vec<(usize, usize)> = page.image_blocks.iter().map(|b| (b.line_index, b.x)).collect();
+    assert_eq!(blocks[0].0, blocks[1].0);
+    assert_eq!(blocks[1].0, blocks[2].0);
+    // From the list's indent, 20 columns and a gap of 2 each
+    let start = blocks[0].1;
+    assert_eq!(blocks.iter().map(|b| b.1).take(3).collect::<Vec<_>>(), vec![start, start + 22, start + 44]);
+    assert!(blocks[3].0 > blocks[0].0 + 4, "the fourth didn't start a new row: {blocks:?}");
+    // The captions are on one line, under their images, and each selects its image
+    let caption_line = blocks[0].0 + 4;
+    let text = page.lines[caption_line].to_string();
+    let column = |label: &str| text.find(label).map(|byte| text[..byte].chars().count());
+    assert_eq!(column("[Alpha]"), Some(start), "{text:?}");
+    assert_eq!(column("[Beta]"), Some(start + 22), "{text:?}");
+    assert_eq!(column("[Gamma]"), Some(start + 44), "{text:?}");
+    let caption_regions: Vec<(usize, Option<usize>)> =
+        page.links.iter().filter(|l| l.line_index == caption_line).map(|l| (l.x_start, l.image)).collect();
+    assert_eq!(caption_regions, vec![(start, Some(0)), (start + 22, Some(1)), (start + 44, Some(2))]);
+    // No bullets left over in front of what follows
+    let after = page.lines.iter().find(|l| l.to_string().contains("After the gallery")).unwrap().to_string();
+    assert!(!after.contains('•'), "{after:?}");
+    assert!(page.lines.iter().any(|l| l.to_string().contains("After the gallery")));
+}
+
+/// A taller image in the row makes the row taller, and what follows moves down with it
+#[test]
+fn a_taller_image_extends_its_row() {
+    let html = "<div><img src=a.png alt=Short></div><div><img src=b.png alt=Tall></div><p id=after>After</p>";
+    let page = laid_out(html, &[("a.png", (10, 2)), ("b.png", (10, 5))], 60);
+    let (a, b) = (page.image_blocks[0], page.image_blocks[1]);
+    assert_eq!(a.line_index, b.line_index);
+    let caption_line = a.line_index + 5;
+    let text = page.lines[caption_line].to_string();
+    assert!(text.starts_with("[Short]") && text.contains("[Tall]"), "{text:?}");
+    let after = *page.anchors.get("after").unwrap();
+    assert!(after > caption_line, "the paragraph after didn't move down: {after} vs {caption_line}");
+    assert!(page.lines[after].to_string().contains("After") || page.lines[after + 1].to_string().contains("After"));
+}
+
+/// Text between images, or an image that doesn't fit, starts a new row
+#[test]
+fn text_between_images_starts_a_new_row() {
+    let page = laid_out(
+        "<figure><img src=a.png alt=One><figcaption>The first</figcaption></figure><figure><img src=b.png alt=Two></figure>",
+        &[("a.png", (10, 2)), ("b.png", (10, 2))],
+        60,
+    );
+    assert_ne!(page.image_blocks[0].line_index, page.image_blocks[1].line_index);
+    let wide = laid_out(
+        "<p><img src=a.png alt=One></p><p><img src=b.png alt=Two></p>",
+        &[("a.png", (40, 2)), ("b.png", (40, 2))],
+        60,
+    );
+    assert_ne!(wide.image_blocks[0].line_index, wide.image_blocks[1].line_index);
+}
+
+/// A caption wider than its image pushes the next image along, rather than meeting its caption
+#[test]
+fn wide_captions_keep_their_images_apart() {
+    let page = laid_out(
+        "<div><img src=a.png alt='A long description'></div><div><img src=b.png alt=Two></div>",
+        &[("a.png", (4, 2)), ("b.png", (4, 2))],
+        80,
+    );
+    let (a, b) = (page.image_blocks[0], page.image_blocks[1]);
+    assert_eq!(a.line_index, b.line_index);
+    assert_eq!(b.x, a.x + "[A long description]".len() + 2);
+    let captions = page.lines[a.line_index + 2].to_string();
+    assert!(captions.contains("[A long description]  [Two]"), "{captions:?}");
+}

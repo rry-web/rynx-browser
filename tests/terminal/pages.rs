@@ -282,3 +282,23 @@ fn img_03_own_images_load_by_themselves() {
     assert_eq!(other.requests("/other.png"), 1, "I didn't load the other image");
     rynx.quit();
 }
+
+/// A gallery of loaded images is laid out side by side, captions under each
+#[test]
+fn image_galleries_side_by_side() {
+    let site = Site::new(&[(
+        "/",
+        "<h1>Pictures</h1><ul class=gallery><li><img src=/a.png alt=Alpha></li><li><img src=/b.png alt=Beta></li>\
+         <li><img src=/c.png alt=Gamma></li></ul><p>After the gallery</p>",
+    )]);
+    for name in ["/a.png", "/b.png", "/c.png"] {
+        site.respond(name, wiremock::ResponseTemplate::new(200).set_body_raw(png(), "image/png"));
+    }
+    let (_home, mut rynx) = started_with("gallery", "images = site\n");
+    rynx.open(&site.url("/"));
+    rynx.wait_for("After the gallery");
+    rynx.settle();
+    let row = rynx.rows().into_iter().find(|r| r.contains("[Alpha]")).expect("no captions");
+    assert!(row.contains("[Beta]") && row.contains("[Gamma]"), "not side by side: {row:?}");
+    rynx.quit();
+}

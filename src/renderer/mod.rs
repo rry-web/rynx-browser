@@ -328,6 +328,8 @@ pub struct DomRenderer {
     image_sizes: Arc<HashMap<String, (u16, u16)>>,
     /// The image whose placeholder is being drawn
     active_image: Option<usize>,
+    /// The row of images being laid out side by side (a gallery), while nothing but images follow
+    image_row: Option<images::ImageRow>,
 }
 
 impl DomRenderer {
@@ -371,6 +373,7 @@ impl DomRenderer {
             image_blocks: Vec::new(),
             image_sizes: Arc::default(),
             active_image: None,
+            image_row: None,
         }
     }
 

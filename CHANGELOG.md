@@ -9,6 +9,10 @@
   with such text are now written cell by cell, each at its own position.
 - When some of a page's images couldn't be shown, the status line named no reason.
 
+### Added
+- Galleries and grids of loaded images are laid out side by side while they fit, each caption
+  under its image, instead of one under another.
+
 ## [0.2.0-beta.9]
 
 (Tagged as 0.2.0-beta.8 at first, but that release's builds failed and nothing was published.)
