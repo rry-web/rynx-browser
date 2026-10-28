@@ -7,3 +7,7 @@
 /fuzz/coverage
 # cargo mutants output
 /mutants.out*
+
+# Editor swap files
+*.swp
+*.swo
