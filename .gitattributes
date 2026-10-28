@@ -1,0 +1,2 @@
+# Signed fixtures: their bytes must stay exactly as signed (no line-ending conversion)
+tests/data/** binary
