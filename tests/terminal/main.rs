@@ -14,6 +14,7 @@ mod browsing;
 mod downloads;
 mod forms;
 mod i2p;
+mod linux;
 mod pages;
 mod scrolling;
 mod security;

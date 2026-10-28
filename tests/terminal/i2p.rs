@@ -190,7 +190,7 @@ fn cache_02_i2p_site_gone() {
     let (_home, mut rynx) = in_i2p_mode("i2p-gone", &proxy, "");
     rynx.open("http://site.i2p/");
     rynx.wait_for("The first visit's copy");
-    rynx.open("about:blank");
+    rynx.keys("n");
     *up.lock().unwrap() = false;
     rynx.open("http://site.i2p/");
     rynx.wait_for("This is the copy saved");
@@ -259,4 +259,27 @@ fn set_08_i2p_visits_never_reach_history_txt() {
     rynx.quit();
     let file = home.read_config("history.txt").unwrap_or_default();
     assert!(!file.contains("diary.i2p") && !file.contains("Secret diary"), "an I2P visit was saved: {file}");
+}
+
+/// I2P-02: https:// addresses in I2P mode go through the I2P proxy too (as CONNECT, to its
+/// outproxy), never straight to the clearweb; nor do searches typed into the address bar
+#[test]
+fn i2p_02_https_goes_through_the_proxy() {
+    let proxy = Proxy::start(Arc::new(|_: &Seen| Answer::status(503, "<h1>No outproxy</h1>")));
+    let (_home, mut rynx) = in_i2p_mode("i2p-https", &proxy, "");
+    rynx.open("https://clearweb.example/page");
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    assert!(
+        proxy.seen().iter().any(|s| s.line.starts_with("CONNECT clearweb.example:443 ")),
+        "https:// in I2P mode didn't go through the I2P proxy: {:?}",
+        proxy.seen()
+    );
+    rynx.open("some search words");
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    assert!(
+        proxy.seen().iter().any(|s| s.line.starts_with("CONNECT ") && s.line.contains("marginalia")),
+        "a search left I2P: {:?}",
+        proxy.seen()
+    );
+    rynx.quit();
 }

@@ -236,7 +236,9 @@ impl NetworkManager {
         builder = builder.use_preconfigured_tls(Self::tls_config(!use_proxy)?);
 
         if use_proxy {
-            let proxy = reqwest::Proxy::http(proxy_url)?;
+            // Every request, https:// as well as http:// (Proxy::http would send https:// straight
+            // to the clearweb, around I2P): https:// goes to the router as CONNECT, for its outproxy
+            let proxy = reqwest::Proxy::all(proxy_url)?;
             builder = builder.proxy(proxy);
         }
 

@@ -524,6 +524,11 @@ impl App {
         if self.show_internal_page(&url) {
             return;
         }
+        // The browser's own pages are all known; another about: address isn't searched for
+        if url.to_ascii_lowercase().starts_with("about:") {
+            self.current_tab().status_message = format!("There's no page {} in rynx", url);
+            return;
+        }
         let tab = self.current_tab();
         if tab.is_current_document(&url) {
             let fragment = fragment_of(&url);

@@ -5,8 +5,20 @@
 ### Fixed
 - Gemini and Gopher sites with international names can be reached (their names are now
   encoded for the lookup and the request).
+- A `<button>` after a form field was drawn cut short (`[n in]` for `[Sign in]`).
+- The cursor was invisible on empty lines (between paragraphs, or below a short page's text).
+- After jumping to a section within a page, Tab skipped the first link after it (and after the
+  last section, went back to the top of the page).
+- Leaving find with Enter left "SEARCH MODE" on the status line; it now says how many matches
+  there are.
+- With a site unreachable, the status line cut off the note that the page shown is a saved
+  copy; the note now comes first, and request errors give their cause before the address.
+- An `about:` address rynx doesn't have (`about:blank`) was sent to the search engine.
 
 ### Added
+- Terminal tests (`tests/terminal/`): the real program run in a pseudo-terminal, with keys,
+  the mouse and resizing, against local web, Gemini, Gopher, MCP and fake I2P servers, covering
+  most of TESTING.md's checks.
 - Staying signed in: `C` lets the site you're on keep cookies (before signing in), `C` again
   forgets them, and `about:cookies` lists the sites. A site is everything under its registered
   name; its cookies are taken from and sent to it only, never for a whole public suffix. Lasting
@@ -15,6 +27,12 @@
   signed in. Cookies carry over when settings change.
 
 ### Security
+- **I2P mode sent https:// requests straight to the clearweb.** The I2P clients proxied only
+  `http://` (reqwest's `Proxy::http`), so `https://` addresses in I2P mode (typed sites,
+  searches, the Internet Archive key, tools and images on https pages) bypassed the I2P router
+  and revealed your IP address to those sites. Every request in I2P mode now goes through the
+  router, `https://` as CONNECT for its outproxy. Present since I2P mode was added; found by
+  the new terminal tests' fake I2P proxy.
 - Saved cookies, and the list of sites allowed them, are encrypted (ChaCha20-Poly1305) with a
   random key kept in the system keychain: `cookies.enc` replaces the plain files, which are
   encrypted and removed on the first start with a keychain. Without one they're saved as before,

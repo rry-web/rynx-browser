@@ -462,3 +462,16 @@ fn read_03_reader_mode_stays_on() {
     rynx.wait_gone("READER");
     rynx.quit();
 }
+
+/// An about: address rynx doesn't have is said so, not searched for
+#[test]
+fn unknown_about_pages_arent_searched() {
+    let home = Home::new("about-unknown");
+    home.settings("search_url = http://127.0.0.1:9/never?q={query}\n");
+    let mut rynx = Rynx::start(&home);
+    rynx.wait_for("RYNX BROWSER");
+    rynx.open("about:blank");
+    rynx.wait_for("There's no page about:blank in rynx");
+    assert!(!rynx.text().contains("127.0.0.1:9"));
+    rynx.quit();
+}
