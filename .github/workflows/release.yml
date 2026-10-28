@@ -95,7 +95,8 @@ jobs:
         shell: bash
         run: |
           exe=target/${{ matrix.target }}/release/rynx
-          [ -f "$exe" ] || exe="$exe.exe"
+          # Named, not tested for: Git Bash's [ -f rynx ] also matches rynx.exe
+          if [ "$RUNNER_OS" = Windows ]; then exe="$exe.exe"; fi
           cargo audit bin "$exe"
 
       - name: Package
