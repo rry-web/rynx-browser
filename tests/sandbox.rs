@@ -27,6 +27,11 @@ fn child(downloads: &Path, secret: &Path, outside: &Path) {
     println!("read_download={}", outcome(std::fs::read(downloads.join("file.zip"))));
     println!("read_etc={}", outcome(std::fs::read("/etc/hosts")));
     println!("open_tty={}", outcome(std::fs::OpenOptions::new().read(true).write(true).open("/dev/null")));
+    // No programs, and no listening; connections out still work
+    println!("run_program={}", outcome(Command::new("/bin/echo").arg("hi").output()));
+    let port: u16 = std::env::var("SBX_PORT").unwrap().parse().unwrap();
+    println!("connect_out={}", outcome(std::net::TcpStream::connect(("127.0.0.1", port))));
+    println!("listen={}", outcome(std::net::TcpListener::bind("127.0.0.1:0")));
     // Threads started after the sandbox inherit it
     let secret = secret.to_path_buf();
     let in_thread = std::thread::spawn(move || outcome(std::fs::read(&secret))).join().unwrap();
@@ -48,6 +53,7 @@ fn sandbox_allows_downloads_and_system_files_only() {
     let secret = root.join("id_ed25519");
     std::fs::write(&secret, b"private key").unwrap();
     let outside = root.join("planted.sh");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
 
     let output = Command::new(std::env::current_exe().unwrap())
         .args(["sandbox_allows_downloads_and_system_files_only", "--exact", "--nocapture", "--test-threads=1"])
@@ -55,6 +61,7 @@ fn sandbox_allows_downloads_and_system_files_only() {
         .env("SBX_DOWNLOADS", &downloads)
         .env("SBX_SECRET", &secret)
         .env("SBX_OUTSIDE", &outside)
+        .env("SBX_PORT", listener.local_addr().unwrap().port().to_string())
         .env("HOME", &root)
         .output()
         .unwrap();
@@ -85,6 +92,12 @@ fn sandbox_allows_downloads_and_system_files_only() {
     assert_eq!(value("read_etc"), "allowed", "{report}");
     assert_eq!(value("open_tty"), "allowed", "{report}");
     assert_eq!(value("spawned_thread_secret"), "denied", "{report}");
+    assert_eq!(value("run_program"), "denied", "{report}");
+    assert_eq!(value("connect_out"), "allowed", "{report}");
+    // Older kernels (Landlock before ABI 4) can't restrict listening; the status says Partial
+    if status != format!("{:?}", SandboxStatus::Partial) {
+        assert_eq!(value("listen"), "denied", "{report}");
+    }
 }
 
 /// Runs inside the sandboxed child, with the real home folder: what the browser does all day

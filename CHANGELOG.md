@@ -11,6 +11,9 @@
   signed in. Cookies carry over when settings change.
 
 ### Security
+- The sandbox now also forbids starting programs (Landlock: no Execute anywhere; Seatbelt:
+  process-exec and fork denied) and listening for connections (Landlock's TCP bind rule;
+  Seatbelt's network-bind), which rynx never does once running. Crash dumps are turned off.
 - Public names that point at this computer or the local network are refused (DNS rebinding):
   rynx looks every name up itself, for the web, images, tools, Gemini and Gopher, and connects
   only to the addresses it checked. Names local by their form (`printer.local`, `router.lan`,

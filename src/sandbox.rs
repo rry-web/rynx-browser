@@ -15,6 +15,11 @@
 //! Unlike Landlock it applies to the whole process at once; programs it starts inherit it. The
 //! policy starts from "allow" and denies file access, rather than listing every system service the
 //! browser uses (certificate checks, DNS, the clipboard), which differ between macOS versions.
+//!
+//! On both, once sandboxed the browser can't start programs (it never does: the I2P router and
+//! the restart after an update happen before the sandbox) or listen for connections (it only
+//! makes them), so a bug that let a page take over the browser couldn't run a shell or open a
+//! port. Crash dumps, which would hold pages and cookies, are turned off for every run.
 
 use std::path::Path;
 
@@ -79,12 +84,14 @@ const DEVICE_PATHS: &[&str] = &["/dev/tty", "/dev/null"];
 #[cfg(target_os = "linux")]
 pub fn restrict_filesystem(writable: &[&Path]) -> SandboxStatus {
     use landlock::{
-        ABI, Access, AccessFs, Ruleset, RulesetAttr, RulesetCreatedAttr, RulesetStatus, path_beneath_rules,
+        ABI, Access, AccessFs, AccessNet, Ruleset, RulesetAttr, RulesetCreatedAttr, RulesetStatus, path_beneath_rules,
     };
 
     let abi = ABI::V5;
-    let read = AccessFs::from_read(abi);
+    // Running programs is allowed nowhere: Execute is handled, and granted by no rule
+    let read = AccessFs::from_read(abi) & !AccessFs::Execute;
     let all = AccessFs::from_all(abi);
+    let writable_access = all & !AccessFs::Execute;
 
     // Certificate locations and the X11 auth file can be configured outside the system paths
     let mut extra_read: Vec<std::path::PathBuf> = Vec::new();
@@ -104,11 +111,13 @@ pub fn restrict_filesystem(writable: &[&Path]) -> SandboxStatus {
 
     let result = Ruleset::default()
         .handle_access(all)
+        // Listening on a port is allowed nowhere (no rule grants it); connecting isn't restricted
+        .and_then(|ruleset| ruleset.handle_access(AccessNet::BindTcp))
         .and_then(|ruleset| ruleset.create())
         .and_then(|ruleset| ruleset.add_rules(path_beneath_rules(READ_ONLY_PATHS, read)))
         .and_then(|ruleset| ruleset.add_rules(path_beneath_rules(&extra_read, read)))
-        .and_then(|ruleset| ruleset.add_rules(path_beneath_rules(DEVICE_PATHS, all)))
-        .and_then(|ruleset| ruleset.add_rules(path_beneath_rules(writable, all)))
+        .and_then(|ruleset| ruleset.add_rules(path_beneath_rules(DEVICE_PATHS, writable_access)))
+        .and_then(|ruleset| ruleset.add_rules(path_beneath_rules(writable, writable_access)))
         .and_then(|ruleset| ruleset.restrict_self());
 
     match result {
@@ -140,7 +149,10 @@ fn seatbelt_policy(home: &Path, writable: &[&Path], executable: Option<&Path>) -
          (deny file-write*)\n\
          (allow file-write* (subpath \"/dev\"){allowed})\n\
          (deny file-read* (subpath {home}))\n\
-         (allow file-read-metadata (literal {home}))\n"
+         (allow file-read-metadata (literal {home}))\n\
+         (deny process-exec*)\n\
+         (deny process-fork)\n\
+         (deny network-bind)\n"
     );
     // Only with folders to name: "(allow file-read*)" alone would allow reading everything
     if !allowed.is_empty() {
@@ -218,6 +230,20 @@ mod seatbelt {
         Err(message)
     }
 }
+
+/// Turn crash dumps off: one would hold the pages, cookies and passwords in memory
+#[cfg(unix)]
+#[allow(unsafe_code)]
+pub fn disable_core_dumps() {
+    let none = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    // SAFETY: setrlimit reads the struct passed, which lives for the call
+    unsafe {
+        libc::setrlimit(libc::RLIMIT_CORE, &none);
+    }
+}
+
+#[cfg(not(unix))]
+pub fn disable_core_dumps() {}
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub fn restrict_filesystem(_writable: &[&Path]) -> SandboxStatus {

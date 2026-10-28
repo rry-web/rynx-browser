@@ -58,6 +58,7 @@ Options:
 Key bindings are listed on the start page and in the README.";
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+    rynx::sandbox::disable_core_dumps();
     let mut sandbox_enabled = true;
     for arg in std::env::args().skip(1) {
         match arg.as_str() {

@@ -369,8 +369,10 @@ that:
 - **Filesystem sandbox (preliminary):** on Linux (Landlock, kernel 5.13+) and macOS (Seatbelt, the
   sandbox Safari, Chrome and Firefox use), the browser restricts itself at startup: it can write
   only to your Downloads folder and its settings folder, and can't read the rest of your home
-  folder, so a bug can't be used to read SSH keys or documents, or plant files. Programs it could
-  be tricked into starting inherit the same limits. The status line shows whether it's active.
+  folder, so a bug can't be used to read SSH keys or documents, or plant files. It also can't
+  start programs or listen for connections once running (it never needs to), so a bug can't run a
+  shell or open a port, and crash dumps (which would hold pages and cookies) are off. The status
+  line shows whether it's active.
   It hasn't yet been tested on many Linux distributions and kernels or macOS versions, and
   Windows has no sandbox yet.
 - **Hostile pages are contained:** escape sequences that could take over your terminal are
