@@ -34,8 +34,8 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
 - **Site tools instead of JavaScript:** sites can offer interactive features as
   [MCP](https://modelcontextprotocol.io) tools, which rynx shows as forms. Nothing runs on your
   computer, and nothing is sent until you've seen exactly what it is and confirmed.
-- **I2P:** browse `.i2p` sites through a local I2P router, and lock rynx to I2P so a stray key
-  can't send a page outside it.
+- **I2P:** browse `.i2p` sites through a local I2P router, which rynx can start for you (i2pd),
+  and lock rynx to I2P so a stray key can't send a page outside it.
 - **Settings in the browser:** `S` opens every setting as a form; `A` opens the Internet Archive's
   copy of a page that's gone or blocked.
 
@@ -210,6 +210,9 @@ images = site
 image_display = inline
 updates = daily
 update_channel = beta
+i2p_router = start
+i2p_router_keep = on
+i2pd_path = /opt/i2pd/i2pd
 ```
 
 rynx introduces itself honestly to websites, as `rynx/<version> (+<project page>)`. Bot walls
@@ -224,6 +227,29 @@ leading zeros, using every CPU core), hands in the answer, and loads the page yo
 status line says when it's doing this. The `fast`, `slow`, `sha256`, `argon2id` and
 `metarefresh` methods are supported; `hashx` isn't yet. `anubis = off` shows the check's page
 instead.
+
+### Starting the I2P router
+
+rynx can start [i2pd](https://i2pd.website/) for you, so I2P works without setting a router up:
+install it (`brew install i2pd`, `apt install i2pd`, or from its site), then on the settings
+page tick "Start i2pd when rynx starts" (or set `i2p_router = start`) and restart rynx.
+
+- **When:** at startup, if no router is already running at the I2P proxy's address (one is left
+  alone) and rynx isn't set to always use the clearweb. It's started before the sandbox, so it
+  isn't confined by it.
+- **How:** with its own data folder (`i2pd` next to the snapshots folder) and empty `i2pd.conf`
+  and `tunnels.conf` there for options of your own; only the HTTP proxy rynx uses, with SOCKS,
+  SAM and the other client ports off; its web console on `127.0.0.1:7070` (if free), which rynx
+  reads to show its progress on the status line and the settings page.
+- **Joining the network** takes a minute or so; the first time, names like `stats.i2p` work only
+  once its address book has downloaded, about 5 to 10 minutes after that. Until then, use a jump
+  service, or a `.b32.i2p` address.
+- **When rynx quits** the router stops, and while it runs it carries no one else's traffic
+  (transit tunnels), since dropping them at every quit is hard on the network.
+  `i2p_router_keep = on` keeps it running instead, ready sooner next time, carrying others'
+  traffic as routers normally do; stop it yourself when you want (its process is shown on the
+  settings page). A router left running by a crash is recognised and stopped next time.
+- `i2pd_path` gives the program's location if it isn't on `PATH` or where package managers put it.
 
 Bookmarks are kept next to it in `bookmarks.txt`, history (when `history = on`) in
 `history.txt`, and the certificates of Gemini sites you've visited in `gemini_known_hosts.txt`. Pages visited in I2P mode are never saved to the history file.
@@ -408,6 +434,10 @@ rynx is a beta. What's missing or rough today:
   (used by some capsules for accounts) aren't supported. View source on Gemini, Gopher and feed
   pages shows the converted HTML, not the original.
 - **Site tools (MCP):** no sign-in (OAuth), and servers can't ask questions while a tool runs.
+- **The I2P router:** rynx starts i2pd but doesn't bundle it (install it yourself); on Windows,
+  i2pd is found only through `i2pd_path` or `PATH`, and is untested there. Changes to the router
+  settings take effect when rynx next starts. A router that stops when rynx quits leaves nothing
+  behind on macOS only if rynx quits normally or panics; if rynx is killed, the next start stops it.
 - **Smaller things:** the history page shows times in UTC; a public site whose name points at
   your local network isn't caught (only addresses are).
 - **Untested by hand:** [TEST_LOG.md](TEST_LOG.md) lists the checks still waiting for a person
@@ -460,14 +490,16 @@ Done:
 - [x] **Sandbox** on Linux and macOS
 - [x] **Signed in-app updates**, coverage-guided fuzzing, release and check scripts
 - [x] **Customisable key bindings** (`keys.conf`)
+- [x] **Starting the I2P router** (i2pd) with rynx
 
 Next:
 
-- [ ] **A bundled I2P router** (i2pd, or the Rust router emissary), so I2P works without setting
-      one up separately
 - [ ] **Your own MCP servers**: tools from servers you configure, usable on any page
 
 Later:
+
+- [ ] **A built-in I2P router** (the Rust router emissary, once it matures), so I2P needs
+      nothing installed
 
 - [ ] **MCP sign-in** (OAuth) for tools that need an account
 - [ ] **Session restore** (opt-in): reopen your tabs

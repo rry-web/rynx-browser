@@ -30,6 +30,7 @@ mod downloads;
 mod fetch;
 mod images;
 mod pages;
+mod router;
 mod settings_page;
 mod snapshot_pages;
 mod tab;
@@ -78,6 +79,10 @@ pub struct App {
     /// Where releases are listed, and the key their checksums must be signed with (tests change them)
     pub update_api: String,
     pub release_key: [u8; 32],
+    /// The I2P router rynx started, if any, and how far it has got
+    pub router_state: crate::i2pd::RouterState,
+    pub router_progress: Option<crate::i2pd::Progress>,
+    router_ready_announced: bool,
     /// The browsing keys, from keys.conf
     pub keymap: crate::keys::Keymap,
     /// Certificates seen for Gemini hosts (trust on first use)
@@ -145,6 +150,9 @@ impl App {
             update_api: crate::update::RELEASES_API.to_string(),
             release_key: crate::update::RELEASE_KEY,
             keymap: crate::keys::Keymap::default(),
+            router_state: crate::i2pd::RouterState::NotManaged,
+            router_progress: None,
+            router_ready_announced: false,
             confirm_clear_history: false,
             confirm_reset_settings: false,
             confirm_delete_snapshots: None,

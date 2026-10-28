@@ -30,9 +30,15 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      # The macOS sandbox's everyday test needs a clipboard, which runners may not have
+      # The macOS sandbox's everyday test needs a clipboard, which runners may not have. macOS
+      # checks revocation only when it can reach the revocation server, which runners often
+      # can't, so that test is for local runs there.
       - name: Tests that need the internet
-        run: cargo test --locked -- --ignored --skip the_browser_works_inside_the_macos_sandbox
+        shell: bash
+        run: |
+          skip="--skip the_browser_works_inside_the_macos_sandbox"
+          if [ "$RUNNER_OS" = macOS ]; then skip="$skip --skip revoked_certificate_is_rejected"; fi
+          cargo test --locked -- --ignored $skip
       - name: The browser inside the macOS sandbox
         if: runner.os == 'macOS'
         continue-on-error: true

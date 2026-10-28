@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 140 (29 priority).
+Total checks: 144 (31 priority).
 
 
 ## Automated checks
@@ -263,3 +263,12 @@ Total checks: 140 (29 priority).
 | I2P-02 | HTTPS through I2P | Yes |  |  |  |
 | I2P-03 | Jump services | Yes |  |  |  |
 | I2P-04 | Toggling back | Yes |  |  |  |
+
+## I2P router (needs i2pd installed, and no other router running)
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| ROUTER-01 | Starting and stopping with rynx | Yes |  |  | Partly checked during development (macOS 27, i2pd 3.0.0 from Homebrew, sandbox on): rynx started it, showed "ready" and stopped it on quit; names resolved through a router started the same way after ~11 minutes. Not yet: loading a site in rynx, the settings page by eye. |
+| ROUTER-02 | Kept running |  |  |  |  |
+| ROUTER-03 | Another router |  |  |  |  |
+| ROUTER-04 | Linux | Yes |  |  |  |

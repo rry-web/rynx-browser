@@ -2665,6 +2665,7 @@ dependencies = [
  "httpdate",
  "image",
  "landlock",
+ "libc",
  "percent-encoding",
  "quick-xml",
  "ratatui",

@@ -587,3 +587,20 @@ Worth repeating after any dependency upgrade.
       Clearweb sites with server errors never trigger a jump lookup.
 - [ ] **I2P-04 (priority) Toggling back.** Press `p` again and load a clearweb site.
       *Expected:* it loads directly (URL bar shows `[Clearweb]`), over HTTPS.
+
+## I2P router (needs i2pd installed, and no other router running)
+
+- [ ] **ROUTER-01 (priority) Starting and stopping with rynx.** Tick "Start i2pd when rynx
+      starts" in settings, quit and start rynx.
+      *Expected:* the status line says the router is starting, then (within a few minutes) that
+      it's ready; the settings page shows its progress. After 5 to 10 minutes, `stats.i2p` loads
+      in I2P mode. Quit: `pgrep i2pd` finds nothing.
+- [ ] **ROUTER-02 Kept running.** Also tick "Keep it running", restart rynx, then quit.
+      *Expected:* i2pd is still running after quitting; starting rynx again says nothing about
+      starting it, and I2P sites load straight away.
+- [ ] **ROUTER-03 Another router.** With a router already running on 127.0.0.1:4444 (a hand-made
+      i2pd, or Java I2P), start rynx with the setting on.
+      *Expected:* the settings page says one was already running and rynx left it alone.
+- [ ] **ROUTER-04 Linux.** ROUTER-01 on Linux with i2pd from the distribution's packages, the
+      sandbox on.
+      *Expected:* as ROUTER-01; closing the terminal window while rynx runs also stops i2pd.

@@ -54,6 +54,10 @@ semver = "1.0.28"
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
 xattr = "1.6.1"
 
+# Starting and stopping the I2P router (i2pd)
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.191"
+
 # Filesystem sandbox
 [target.'cfg(target_os = "linux")'.dependencies]
 landlock = "0.4.7"

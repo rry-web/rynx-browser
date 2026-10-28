@@ -41,6 +41,23 @@ const DOCUMENTED: &[Documented] = &[
         examples: &["http://127.0.0.1:4444"],
     },
     Documented {
+        key: "i2p_router",
+        about: "Start the I2P router, i2pd, when rynx starts, if it's installed and no router is already\n\
+                running at i2p_proxy. Off by default. It has its own data folder, apart from any i2pd set up by hand.",
+        examples: &["start"],
+    },
+    Documented {
+        key: "i2p_router_keep",
+        about: "Keep that router running after rynx quits (so I2P is ready sooner next time, and it can carry\n\
+                other people's traffic, as routers do). Off by default: it stops when rynx quits.",
+        examples: &["on"],
+    },
+    Documented {
+        key: "i2pd_path",
+        about: "Where the i2pd program is, if it isn't on PATH or in the usual places",
+        examples: &["/opt/i2pd/i2pd"],
+    },
+    Documented {
         key: "download_dir",
         about: "Where downloads are saved (by default, your Downloads folder). Takes effect when rynx starts.",
         examples: &["/path/to/folder"],
@@ -191,6 +208,10 @@ pub struct Settings {
     pub check_updates: bool,
     /// Update to pre-releases (betas) too
     pub beta_updates: bool,
+    /// Start i2pd when rynx starts, and keep it running after
+    pub start_i2p_router: bool,
+    pub keep_i2p_router: bool,
+    pub i2pd_path: Option<PathBuf>,
 }
 
 impl Default for Settings {
@@ -212,6 +233,9 @@ impl Default for Settings {
             image_protocol: ImageProtocol::Auto,
             check_updates: true,
             beta_updates: true,
+            start_i2p_router: false,
+            keep_i2p_router: false,
+            i2pd_path: None,
         }
     }
 }
@@ -259,6 +283,9 @@ impl Settings {
                     settings.i2p_proxy = value.to_string()
                 }
                 "download_dir" if !value.is_empty() => settings.download_dir = Some(PathBuf::from(value)),
+                "i2p_router" if matches!(value, "start" | "off") => settings.start_i2p_router = value == "start",
+                "i2p_router_keep" if matches!(value, "on" | "off") => settings.keep_i2p_router = value == "on",
+                "i2pd_path" if !value.is_empty() => settings.i2pd_path = Some(PathBuf::from(value)),
                 "history" if matches!(value, "on" | "off") => settings.save_history = value == "on",
                 "anubis" if matches!(value, "on" | "off") => settings.solve_anubis = value == "on",
                 "images" if matches!(value, "ask" | "site" | "all") => {
@@ -305,7 +332,9 @@ impl Settings {
                 }
                 "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" | "user_agent" | "anubis"
                 | "cache" | "cache_i2p" | "cache_size" | "images" | "image_display" | "image_protocol" | "updates"
-                | "update_channel" => problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value)),
+                | "update_channel" | "i2p_router" | "i2p_router_keep" | "i2pd_path" => {
+                    problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
+                }
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),
             }
         }
@@ -356,6 +385,9 @@ impl Settings {
             "update_channel" => (!self.beta_updates).then(|| "stable".to_string()),
             "cache" => self.disk_cache.then(|| "on".to_string()),
             "cache_i2p" => self.disk_cache_i2p.then(|| "on".to_string()),
+            "i2p_router" => self.start_i2p_router.then(|| "start".to_string()),
+            "i2p_router_keep" => self.keep_i2p_router.then(|| "on".to_string()),
+            "i2pd_path" => self.i2pd_path.as_ref().map(|d| d.to_string_lossy().into_owned()),
             "cache_size" => changed(self.cache_size_mb.to_string(), default.cache_size_mb.to_string()),
             _ => None,
         }

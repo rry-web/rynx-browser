@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Added
+- rynx can start the I2P router, i2pd, when it starts (`i2p_router = start`, or the settings
+  page), if it's installed and no router is already running: with its own data folder, only the
+  HTTP proxy, and no transit traffic unless it's kept running after rynx quits
+  (`i2p_router_keep`). Its progress (joining the network, building tunnels, ready) shows on the
+  status line and the settings page, read from its local console; a router left running by a
+  crash is recognised and stopped. `i2pd_path` gives the program's location.
 - Key bindings can be changed in `keys.conf` (written on first run with every action and its
   default keys): add keys, replace them (`only`) or remove them (`none`), with Ctrl, Alt and
   function keys. `about:keys` lists the keys in force and any mistakes in the file; `?` opens the
@@ -13,7 +19,8 @@
 - Coverage-guided fuzzing (`fuzz/`, `cargo fuzz`) of pages, Gemini, Gopher, feeds, Anubis pages,
   cookies, settings, keys.conf and the update list, nightly in CI, with each target's corpus kept between
   runs, seed inputs, and replay of past crashes from `fuzz/regressions/`.
-- A weekly CI run of the tests that need the internet, and a test coverage report on every CI
+- A weekly CI run of the tests that need the internet (skipping the revocation test on macOS
+  runners, which often can't reach the revocation servers), and a test coverage report on every CI
   run (failing below 80% of lines).
 - CONTRIBUTING.md, SECURITY.md (private vulnerability reports), issue forms and a pull request
   checklist.

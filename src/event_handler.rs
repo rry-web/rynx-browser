@@ -596,6 +596,11 @@ pub fn process_network_events(app: &mut App, terminal_width: u16) -> Result<()> 
 }
 
 pub fn handle_network_event(app: &mut App, response: NetworkResponse, terminal_width: u16) -> Result<()> {
+    // Not about any one tab
+    if let NetworkResponse::RouterProgress(progress) = response {
+        app.finish_router_progress(progress);
+        return Ok(());
+    }
     let target_id = match &response {
         NetworkResponse::Success(id, ..) => *id,
         NetworkResponse::Error(id, ..) => *id,
@@ -610,6 +615,7 @@ pub fn handle_network_event(app: &mut App, response: NetworkResponse, terminal_w
         NetworkResponse::ImageLoaded(id, ..) => *id,
         NetworkResponse::UpdateChecked(id, ..) => *id,
         NetworkResponse::UpdateDownloaded(id, ..) => *id,
+        NetworkResponse::RouterProgress(_) => return Ok(()),
     };
 
     if let Some(index) = app.tabs.iter().position(|t| t.id == target_id) {
@@ -692,6 +698,8 @@ pub fn handle_network_event(app: &mut App, response: NetworkResponse, terminal_w
             NetworkResponse::UpdateDownloaded(_, result) => {
                 app.finish_update_download(index, result);
             }
+            // Handled above
+            NetworkResponse::RouterProgress(_) => {}
             NetworkResponse::DownloadError(_, msg) => {
                 let tab = &mut app.tabs[index];
                 // The download may fail before any progress created its state

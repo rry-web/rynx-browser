@@ -98,6 +98,16 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     };
     let download_dir = settings.download_dir.clone().unwrap_or_else(App::default_download_dir);
 
+    // The I2P router, if the settings ask for it: started now, so the sandbox doesn't confine it
+    let (router_state, router) = rynx::i2pd::start_if_wanted(
+        settings.start_i2p_router,
+        settings.keep_i2p_router,
+        settings.network == rynx::settings::NetworkMode::Clearweb,
+        &settings.i2p_proxy,
+        settings.i2pd_path.as_deref(),
+        rynx::i2pd::data_dir(),
+    );
+
     // Sandbox while this is still the only thread: every thread started afterwards (the async
     // runtime, clipboard, background rendering) inherits the restrictions. The writable folders
     // must exist first, since nothing outside them can be created later.
@@ -124,6 +134,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         config_dir,
         sandbox,
         (installed, update_dir, update_note),
+        (router_state, router),
     ))
 }
 
@@ -156,6 +167,7 @@ async fn run(
     config_dir: Option<std::path::PathBuf>,
     sandbox: SandboxStatus,
     (installed, update_dir, update_note): (rynx::update::Installed, Option<std::path::PathBuf>, Option<String>),
+    (router_state, router): (rynx::i2pd::RouterState, Option<rynx::i2pd::Router>),
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // This hook catches panics and restores the terminal before printing the error
     let original_hook = std::panic::take_hook();
@@ -216,6 +228,11 @@ async fn run(
     }
     app.update_note = update_note;
     app.open_home_page();
+    if let Some(note) = router_state.startup_note() {
+        app.current_tab().status_message = note;
+    }
+    app.router_state = router_state;
+    app.watch_router();
     app.check_for_updates_if_due();
 
     // Run App
@@ -227,6 +244,10 @@ async fn run(
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
+    // Before exiting, which skips cleanup: a router rynx started stops (unless it's kept)
+    if let Some(router) = router {
+        router.stop();
+    }
 
     if let Err(err) = res {
         println!("{:?}", err);

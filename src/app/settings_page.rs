@@ -54,6 +54,8 @@ impl App {
             "</select>",
         ));
 
+        html.push_str(&self.router_html());
+
         html.push_str("<h2>Browsing</h2>");
         // Search: a choice of engines that work without JavaScript, or an address of your own
         let preset = crate::constants::SEARCH_ENGINES.iter().find(|(_, _, url)| *url == s.search_url);
@@ -224,6 +226,8 @@ impl App {
         let mut cache = false;
         let mut cache_i2p = false;
         let mut updates = false;
+        let mut router = false;
+        let mut router_keep = false;
         let mut engine = None;
         for (control, value) in tab.controls.iter().zip(&tab.control_values) {
             if control.form != Some(form) {
@@ -234,6 +238,8 @@ impl App {
                 ("anubis", ControlValue::Checked(on)) => anubis = *on,
                 ("cache", ControlValue::Checked(on)) => cache = *on,
                 ("updates", ControlValue::Checked(on)) => updates = *on,
+                ("i2p_router", ControlValue::Checked(on)) => router = *on,
+                ("i2p_router_keep", ControlValue::Checked(on)) => router_keep = *on,
                 ("cache_i2p", ControlValue::Checked(on)) => cache_i2p = *on,
                 ("search_engine", ControlValue::Selected(i)) => {
                     if let ControlKind::Select { options } = &control.kind {
@@ -268,6 +274,8 @@ impl App {
         lines.push(format!("cache = {}", if cache { "on" } else { "off" }));
         lines.push(format!("updates = {}", if updates { "daily" } else { "off" }));
         lines.push(format!("cache_i2p = {}", if cache_i2p { "on" } else { "off" }));
+        lines.push(format!("i2p_router = {}", if router { "start" } else { "off" }));
+        lines.push(format!("i2p_router_keep = {}", if router_keep { "on" } else { "off" }));
 
         let (settings, problems) = crate::settings::Settings::parse(&lines.join("\n"));
         if let Some(problem) = problems.first() {
@@ -287,10 +295,13 @@ impl App {
         };
         match saved {
             Ok(message) => {
-                let restart = settings.download_dir != self.settings.download_dir;
+                let restart = settings.download_dir != self.settings.download_dir
+                    || settings.start_i2p_router != self.settings.start_i2p_router
+                    || settings.keep_i2p_router != self.settings.keep_i2p_router
+                    || settings.i2pd_path != self.settings.i2pd_path;
                 let message = match self.apply_settings(settings) {
                     Err(e) => e,
-                    Ok(()) if restart => format!("{}; the downloads folder changes when rynx next starts", message),
+                    Ok(()) if restart => format!("{}; some changes take effect when rynx next starts", message),
                     Ok(()) => message.to_string(),
                 };
                 self.show_internal_page(SETTINGS_PAGE);

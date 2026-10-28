@@ -11,6 +11,7 @@ pub mod forms;
 pub mod gemini;
 pub mod gopher;
 pub mod history;
+pub mod i2pd;
 pub mod keys;
 pub mod mcp;
 pub mod models;

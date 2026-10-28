@@ -26,6 +26,8 @@ pub enum NetworkResponse {
     UpdateChecked(usize, bool, Result<Option<crate::update::Release>, String>),
     /// An update was downloaded and checked (its version), or not: tab_id
     UpdateDownloaded(usize, Result<String, String>),
+    /// What the I2P router's console says (None: it didn't answer)
+    RouterProgress(Option<crate::i2pd::Progress>),
     /// An image was fetched and decoded (or failed): tab_id, address, image
     ImageLoaded(usize, String, Result<std::sync::Arc<image::DynamicImage>, String>),
 }
