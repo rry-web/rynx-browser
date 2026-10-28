@@ -531,3 +531,34 @@ fn vim_style_keys() {
     }
     rynx.quit();
 }
+
+/// Terminals that send ^H (Ctrl+H) for Backspace, as some openSUSE setups do: it deletes in the
+/// address bar and in find, and goes back on a page, instead of typing "h"
+#[test]
+fn ctrl_h_is_backspace() {
+    let site = two_pages();
+    let (_home, mut rynx) = started("ctrl-h");
+    rynx.open(&site.url("/a"));
+    rynx.wait_for("Alpha page");
+    rynx.open(&site.url("/b"));
+    rynx.wait_for("Beta page");
+    rynx.keys("\x08");
+    rynx.wait_for("Alpha page");
+
+    rynx.keys("e");
+    rynx.type_text("zqxwv");
+    rynx.wait_for("zqxwv");
+    rynx.keys("\x08\x08");
+    rynx.wait_gone("zqxwv");
+    assert!(rynx.text().contains("zqx"), "{}", rynx.screen());
+    assert!(!rynx.text().contains("zqxh") && !rynx.text().contains("zqxwvh"), "{}", rynx.screen());
+    rynx.keys("\x1b");
+    rynx.wait_for("Ready");
+
+    rynx.keys("/");
+    rynx.type_text("pagex");
+    rynx.wait_for("FIND");
+    rynx.keys("\x08");
+    rynx.wait_for("FIND match 1 of 1");
+    assert!(!rynx.text().contains("pagexh"), "{}", rynx.screen());
+}

@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- Backspace typed an "h" in the address bar and in find, and didn't go back on a page, in
+  terminals that send ^H for it (Ctrl+H, as some openSUSE setups do). Ctrl+H is now Backspace,
+  and other Ctrl combinations no longer type their letter there.
 - Tables whose cells span columns, like Wikipedia's navigation boxes, made those columns only a
   few characters wide, breaking every word onto its own line. The rule under a table's header
   also crosses only where the next row's cells divide.

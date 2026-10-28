@@ -29,6 +29,13 @@ fn viewport_height(terminal_height: u16) -> usize {
 }
 
 pub fn handle_key_event(app: &mut App, key: KeyEvent, terminal_width: u16, terminal_height: u16) -> Result<bool> {
+    // Some terminals (and stty settings, e.g. on openSUSE) send ^H for Backspace, which arrives as
+    // Ctrl+H; without this it typed an "h"
+    let key = if key.code == KeyCode::Char('h') && key.modifiers == KeyModifiers::CONTROL {
+        KeyEvent::new_with_kind(KeyCode::Backspace, KeyModifiers::NONE, key.kind)
+    } else {
+        key
+    };
     // The image viewer covers the page: Esc (or q, or i) closes it
     if app.images.viewer.is_some() {
         if matches!(key.code, KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('i') | KeyCode::Enter) {
@@ -407,7 +414,8 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
                 Err(e) => app.current_tab().status_message = e,
             }
         }
-        KeyCode::Char(c) => {
+        // Other Ctrl combinations aren't text
+        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) && !c.is_control() => {
             app.current_tab().url_input.push(c);
         }
         KeyCode::Backspace => {
@@ -781,7 +789,7 @@ fn handle_search_mode(app: &mut App, key: KeyEvent) -> Result<bool> {
                 None => String::from("Ready"),
             };
         }
-        KeyCode::Char(c) => {
+        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) && !c.is_control() => {
             if let Some(search_state) = &mut tab.search_state {
                 search_state.query.push(c);
                 // Clone the query to avoid borrowing issues
