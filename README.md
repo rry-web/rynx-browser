@@ -3,7 +3,7 @@
 A private, hardened terminal web browser written in Rust, loosely inspired by **Lynx** and
 **w3m**, with **no JavaScript**. It also browses Gemini, Gopher, RSS feeds and I2P.
 
-> **Version 0.3.0**, the first release out of beta. rynx is young: please report problems, and
+> **Out of beta since 0.3.0.** rynx is young: please report problems, and
 > anything that looks like a security issue (see [SECURITY.md](SECURITY.md)), on
 > [GitHub](https://github.com/rry-web/rynx-browser/issues). The filesystem sandbox hasn't yet been
 > checked on a wide range of systems.

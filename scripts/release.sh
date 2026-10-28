@@ -25,10 +25,15 @@ grep -q '^## \[Unreleased\]' CHANGELOG.md || fail 'CHANGELOG.md has no "## [Unre
 awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{exit} f && /^- /{found=1} END{exit !found}' CHANGELOG.md \
     || fail 'nothing is listed under "## [Unreleased]" in CHANGELOG.md'
 
+# A full check from clean builds well over 10 GB; running out halfway leaves a half-made release
+free_gb=$(( $(df -Pk . | awk 'NR==2 {print $4}') / 1024 / 1024 ))
+[ "$free_gb" -ge 20 ] || fail "only ${free_gb} GB free; a release needs 20 (cargo clean frees the old builds)"
+
 echo "Releasing $new (was $old)"
 sed -i.bak "s/^version = \"$old\"/version = \"$new\"/" Cargo.toml && rm Cargo.toml.bak
 sed -i.bak "s/^## \[Unreleased\]/## [$new]/" CHANGELOG.md && rm CHANGELOG.md.bak
-sed -i.bak "s/$old/$new/g" README.md && rm README.md.bak
+# Only the example command: other versions in the README (like "since 0.3.0") are history
+sed -i.bak "s/release.sh $old /release.sh $new /" README.md && rm README.md.bak
 # Brings both lock files to the new version (the fuzz targets' records rynx's version too)
 cargo check --quiet
 cargo check --quiet --manifest-path fuzz/Cargo.toml
