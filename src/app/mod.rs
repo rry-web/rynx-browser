@@ -85,6 +85,8 @@ pub struct App {
     pub router_state: crate::i2pd::RouterState,
     pub router_progress: Option<crate::i2pd::Progress>,
     router_ready_announced: bool,
+    /// Tabs closed lately, to reopen with X (the last CLOSED_TABS_KEPT)
+    pub closed_tabs: Vec<BrowserTab>,
     /// The browsing keys, from keys.conf
     pub keymap: crate::keys::Keymap,
     /// Certificates seen for Gemini hosts (trust on first use)
@@ -100,7 +102,7 @@ pub struct App {
     pub confirm_delete_snapshots: Option<String>,
     /// Restore defaults was pressed once on the settings page; a second press restores them
     pub confirm_reset_settings: bool,
-    /// `x` was pressed once on the history page; a second press clears it
+    /// `D` was pressed once on the history page; a second press clears it
     pub confirm_clear_history: bool,
     /// Latest terminal width, for laying out pages the browser makes itself
     pub terminal_width: u16,
@@ -108,6 +110,9 @@ pub struct App {
 
 /// The start page with the key bindings
 pub const HELP_PAGE: &str = "about:help";
+
+/// How many closed tabs are kept to reopen
+const CLOSED_TABS_KEPT: usize = 10;
 
 impl App {
     pub fn new(
@@ -152,6 +157,7 @@ impl App {
             update_api: crate::update::RELEASES_API.to_string(),
             release_keys: crate::update::RELEASE_KEYS.to_vec(),
             keymap: crate::keys::Keymap::default(),
+            closed_tabs: Vec::new(),
             router_state: crate::i2pd::RouterState::NotManaged,
             router_progress: None,
             router_ready_announced: false,
@@ -284,11 +290,39 @@ impl App {
 
     pub fn close_tab(&mut self) {
         if self.tabs.len() > 1 {
-            self.tabs.remove(self.active_tab_index);
+            let closed = self.tabs.remove(self.active_tab_index);
+            // Kept to reopen (X), the last few
+            self.closed_tabs.push(closed);
+            if self.closed_tabs.len() > CLOSED_TABS_KEPT {
+                self.closed_tabs.remove(0);
+            }
             if self.active_tab_index >= self.tabs.len() {
                 self.active_tab_index = self.tabs.len() - 1;
             }
         }
+    }
+
+    /// X: the tab closed last, back where it was shown, with its page and history
+    pub fn reopen_tab(&mut self) {
+        let Some(tab) = self.closed_tabs.pop() else {
+            self.current_tab().status_message = String::from("No closed tab to reopen");
+            return;
+        };
+        self.active_tab_index = (self.active_tab_index + 1).min(self.tabs.len());
+        self.tabs.insert(self.active_tab_index, tab);
+        self.render_tab(self.active_tab_index, self.terminal_width);
+        self.current_tab().status_message = String::from("Reopened the tab closed last");
+    }
+
+    /// Y: copy the page's address (a password in it isn't copied as typed: the page's address is)
+    pub fn copy_address(&mut self) {
+        let tab = self.current_tab();
+        let address = tab.page_url.clone().unwrap_or_else(|| tab.url_input.clone());
+        let message = match self.copy_to_clipboard(address.clone()) {
+            Ok(()) => format!("Copied {}", address),
+            Err(e) => e,
+        };
+        self.current_tab().status_message = message;
     }
 
     pub fn open_link_in_new_tab(&mut self, url: String) {

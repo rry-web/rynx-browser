@@ -122,6 +122,8 @@ fn test_app(server: &MockServer, key: [u8; 32], dir: &std::path::Path) -> App {
     app.clipboard = None;
     app.render_in_background = false;
     app.update_api = format!("{}/releases", server.uri());
+    // The fake release is a beta
+    app.settings.beta_updates = true;
     app.release_keys = vec![key];
     app.update_dir = Some(dir.join("update"));
     app.installed = Installed::Updatable(dir.join("rynx"));

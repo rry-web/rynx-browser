@@ -190,7 +190,7 @@ fn cache_02_i2p_site_gone() {
     let (_home, mut rynx) = in_i2p_mode("i2p-gone", &proxy, "");
     rynx.open("http://site.i2p/");
     rynx.wait_for("The first visit's copy");
-    rynx.keys("n");
+    rynx.keys("t");
     *up.lock().unwrap() = false;
     rynx.open("http://site.i2p/");
     rynx.wait_for("This is the copy saved");

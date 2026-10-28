@@ -1107,7 +1107,7 @@ async fn test_non_web_links_are_refused() {
 
     for (i, (_, scheme)) in links.iter().enumerate() {
         app.current_tab().selected_link_index = i;
-        for code in [KeyCode::Enter, KeyCode::Char('t'), KeyCode::Char('d')] {
+        for code in [KeyCode::Enter, KeyCode::Char('F'), KeyCode::Char('d')] {
             handle_key_event(&mut app, key(code), 80, 24).unwrap();
             let tab = app.current_tab();
             assert_eq!(tab.status_message, format!("Unsupported link type: {scheme}"), "{code:?}");

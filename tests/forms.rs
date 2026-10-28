@@ -306,7 +306,7 @@ async fn controls_are_never_downloaded_or_opened_in_tabs() {
     let mut app = test_app();
     arrive(&mut app, PAGE, "<form><input name=q></form>");
     press(&mut app, KeyCode::Char('d'));
-    press(&mut app, KeyCode::Char('t'));
+    press(&mut app, KeyCode::Char('F'));
     assert!(app.current_tab().download_prompt.is_none());
     assert_eq!(app.tabs.len(), 1);
 }
@@ -365,7 +365,7 @@ async fn links_that_hide_their_real_site_are_blocked_and_flagged() {
     let screen: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
     assert!(screen.contains("really goes to evil.example"), "no warning in preview");
 
-    for code in [KeyCode::Enter, KeyCode::Char('t')] {
+    for code in [KeyCode::Enter, KeyCode::Char('F')] {
         press(&mut app, code);
         assert!(app.current_tab().status_message.contains("evil.example"), "{code:?}");
         assert_eq!(app.tabs.len(), 1);

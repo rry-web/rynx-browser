@@ -60,7 +60,7 @@ fn set_03_home_page() {
     let site = Site::new(&[("/home", "<title>Home</title><h1>My home page</h1>")]);
     let (_home, mut rynx) = started_with("home-page", &format!("home_page = {}\n", site.url("/home")));
     rynx.wait_for("My home page");
-    rynx.keys("n");
+    rynx.keys("t");
     rynx.wait_for("Home");
     assert_eq!(rynx.rows()[1].matches("Home").count(), 2, "{}", rynx.rows()[1]);
     rynx.quit();
@@ -156,12 +156,12 @@ fn set_08_09_saved_and_cleared_history() {
     again.wait_for("RYNX BROWSER");
     again.keys("s");
     again.wait_for("Third");
-    again.keys("x");
+    again.keys("D");
     again.wait_for("again");
     again.keys("j");
-    again.keys("x");
+    again.keys("D");
     again.wait_for("again");
-    again.keys("x");
+    again.keys("D");
     again.wait_gone("Third");
     again.quit();
     let file = home.read_config("history.txt").unwrap_or_default();
@@ -219,7 +219,7 @@ fn set_14_settings_page() {
     let file = home.read_config("settings.conf").unwrap();
     assert!(file.contains(&format!("home_page = {}", site.url("/new-home"))), "{file}");
     assert!(file.contains("history = on"), "{file}");
-    rynx.keys("n");
+    rynx.keys("t");
     rynx.wait_for("The new home page");
     rynx.quit();
 }
@@ -256,7 +256,7 @@ fn key_01_changed_keys() {
     rynx.keys("\x1b[15~");
     std::thread::sleep(Duration::from_millis(500));
     assert_eq!(site.requests("/"), 2, "F5 didn't reload");
-    rynx.keys("n");
+    rynx.keys("t");
     rynx.wait_for("RYNX BROWSER");
     // Alt+l: Escape, then l
     rynx.keys("\x1bl");

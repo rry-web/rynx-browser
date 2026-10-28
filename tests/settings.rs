@@ -211,8 +211,8 @@ async fn visits_are_listed_on_the_history_page_and_can_be_cleared() {
     assert_eq!(app.history.entries.len(), 1);
     assert_eq!(app.history.entries[0].url, "https://example.com/page", "credentials are stripped");
 
-    // x does nothing away from the history page
-    press(&mut app, KeyCode::Char('x'));
+    // D does nothing away from the history page
+    press(&mut app, KeyCode::Char('D'));
     assert_eq!(app.history.entries.len(), 1);
 
     press(&mut app, KeyCode::Char('s'));
@@ -221,13 +221,13 @@ async fn visits_are_listed_on_the_history_page_and_can_be_cleared() {
     assert!(text(&mut app).contains("kept only until you quit"));
     assert_eq!(app.current_tab().link_regions[0].url, "https://example.com/page");
 
-    // One x asks; another key cancels; two in a row clear
-    press(&mut app, KeyCode::Char('x'));
+    // One D asks; another key cancels; two in a row clear
+    press(&mut app, KeyCode::Char('D'));
     assert!(app.current_tab().status_message.contains("again"));
     press(&mut app, KeyCode::Char('j'));
-    press(&mut app, KeyCode::Char('x'));
+    press(&mut app, KeyCode::Char('D'));
     assert_eq!(app.history.entries.len(), 1);
-    press(&mut app, KeyCode::Char('x'));
+    press(&mut app, KeyCode::Char('D'));
     assert!(app.history.entries.is_empty());
     assert!(text(&mut app).contains("No pages visited yet"));
 }
@@ -436,7 +436,7 @@ async fn new_tabs_show_the_start_page_address_and_back_returns_to_it() {
     press(&mut app, KeyCode::Backspace);
     assert_eq!(app.current_tab().url_input, "about:help", "back goes to the start page, not some website");
     assert!(text(&mut app).contains("Moving around"));
-    press(&mut app, KeyCode::Char('n'));
+    press(&mut app, KeyCode::Char('t'));
     assert_eq!(app.current_tab().url_input, "about:help");
 }
 

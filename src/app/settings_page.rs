@@ -157,7 +157,7 @@ impl App {
             choice(
                 "update_channel",
                 if s.beta_updates { "beta" } else { "stable" },
-                &[("beta", "Betas too, while rynx is in beta"), ("stable", "Stable releases only")]
+                &[("stable", "Stable releases"), ("beta", "Betas too: test versions of what's coming next")]
             )
         ));
         html.push_str("<h2>Privacy</h2>");

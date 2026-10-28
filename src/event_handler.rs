@@ -132,7 +132,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let page = viewport_height(terminal_height) as isize;
     // Clearing the history needs two x presses in a row
-    if key.code != KeyCode::Char('x') {
+    if key.code != KeyCode::Char('D') {
         app.confirm_clear_history = false;
     }
     // Restoring default settings or deleting snapshots needs the button pressed twice in a row
@@ -158,7 +158,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
         KeyCode::Char('b') => app.toggle_bookmark(),
         KeyCode::Char('B') => app.follow_link(crate::bookmarks::BOOKMARKS_PAGE.to_string()),
         KeyCode::Char('s') => app.follow_link(crate::history::HISTORY_PAGE.to_string()),
-        KeyCode::Char('x') => app.clear_history_key(),
+        KeyCode::Char('D') => app.clear_history_key(),
 
         // --- VISUAL MODE ---
         KeyCode::Char('v') => app.current_tab().enter_visual_mode(),
@@ -189,8 +189,18 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
             }
         }
         // --- TAB CONTROLS ---
-        KeyCode::Char('n') => app.add_tab(None),
-        KeyCode::Char('t') => {
+        KeyCode::Char('t') => app.add_tab(None),
+        KeyCode::Char('X') => app.reopen_tab(),
+        KeyCode::Char('Y') => app.copy_address(),
+        KeyCode::Char('O') => {
+            app.add_tab(None);
+            let tab = app.current_tab();
+            tab.url_before_edit = Some(tab.url_input.clone());
+            tab.url_input.clear();
+            tab.input_mode = InputMode::Editing;
+            tab.status_message = String::from("EDIT MODE - Type URL and press Enter");
+        }
+        KeyCode::Char('F') => {
             let tab = app.current_tab();
             if let Some(region) = tab.link_regions.get(tab.selected_link_index).filter(|r| r.control.is_none()) {
                 let full_url = crate::network::resolve_url(tab.link_base(), &region.url);

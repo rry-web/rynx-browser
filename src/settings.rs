@@ -100,8 +100,9 @@ const DOCUMENTED: &[Documented] = &[
     },
     Documented {
         key: "update_channel",
-        about: "Which releases to update to: \"beta\" (the default, while rynx is in beta) or \"stable\".",
-        examples: &["stable"],
+        about: "Which releases to update to: \"stable\" (the default) or \"beta\", which includes test versions\n\
+                of what's coming next.",
+        examples: &["beta"],
     },
     Documented {
         key: "images",
@@ -251,7 +252,7 @@ impl Default for Settings {
             image_display: ImageDisplay::Inline,
             image_protocol: ImageProtocol::Auto,
             check_updates: true,
-            beta_updates: true,
+            beta_updates: false,
             start_i2p_router: false,
             keep_i2p_router: false,
             i2pd_path: None,
@@ -414,7 +415,7 @@ impl Settings {
                 ImageProtocol::Blocks => Some("blocks".to_string()),
             },
             "updates" => (!self.check_updates).then(|| "off".to_string()),
-            "update_channel" => (!self.beta_updates).then(|| "stable".to_string()),
+            "update_channel" => self.beta_updates.then(|| "beta".to_string()),
             "cache" => self.disk_cache.then(|| "on".to_string()),
             "cache_i2p" => self.disk_cache_i2p.then(|| "on".to_string()),
             "i2p_router" => self.start_i2p_router.then(|| "start".to_string()),

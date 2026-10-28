@@ -153,7 +153,7 @@ impl History {
                     escape_html(title)
                 ));
             }
-            html.push_str("</ul><p>Times are UTC. Press <b>x</b> twice to clear the history.</p>");
+            html.push_str("</ul><p>Times are UTC. Press <b>D</b> twice to clear the history.</p>");
         }
         if !self.is_saved() {
             html.push_str(

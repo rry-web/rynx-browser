@@ -51,7 +51,7 @@ fn sec_03_04_non_web_and_i2p_links() {
     rynx.wait_for("mail link");
     rynx.keys("\r");
     rynx.wait_for("Unsupported link type: mailto");
-    rynx.keys("\tt");
+    rynx.keys("\tF");
     rynx.wait_for("Unsupported link type: javascript");
     assert!(!rynx.rows()[1].contains("│  Evil  │"), "a tab was opened: {}", rynx.rows()[1]);
     rynx.click_text("mail link");

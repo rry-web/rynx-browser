@@ -3,17 +3,17 @@
 A private, hardened terminal web browser written in Rust, loosely inspired by **Lynx** and
 **w3m**, with **no JavaScript**. It also browses Gemini, Gopher, RSS feeds and I2P.
 
-> **Status: beta.** Version 0.2.0-beta.10 is the latest release. rynx is under active development,
-> and some protections (the filesystem sandbox in particular) haven't yet been checked on a wide
-> range of systems. Please report problems, and anything that looks like a security issue (see
-> [SECURITY.md](SECURITY.md)), on [GitHub](https://github.com/rry-web/rynx-browser/issues).
+> **Version 0.3.0**, the first release out of beta. rynx is young: please report problems, and
+> anything that looks like a security issue (see [SECURITY.md](SECURITY.md)), on
+> [GitHub](https://github.com/rry-web/rynx-browser/issues). The filesystem sandbox hasn't yet been
+> checked on a wide range of systems.
 
 ## Installation
 
 With [Rust](https://rustup.rs) 1.90 or newer:
 
 ```sh
-cargo install rynx --version 0.2.0-beta.10
+cargo install rynx
 ```
 
 Or download your system's build from the [releases page](https://github.com/rry-web/rynx-browser/releases)
@@ -26,7 +26,7 @@ and `--no-sandbox` (for troubleshooting).
 
 ## Getting started
 
-Press **`e`**, type an address or search words, and press Enter. **`Tab`** steps through links and
+Press **`e`** (or **`o`**), type an address or search words, and press Enter. **`Tab`** steps through links and
 form fields (the bottom border shows where each goes), **Enter** follows a link or starts typing
 in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key, **`S`** the settings.
 
@@ -72,17 +72,19 @@ them (`reload = F5` adds a key, `reload = F5 only` replaces them, `reload = none
 
 | Keys | Action |
 | :--- | :--- |
-| `e` | Type an address or search words |
+| `e` or `o`, `O` | Type an address or search words (`O`: in a new tab) |
 | `Tab` / `Shift+Tab`, `Enter`, click | Select links and fields; open or use the selected one |
 | `Backspace` / `Right` (or `H` / `L`), `r` | Back / forward, reload |
 | `h` `j` `k` `l`, arrows, wheel, `PageUp` / `PageDown`, `Ctrl+u` / `Ctrl+d`, `g` / `G` | Move and scroll |
-| `n`, `w`, `t` or `Ctrl`+click, `[` / `]` | New tab, close tab, open link in a new tab, switch tabs |
-| `/`, `>` / `<` | Find on the page, next / previous match |
+| `t`, `x` (or `w`), `X` | New tab, close tab, reopen the tab closed last |
+| `F` or `Ctrl`+click, `J` / `K` (or `[` / `]`) | Open the link in a new tab; previous / next tab |
+| `/`, `n` / `N` (or `>` / `<`) | Find on the page, next / previous match |
 | `v` (then `y`) | Copy mode: select text and copy it |
 | `R`, `Shift+V` | Reader mode, page source |
 | `I`, `i` | Load the page's images, view one full screen |
 | `d` | Download the selected link |
-| `b`, `B`, `s` | Bookmark the page, show bookmarks, show history |
+| `b`, `B`, `s` | Bookmark the page, show bookmarks, show history (`D` twice there clears it) |
+| `Y` | Copy the page's address |
 | `C` | Let this site keep cookies (stay signed in), or forget them |
 | `T`, `Z`, `A` | Track a site's snapshots, show snapshots, the Internet Archive's copy |
 | `p` | Switch I2P mode (unless settings lock it) |

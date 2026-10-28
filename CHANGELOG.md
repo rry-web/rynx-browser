@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+The first release out of beta. rynx reads the web, Gemini, Gopher and feeds with no JavaScript;
+draws images in capable terminals; keeps a cache and snapshots; lets you stay signed in to the
+sites you choose; uses I2P through a router it can start; and updates itself with signed
+releases, all in a sandbox on Linux and macOS. The README lists everything it does.
+
+### Changed
+- Keys closer to Vim and Vim-style browsers: `n` / `N` between matches (`>` / `<` still work),
+  `o` and `O` (in a new tab) for an address, `t` a new tab, `F` opens the selected link in a new
+  tab, `J` / `K` between tabs (with `[` / `]`), `x` closes a tab (with `w`) and `X` reopens it,
+  `Y` copies the page's address, and `D` twice clears history (it was `x`). `keys.conf` can
+  change any of them back.
+- Updates follow stable releases by default; `update_channel = beta` (or the settings page) adds
+  test versions.
+
 ## [0.2.0-beta.10]
 
 ### Fixed

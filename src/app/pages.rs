@@ -107,14 +107,14 @@ impl App {
         }
     }
 
-    /// On the history page, `x` asks for confirmation and a second `x` clears the history
+    /// On the history page, `D` asks for confirmation and a second `D` clears the history
     pub fn clear_history_key(&mut self) {
         if self.current_tab().url_input != HISTORY_PAGE {
             return;
         }
         if !self.confirm_clear_history {
             self.confirm_clear_history = true;
-            self.current_tab().status_message = String::from("Press x again to clear all history");
+            self.current_tab().status_message = String::from("Press D again to clear all history");
             return;
         }
         self.confirm_clear_history = false;

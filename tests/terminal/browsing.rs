@@ -30,9 +30,9 @@ fn smoke_01_key_bindings() {
     let (_home, mut rynx) = started("smoke-keys");
     rynx.open(&site.url("/a"));
     rynx.wait_for("Alpha page");
-    // t opens the selected link (the first, when a page opens) in a new tab; ] and [ move
+    // F opens the selected link (the first, when a page opens) in a new tab; ] and [ move
     // between tabs; w closes one
-    rynx.keys("t");
+    rynx.keys("F");
     rynx.wait_for("Beta page");
     assert!(rynx.rows()[1].contains("Alpha") && rynx.rows()[1].contains("Beta"), "{}", rynx.rows()[1]);
     rynx.keys("]");
@@ -42,8 +42,8 @@ fn smoke_01_key_bindings() {
     rynx.keys("w");
     rynx.wait_for("Alpha page");
     assert!(!rynx.rows()[1].contains("Beta"), "the tab wasn't closed: {}", rynx.rows()[1]);
-    // n opens a new tab on the start page
-    rynx.keys("n");
+    // t opens a new tab on the start page
+    rynx.keys("t");
     rynx.wait_for("RYNX BROWSER");
     rynx.keys("w");
     rynx.wait_for("Alpha page");
@@ -115,7 +115,7 @@ fn smoke_03_resizing_rewraps() {
     rynx.settle();
     assert_eq!(lines_with_words(&rynx), wide);
     // PERF-04: the start page re-wraps rather than disappearing
-    rynx.keys("n");
+    rynx.keys("t");
     rynx.wait_for("RYNX BROWSER");
     rynx.resize(30, 70);
     rynx.settle();
@@ -168,7 +168,7 @@ fn crash_02_05_tiny_and_narrow_terminals() {
 #[test]
 fn crash_03_copy_mode_on_an_empty_page() {
     let (_home, mut rynx) = started("empty-visual");
-    rynx.keys("n");
+    rynx.keys("t");
     rynx.keys("V");
     rynx.keys("v");
     rynx.keys("jkllhhjj");
@@ -243,10 +243,10 @@ fn nav_04_05_07_jumps_within_a_page() {
     rynx.keys("\u{7f}");
     rynx.wait_for("Contents");
     assert_eq!(site.requests("/book"), 1, "Back reloaded the page");
-    // t on the chapter link (selected again once the page is opened anew): a new tab, at it
+    // F on the chapter link (selected again once the page is opened anew): a new tab, at it
     rynx.open(&site.url("/book"));
     rynx.wait_for("Contents");
-    rynx.keys("t");
+    rynx.keys("F");
     rynx.wait_for("Chapter 5 heading");
     assert!(rynx.rows()[1].matches("Book").count() >= 2, "{}", rynx.rows()[1]);
     rynx.quit();
@@ -401,7 +401,7 @@ fn perf_03_slow_pages_dont_freeze() {
     rynx.wait_for("Rendering");
     // A new tab appears at once, though the page isn't laid out yet
     let start = Instant::now();
-    rynx.keys("n");
+    rynx.keys("t");
     rynx.wait_for_within("RYNX BROWSER", Duration::from_secs(2));
     assert!(start.elapsed() < Duration::from_secs(2));
     rynx.keys("w");
@@ -473,5 +473,61 @@ fn unknown_about_pages_arent_searched() {
     rynx.open("about:blank");
     rynx.wait_for("There's no page about:blank in rynx");
     assert!(!rynx.text().contains("127.0.0.1:9"));
+    rynx.quit();
+}
+
+/// The Vim-style keys: n / N between matches, o and O for an address (O in a new tab), J / K
+/// between tabs, x closing one and X reopening it, F opening a link in a new tab
+#[test]
+fn vim_style_keys() {
+    let site = two_pages();
+    let (_home, mut rynx) = started("vim-keys");
+    rynx.keys("o");
+    rynx.keys("\u{15}");
+    rynx.type_text(&site.url("/a"));
+    rynx.keys("\r");
+    rynx.wait_for("Alpha page");
+    // Find, then n and N move between matches
+    rynx.keys("/");
+    rynx.type_text("a");
+    rynx.keys("\r");
+    rynx.wait_for("matches for \"a\"");
+    let first = rynx.cells_with_background(2);
+    rynx.keys("n");
+    rynx.settle();
+    let second = rynx.cells_with_background(2);
+    assert_ne!(first, second, "n didn't move to the next match");
+    rynx.keys("N");
+    rynx.settle();
+    assert_eq!(rynx.cells_with_background(2), first, "N didn't move back");
+    // F opens the selected link in a new tab
+    rynx.keys("\u{1b}");
+    rynx.keys("F");
+    rynx.wait_for("Beta page");
+    // J and K move between tabs
+    rynx.keys("J");
+    rynx.wait_for("Alpha page");
+    rynx.keys("K");
+    rynx.wait_for("Beta page");
+    // x closes the tab, X brings it back with its page
+    rynx.keys("x");
+    rynx.wait_for("Alpha page");
+    assert!(!rynx.rows()[1].contains("Beta"));
+    rynx.keys("X");
+    rynx.wait_for("Beta page");
+    rynx.wait_for("Reopened the tab");
+    // O types an address in a new tab
+    rynx.keys("O");
+    rynx.wait_for("EDITING ADDRESS");
+    rynx.type_text(&site.url("/c"));
+    rynx.keys("\r");
+    rynx.wait_for("Gamma page");
+    assert!(rynx.rows()[1].matches('│').count() >= 3, "no third tab: {}", rynx.rows()[1]);
+    #[cfg(target_os = "linux")]
+    {
+        // Y copies the address; on CI there's no clipboard, which it says
+        rynx.keys("Y");
+        rynx.wait_for("Clipboard unavailable");
+    }
     rynx.quit();
 }
