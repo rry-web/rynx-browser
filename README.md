@@ -499,7 +499,9 @@ every platform, published on GitHub with checksums, build provenance attestation
 of the checksums, and published to crates.io by trusted publishing. Tags containing `-` become
 pre-releases. The checksums are signed with the release key (the `RELEASE_SIGNING_KEY` secret; its
 public half is `RELEASE_KEY` in `src/update.rs` and `.github/release-signing-key.pub.pem`), and the
-workflow checks the signature before publishing. If the key is ever replaced, older copies of rynx
+workflow checks the signature before publishing. Each program carries its exact dependency list (`cargo auditable`), so `cargo audit bin rynx` checks
+a copy for known vulnerabilities. A backup release key, kept offline, is trusted too, for when the
+release key is lost or exposed (CONTRIBUTING.md). If the key is ever replaced, older copies of rynx
 can't verify newer releases and need one manual update.
 
 ## Roadmap

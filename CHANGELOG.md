@@ -15,6 +15,9 @@
   signed in. Cookies carry over when settings change.
 
 ### Security
+- Release programs carry their exact dependency list (`cargo auditable`), so a downloaded copy
+  can be checked for known vulnerabilities with `cargo audit bin rynx`; the release workflow
+  checks each build's list.
 - A backup release key is built in alongside the release key, its private half kept offline: if
   the release key is ever lost or exposed, a release signed with the backup key still updates
   every copy (CONTRIBUTING.md has the steps). The release workflow accepts either signature.

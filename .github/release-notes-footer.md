@@ -33,6 +33,9 @@ sha256sum -c SHA256SUMS --ignore-missing          # macOS: shasum -a 256 -c SHA2
 gh attestation verify <archive> --repo rry-web/rynx-browser
 ```
 
+Each program also carries its exact list of dependencies, so you can check a copy for known
+vulnerabilities at any time: `cargo install cargo-audit`, then `cargo audit bin rynx`.
+
 ## Platform notes
 
 - **Linux and macOS:** the browser sandboxes itself (Landlock on kernel 5.13 or newer; Seatbelt on

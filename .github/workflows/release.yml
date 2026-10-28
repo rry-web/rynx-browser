@@ -84,8 +84,19 @@ jobs:
       - name: Test
         if: matrix.test
         run: cargo test --locked --target ${{ matrix.target }}
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-auditable,cargo-audit
+      # The program carries its exact dependency list (cargo auditable), so anyone can check a
+      # downloaded copy for known vulnerabilities: cargo audit bin rynx
       - name: Build
-        run: cargo build --release --locked --target ${{ matrix.target }}
+        run: cargo auditable build --release --locked --target ${{ matrix.target }}
+      - name: Check the dependency list is in the program
+        shell: bash
+        run: |
+          exe=target/${{ matrix.target }}/release/rynx
+          [ -f "$exe" ] || exe="$exe.exe"
+          cargo audit bin "$exe"
 
       - name: Package
         id: package
