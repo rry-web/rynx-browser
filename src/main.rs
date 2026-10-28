@@ -210,6 +210,8 @@ async fn run(
         app.current_tab().status_message = format!("Ready ({})", sandbox_note);
     }
     if let Some(dir) = &config_dir {
+        // The clearweb cookies of the sites you allowed; I2P's are never saved
+        app.network_manager.cookies(false).load(dir);
         let (keymap, problems) = rynx::keys::Keymap::load_or_create(dir);
         app.keymap = keymap;
         if let Some(problem) = problems.first() {

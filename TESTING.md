@@ -413,6 +413,12 @@ Worth repeating after any dependency upgrade.
       *Expected:* the local name opens; localtest.me is refused with "points at 127.0.0.1 (or ::1),
       on this computer or your local network" and the hint about `local_names`.
 
+- [ ] **SEC-09 (priority) Staying signed in.** On a site you have an account with, press `C` on
+      its sign-in page, sign in, and follow a few links; quit and start rynx again.
+      *Expected:* you stay signed in across pages, and after the restart if the site's sign-in
+      offers "remember me". `about:cookies` lists the site; Forget there (or `C` on its page)
+      signs you out. Without `C`, the sign-in page's status line says to press it first.
+
 ## Platform security
 
 - [ ] **PLAT-01 (priority) Linux sandbox status.** On Linux, start the browser.

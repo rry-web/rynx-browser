@@ -334,6 +334,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
         KeyCode::Char('i') => app.view_image(viewport_height(terminal_height)),
         KeyCode::Char('Z') => app.open_snapshots(),
         KeyCode::Char('?') => app.follow_link(crate::app::HELP_PAGE.to_string()),
+        KeyCode::Char('C') => app.toggle_cookies(),
         _ => {}
     }
     Ok(false)
@@ -678,6 +679,9 @@ pub fn handle_network_event(app: &mut App, response: NetworkResponse, terminal_w
                 app.render_tab(index, terminal_width);
                 if app.is_rendering(index) {
                     app.tabs[index].status_message = String::from(crate::app::RENDERING_STATUS);
+                } else {
+                    // Laid out already (otherwise this is done when the layout arrives)
+                    app.hint_cookies_for_sign_in(index);
                 }
             }
             NetworkResponse::Rendered(_, version, page) => {

@@ -2143,6 +2143,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "psl"
+version = "2.1.245"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46cce9bc841c0eeb395275a775d11e3cc91b904e6ab370a9a42369e111b3038e"
+dependencies = [
+ "psl-types",
+]
+
+[[package]]
 name = "psl-types"
 version = "2.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2656,6 +2665,7 @@ version = "0.2.0-beta.7"
 dependencies = [
  "arboard",
  "argon2",
+ "cookie_store",
  "crossterm",
  "directories",
  "ego-tree",
@@ -2667,6 +2677,7 @@ dependencies = [
  "landlock",
  "libc",
  "percent-encoding",
+ "psl",
  "quick-xml",
  "ratatui",
  "ratatui-image",

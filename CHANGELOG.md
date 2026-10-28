@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+- Staying signed in: `C` lets the site you're on keep cookies (before signing in), `C` again
+  forgets them, and `about:cookies` lists the sites. A site is everything under its registered
+  name; its cookies are taken from and sent to it only, never for a whole public suffix. Lasting
+  clearweb cookies are saved in `cookies.json` (readable only by you); I2P sites are allowed
+  until rynx quits and their cookies never saved. A page asking for a password says how to stay
+  signed in. Cookies carry over when settings change.
+
 ### Security
 - Public names that point at this computer or the local network are refused (DNS rebinding):
   rynx looks every name up itself, for the web, images, tools, Gemini and Gopher, and connects

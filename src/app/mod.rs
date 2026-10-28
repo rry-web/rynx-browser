@@ -26,6 +26,7 @@ use directories::UserDirs;
 use futures_util::StreamExt;
 use tokio::io::AsyncWriteExt; // Required for streaming to file
 
+mod cookies_page;
 mod downloads;
 mod fetch;
 mod images;
@@ -245,6 +246,7 @@ impl App {
             tab.apply_render(page);
             if tab.status_message == RENDERING_STATUS {
                 tab.status_message = String::from("Loaded");
+                self.hint_cookies_for_sign_in(tab_index);
             }
             self.record_visit_if_pending(tab_index);
             self.load_images_if_pending(tab_index);
@@ -351,6 +353,7 @@ impl App {
             || url == SETTINGS_PAGE
             || url == crate::update::UPDATE_PAGE
             || url == crate::keys::KEYS_PAGE
+            || url == crate::cookies::COOKIES_PAGE
             || url.starts_with(crate::snapshots::SNAPSHOTS_PAGE)
             || url.starts_with(crate::snapshots::SNAPSHOT)
             || url.starts_with(crate::mcp::TOOLS_PAGE);
@@ -456,6 +459,10 @@ impl App {
         }
         if tab.page_url.is_none() && tab.url_input == crate::update::UPDATE_PAGE {
             self.update_form(submitter);
+            return;
+        }
+        if tab.page_url.is_none() && tab.url_input == crate::cookies::COOKIES_PAGE {
+            self.cookies_form(submitter);
             return;
         }
         if tab.page_url.is_none() && tab.url_input == crate::snapshots::SNAPSHOTS_PAGE {

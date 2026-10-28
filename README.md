@@ -27,7 +27,7 @@ A terminal web browser written in Rust, loosely inspired by **Lynx** and **w3m**
   that resume where they stopped. Useful on any connection, a big help over I2P.
 - **Fast and light:** pages are laid out on a background thread, so even huge or slow pages never
   freeze the screen, and rynx uses about 16 MB of memory. See [Efficiency](#efficiency).
-- **Private and hardened:** no cookies, no JavaScript, HTTPS everywhere, and on Linux and macOS a
+- **Private and hardened:** no cookies (except for sites you choose to stay signed in to), no JavaScript, HTTPS everywhere, and on Linux and macOS a
   filesystem sandbox. See [Security and privacy](#security-and-privacy).
 - **The small web:** [Gemini](https://geminiprotocol.net) and Gopher sites, and RSS/Atom feeds
   shown as readable pages.
@@ -105,8 +105,16 @@ Press **`Tab`** to step through the links and form fields on a page. The bottom 
 where the selected link goes, or what a form field is and where its form sends what you type.
 
 To use a form, select a field and press **Enter** to start typing, then **Enter** again to submit
-(or **Esc** to stop typing). There are no cookies, so sites that need you to log in won't keep
-you signed in.
+(or **Esc** to stop typing).
+
+There are no cookies, so sites forget you between pages, unless you let one keep them: press
+**`C`** on a site's page before signing in, and you stay signed in (also after restarting rynx, if
+the site's "remember me" cookie says so). **`C`** again forgets its cookies, which signs you out;
+`about:cookies` lists the sites you've allowed. A page asking for a password says this on the
+status line. A site means everything under its registered name (`accounts.example.com` and
+`www.example.com` are both `example.com`), and its cookies are sent only to it. Cookies are saved
+in `cookies.json` in the settings folder, readable only by you; I2P sites are allowed until rynx
+quits, and their cookies are never saved.
 
 Type `gemini://` or `gopher://` addresses as you would a web address. Gemini input prompts and
 Gopher searches appear as a form with one text field. Opening an RSS or Atom feed shows its posts
@@ -337,6 +345,7 @@ file still applies.
 | **`Shift+V`** | Show the page source |
 | **`p`** | Switch I2P mode on or off (through the proxy at `127.0.0.1:4444`), unless settings lock it |
 | **`S`** | Settings |
+| **`C`** | Let this site keep cookies, so you stay signed in (again to forget them); `about:cookies` lists them |
 | **`?`** | The start page, with these keys |
 | **`q`** | Quit |
 
@@ -345,9 +354,11 @@ file still applies.
 A text browser without JavaScript already avoids the biggest source of browser exploits. On top of
 that:
 
-- **No tracking:** no cookies, no storage, no `Referer` header, no JavaScript. The one exception
-  is the pass an Anubis check gives you: only Anubis's own cookies are kept, in memory, sent
-  only to the site that set them, and forgotten when you quit (with separate ones for I2P). In I2P mode the
+- **No tracking:** no cookies, no storage, no `Referer` header, no JavaScript. The exceptions
+  are the pass an Anubis check gives you (only Anubis's own cookies, kept in memory, sent only to
+  the site that set them, and forgotten when you quit) and the cookies of sites you choose to stay
+  signed in to (`C`), which are only taken from and sent to those sites. A site can't set a cookie
+  for a whole public suffix (`co.uk`, `github.io`), and clearweb and I2P cookies are kept apart. In I2P mode the
   browser always identifies itself as `MYOB/6.66 (AN/ON)`, the generic name the I2P proxy uses, so
   its visits don't stand out (even over HTTPS, where the proxy can't rewrite it). History is saved
   only if you turn it on, and never for I2P sites. Pages are kept on disk only if you turn the disk
@@ -431,7 +442,10 @@ rynx is a beta. What's missing or rough today:
 - **No JavaScript, by design.** Sites that only work with it (many web apps, most logins,
   CAPTCHAs) won't work; `A` (the Internet Archive's copy) or reader mode (`R`) sometimes help.
   Anubis bot checks are passed natively, except the `hashx` kind.
-- **No cookies**, so sites can't keep you signed in.
+- **Cookies are all or nothing per site:** a site you allow (`C`) gets its cookies sent with every
+  request to it, including images other pages load from it; there are no per-cookie choices and
+  no third-party cookie rules beyond "only allowed sites". Saved cookies aren't encrypted (see
+  encryption at rest on the roadmap).
 - **Images:** SVG isn't supported; an image only partly on screen shows as its caption until it's
   scrolled fully into view; macOS Terminal can only show rough coloured blocks. Forcing an image
   protocol your terminal doesn't support can make it miss your first key presses.

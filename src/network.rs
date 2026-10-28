@@ -213,6 +213,9 @@ pub struct NetworkManager {
     i2p_client: Client,
     download_client: Client,
     i2p_download_client: Client,
+    /// Separate, so a site can't link clearweb and I2P browsing
+    clearweb_cookies: std::sync::Arc<crate::cookies::Jar>,
+    i2p_cookies: std::sync::Arc<crate::cookies::Jar>,
 }
 
 impl NetworkManager {
@@ -222,9 +225,9 @@ impl NetworkManager {
         timeout: Duration,
         use_proxy: bool,
         proxy_url: &str,
-        cookies: &std::sync::Arc<crate::anubis::Cookies>,
+        cookies: &std::sync::Arc<crate::cookies::Jar>,
     ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
-        // The only cookies kept are Anubis's bot-check passes
+        // The only cookies kept are Anubis's bot-check passes and those of sites you allow
         let mut builder =
             Client::builder().user_agent(user_agent).timeout(timeout).cookie_provider(std::sync::Arc::clone(cookies));
 
@@ -281,14 +284,21 @@ impl NetworkManager {
     /// Clients introducing themselves as `user_agent` on the clearweb, with I2P traffic sent
     /// through `i2p_proxy`
     pub fn with_settings(i2p_proxy: &str, user_agent: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Self::with_cookies(i2p_proxy, user_agent, std::sync::Arc::default(), std::sync::Arc::default())
+    }
+
+    /// with_settings, keeping the cookies of clients made before (when settings change)
+    pub fn with_cookies(
+        i2p_proxy: &str,
+        user_agent: &str,
+        clearweb_cookies: std::sync::Arc<crate::cookies::Jar>,
+        i2p_cookies: std::sync::Arc<crate::cookies::Jar>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         // Our clients carry their own TLS config, but a reqwest Client built without one panics
         // when no process-wide crypto provider is installed. Already-installed is fine.
         let _ = rustls::crypto::ring::default_provider().install_default();
 
         // Create all four clients using the build_client helper method
-        // Separate, so a pass earned on the clearweb can't link it to I2P browsing
-        let clearweb_cookies = std::sync::Arc::default();
-        let i2p_cookies = std::sync::Arc::default();
         let client = Self::build_client(
             user_agent,
             Duration::from_secs(BROWSING_TIMEOUT_SECS),
@@ -318,7 +328,12 @@ impl NetworkManager {
             &i2p_cookies,
         )?;
 
-        Ok(Self { client, i2p_client, download_client, i2p_download_client })
+        Ok(Self { client, i2p_client, download_client, i2p_download_client, clearweb_cookies, i2p_cookies })
+    }
+
+    /// The cookies for the clearweb or I2P
+    pub fn cookies(&self, i2p_mode: bool) -> &std::sync::Arc<crate::cookies::Jar> {
+        if i2p_mode { &self.i2p_cookies } else { &self.clearweb_cookies }
     }
 
     pub fn get_client(&self, i2p_mode: bool) -> &Client {

@@ -16,7 +16,7 @@ cargo +nightly fuzz run render fuzz/artifacts/render/crash-...   # replay a cras
 | `gopher` | menus and addresses | selectors never carry line breaks |
 | `feed` | RSS and Atom | no crash; no entity expansion |
 | `anubis` | bot-check pages | the answer only goes back to the page's own site |
-| `cookies` | Set-Cookie headers | nothing is sent to another site |
+| `cookies` | Set-Cookie headers | kept only for Anubis and allowed sites; nothing sent to another site |
 | `settings` | settings files | written back and read again, nothing changes |
 | `keys` | keys.conf files | no crash |
 | `update_list` | the release list, checksum lists | only newer releases, with this platform's build |

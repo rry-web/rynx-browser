@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 145 (32 priority).
+Total checks: 146 (33 priority).
 
 
 ## Automated checks
@@ -171,6 +171,7 @@ Total checks: 145 (32 priority).
 | SEC-06 | Non-UTF-8 pages still render |  |  |  |  |
 | SEC-07 | Revoked certificates are rejected |  |  |  |  |
 | SEC-08 | Names on your own network | Yes |  |  |  |
+| SEC-09 | Staying signed in | Yes |  |  |  |
 
 ## Platform security
 
@@ -210,7 +211,7 @@ Total checks: 145 (32 priority).
 
 | ID | Check | Priority | Result | Date | Notes |
 |----|-------|:--------:|--------|------|-------|
-| UPD-01 | Updating a release build | Yes |  |  |  |
+| UPD-01 | Updating a release build | Yes | Pass | 2026-10-28 | The released beta.6 (aarch64-apple-darwin, from GitHub) found beta.7, downloaded and verified it (U, then the button), and on the next start installed it, restarted and said "Updated to rynx 0.2.0-beta.7"; `--version` then gave beta.7. |
 | UPD-02 | Cargo installs |  |  |  |  |
 | UPD-03 | I2P |  |  |  |  |
 

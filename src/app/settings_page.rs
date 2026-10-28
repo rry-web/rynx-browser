@@ -37,7 +37,7 @@ impl App {
         let mut html = String::from(
             "<title>Settings</title><h1>Settings</h1>\
              <p><a href=\"about:history\">History</a> · <a href=\"about:bookmarks\">Bookmarks</a> · \
-             <a href=\"about:snapshots\">Snapshots</a> · <a href=\"about:keys\">Keys</a> · <a href=\"about:help\">Help</a></p>\
+             <a href=\"about:snapshots\">Snapshots</a> · <a href=\"about:cookies\">Cookies</a> · <a href=\"about:keys\">Keys</a> · <a href=\"about:help\">Help</a></p>\
              <form action=\"about:settings-save\">",
         );
         // The network lock first: it's the one that matters for privacy
@@ -322,8 +322,14 @@ impl App {
     /// sandbox fixes at startup)
     fn apply_settings(&mut self, new: crate::settings::Settings) -> Result<(), String> {
         if new.user_agent != self.settings.user_agent || new.i2p_proxy != self.settings.i2p_proxy {
-            let network = NetworkManager::with_settings(&new.i2p_proxy, &new.user_agent)
-                .map_err(|e| format!("Settings saved, but they couldn't be applied: {}", e))?;
+            // The cookies carry over to the new clients
+            let network = NetworkManager::with_cookies(
+                &new.i2p_proxy,
+                &new.user_agent,
+                Arc::clone(self.network_manager.cookies(false)),
+                Arc::clone(self.network_manager.cookies(true)),
+            )
+            .map_err(|e| format!("Settings saved, but they couldn't be applied: {}", e))?;
             self.network_manager = Arc::new(network);
         }
         self.cache.configure(new.disk_cache, new.disk_cache_i2p, new.cache_size_mb);

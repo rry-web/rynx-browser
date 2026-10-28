@@ -69,6 +69,7 @@ const ACTIONS: &[Action] = &[
     Action { name: "load_images", about: "Load the page's images", defaults: &["I"] },
     Action { name: "view_image", about: "View an image full screen", defaults: &["i"] },
     Action { name: "updates", about: "Updates", defaults: &["U"] },
+    Action { name: "cookies", about: "Let this site keep cookies (stay signed in), or forget them", defaults: &["C"] },
     Action { name: "help", about: "The start page, with the keys", defaults: &["?"] },
 ];
 
