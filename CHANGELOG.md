@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.1]
 
 ### Fixed
 - Backspace typed an "h" in the address bar and in find, and didn't go back on a page, in
