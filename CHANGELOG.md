@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0-beta.9]
 
 (Tagged as 0.2.0-beta.8 at first, but that release's builds failed and nothing was published.)
 
