@@ -57,7 +57,7 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
 - Dated snapshots of sites you track (`T`, `Z`)
 - Downloads that resume where they stopped, tagged so your system checks them
 - Staying signed in to the sites you choose (`C`), with their cookies encrypted by a key in the
-  system keychain
+  system keychain (asked for only once a site keeps cookies; `cookie_encryption = off` skips it)
 - Anubis bot checks passed without JavaScript
 - Changeable keys (`keys.conf`), settings in the browser (`S`) or in `settings.conf`
 - Signed updates, checked daily and installed when you agree (`U`)

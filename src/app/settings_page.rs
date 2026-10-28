@@ -173,6 +173,11 @@ impl App {
              (otherwise they're kept in memory until you quit)",
         ));
         html.push_str(&checkbox(
+            "cookie_encryption",
+            s.encrypt_cookies,
+            "Encrypt saved cookies with a key in the system keychain (asked for once a site keeps cookies; on macOS it may ask again after updates)",
+        ));
+        html.push_str(&checkbox(
             "cache_i2p",
             s.disk_cache_i2p,
             "Keep I2P pages on disk too (faster on slow I2P connections, but a record of I2P visits)",
@@ -233,6 +238,7 @@ impl App {
         let mut cache = false;
         let mut cache_i2p = false;
         let mut updates = false;
+        let mut encrypt_cookies = false;
         let mut router = false;
         let mut router_keep = false;
         let mut engine = None;
@@ -245,6 +251,7 @@ impl App {
                 ("anubis", ControlValue::Checked(on)) => anubis = *on,
                 ("cache", ControlValue::Checked(on)) => cache = *on,
                 ("updates", ControlValue::Checked(on)) => updates = *on,
+                ("cookie_encryption", ControlValue::Checked(on)) => encrypt_cookies = *on,
                 ("i2p_router", ControlValue::Checked(on)) => router = *on,
                 ("i2p_router_keep", ControlValue::Checked(on)) => router_keep = *on,
                 ("cache_i2p", ControlValue::Checked(on)) => cache_i2p = *on,
@@ -281,6 +288,7 @@ impl App {
         lines.push(format!("cache = {}", if cache { "on" } else { "off" }));
         lines.push(format!("updates = {}", if updates { "daily" } else { "off" }));
         lines.push(format!("cache_i2p = {}", if cache_i2p { "on" } else { "off" }));
+        lines.push(format!("cookie_encryption = {}", if encrypt_cookies { "keychain" } else { "off" }));
         lines.push(format!("i2p_router = {}", if router { "start" } else { "off" }));
         lines.push(format!("i2p_router_keep = {}", if router_keep { "on" } else { "off" }));
 

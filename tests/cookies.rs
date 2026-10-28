@@ -394,3 +394,31 @@ fn the_system_keychain_keeps_the_key() {
     assert_ne!(first, [0u8; 32]);
     let _ = keyring::Entry::new(service, "cookie encryption key").and_then(|e| e.delete_credential());
 }
+
+/// The keychain is wanted only once a site has been allowed cookies
+#[test]
+fn the_keychain_is_needed_only_once_a_site_keeps_cookies() {
+    let dir = temp_dir("needed");
+    assert!(!rynx::cookies::keychain_needed(&dir), "nothing saved yet");
+    std::fs::write(dir.join(rynx::cookies::SITES_FILE), "# Sites allowed to keep cookies\n\n").unwrap();
+    assert!(!rynx::cookies::keychain_needed(&dir), "a list with no sites");
+    std::fs::write(dir.join(rynx::cookies::SITES_FILE), "# Sites\nexample.com\n").unwrap();
+    assert!(rynx::cookies::keychain_needed(&dir));
+    std::fs::remove_file(dir.join(rynx::cookies::SITES_FILE)).unwrap();
+    std::fs::write(dir.join(rynx::cookies::ENCRYPTED_FILE), b"RYNXCK1\0").unwrap();
+    assert!(rynx::cookies::keychain_needed(&dir), "encrypted cookies need their key");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_cookie_encryption_setting() {
+    let defaults = rynx::settings::Settings::default();
+    assert!(defaults.encrypt_cookies);
+    let (off, problems) = rynx::settings::Settings::parse("cookie_encryption = off");
+    assert!(problems.is_empty() && !off.encrypt_cookies);
+    assert!(off.to_file_text().contains("\ncookie_encryption = off\n"));
+    assert_eq!(rynx::settings::Settings::parse(&off.to_file_text()).0, off);
+    assert!(defaults.to_file_text().contains("# cookie_encryption = off"));
+    let (_, problems) = rynx::settings::Settings::parse("cookie_encryption = maybe");
+    assert_eq!(problems.len(), 1);
+}

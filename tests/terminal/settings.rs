@@ -314,3 +314,36 @@ fn upd_03_no_checks_locked_to_i2p() {
     assert_eq!(site.requests("/releases"), 0, "an update check was made");
     rynx.quit();
 }
+
+/// The keychain isn't asked until a site keeps cookies (nor at all, turned off); about:cookies
+/// says which
+#[test]
+fn the_keychain_is_asked_only_when_needed() {
+    let (home, mut rynx) = started_with("keychain-needed", "");
+    rynx.wait_for("RYNX BROWSER");
+    rynx.open("about:cookies");
+    rynx.wait_for("no site keeps cookies yet");
+    rynx.quit();
+
+    home.settings("cookie_encryption = off\n");
+    let mut off = Rynx::start(&home);
+    off.wait_for("RYNX BROWSER");
+    off.open("about:cookies");
+    off.wait_for("cookie_encryption is off in settings");
+    off.quit();
+
+    // Once a site has been allowed cookies, the keychain is asked (here, with a home of its own,
+    // there isn't one to find, which the page says)
+    home.settings("");
+    std::fs::write(home.config().join(rynx::cookies::SITES_FILE), "example.com\n").unwrap();
+    let mut asked = Rynx::start(&home);
+    asked.wait_for("RYNX BROWSER");
+    asked.open("about:cookies");
+    asked.wait_for("example.com");
+    let text = asked.text();
+    assert!(
+        !text.contains("no site keeps cookies yet") && !text.contains("off in settings"),
+        "the keychain wasn't asked: {text}"
+    );
+    asked.quit();
+}

@@ -8,6 +8,10 @@
   characters on screen as you scrolled, in Kitty especially (Wikipedia's language menu). Rows
   with such text are now written cell by cell, each at its own position.
 - When some of a page's images couldn't be shown, the status line named no reason.
+- rynx asked the system keychain for its cookie key at every start, even if no site had ever been
+  allowed cookies, so macOS asked about it (after each update, too) for nothing. The keychain is
+  now asked only once a site keeps cookies, and `cookie_encryption = off` (or the settings page)
+  skips it altogether.
 
 ### Added
 - Galleries and grids of loaded images are laid out side by side while they fit, each caption

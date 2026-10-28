@@ -70,7 +70,8 @@ Items marked **(priority)** haven't been checked by a person yet.
       signs you out. Without `C`, the sign-in page's status line says to press it first.
 - [ ] **SEC-11 (priority) Cookies encrypted in the keychain.** After SEC-09, look at
       `about:cookies`, the settings folder, and (macOS) Keychain Access, searching "rynx-browser".
-      *Expected:* the page says "encrypted, with a key in the system keychain"; the folder has
+      *Expected:* before any site keeps cookies, macOS doesn't ask about the keychain at all; after
+      SEC-09 and a restart, the page says "encrypted, with a key in the system keychain"; the folder has
       `cookies.enc` and no `cookies.json`; the keychain has a "rynx-browser" entry. Start rynx
       again: still signed in. On Linux, the same with GNOME Keyring or KWallet running; without
       one, the page says they're not encrypted and why.

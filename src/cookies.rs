@@ -113,22 +113,14 @@ impl Jar {
                 BTreeSet::new(),
                 None,
                 format!(
-                    "saved cookies are encrypted with a key in the system keychain, which isn't available now ({}); rynx started without them",
+                    "saved cookies are encrypted, and their key isn't available now ({}); rynx started without them",
                     why
                 ),
                 false,
             ),
             Err(why) => {
                 let (sites, store) = read_plain(folder);
-                (
-                    sites,
-                    store,
-                    format!(
-                        "not encrypted, since the system keychain isn't available ({}); saved readable only by you",
-                        why
-                    ),
-                    false,
-                )
+                (sites, store, format!("not encrypted ({}); saved readable only by you", why), false)
             }
         };
         let mut store = store.unwrap_or_default();
@@ -292,8 +284,17 @@ fn decrypt(key: &[u8; 32], data: &[u8]) -> Result<(BTreeSet<String>, Option<cook
     Ok((sites, store))
 }
 
+/// Whether the keychain is needed: a site has been allowed cookies before (there's a list of
+/// them, or encrypted cookies). Until then rynx doesn't ask the keychain at all, so someone who
+/// never stays signed in anywhere is never asked about it.
+pub fn keychain_needed(folder: &Path) -> bool {
+    folder.join(ENCRYPTED_FILE).exists()
+        || std::fs::read_to_string(folder.join(SITES_FILE))
+            .is_ok_and(|text| text.lines().any(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#')))
+}
+
 /// The key saved cookies are encrypted with, from the system keychain under `service`, made the
-/// first time. Asked for once at startup.
+/// first time. Asked for once at startup, and only when keychain_needed.
 pub fn keychain_key(service: &str) -> Result<[u8; 32], String> {
     let entry = keyring::Entry::new(service, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())?;
     match entry.get_secret() {

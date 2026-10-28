@@ -113,7 +113,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // On macOS the keychain's files are in the home folder, which the sandbox closes, so the
     // cookie key is asked for first; Seatbelt confines the whole process, threads and all
     #[cfg(target_os = "macos")]
-    let cookie_key = config_dir.as_ref().map(|_| ask_keychain());
+    let cookie_key = cookie_key(&settings, config_dir.as_deref());
 
     // Sandbox while this is still the only thread: every thread started afterwards (the async
     // runtime, clipboard, background rendering) inherits the restrictions. The writable folders
@@ -137,7 +137,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     // On Linux the cookie key is asked for after the sandbox (see ask_keychain)
     #[cfg(not(target_os = "macos"))]
-    let cookie_key = config_dir.as_ref().map(|_| ask_keychain());
+    let cookie_key = cookie_key(&settings, config_dir.as_deref());
 
     tokio::runtime::Builder::new_multi_thread().enable_all().build()?.block_on(run(
         settings,
@@ -148,6 +148,20 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         (router_state, router),
         cookie_key,
     ))
+}
+
+/// The key saved cookies are encrypted with, if they're to be and a site has been allowed cookies
+/// (so the keychain isn't asked, nor on macOS its permission, before anything needs it), or why
+/// not, as the cookies page says it
+fn cookie_key(settings: &Settings, config_dir: Option<&std::path::Path>) -> Option<Result<[u8; 32], String>> {
+    let dir = config_dir?;
+    Some(if !settings.encrypt_cookies {
+        Err("cookie_encryption is off in settings".to_string())
+    } else if !rynx::cookies::keychain_needed(dir) {
+        Err("no site keeps cookies yet; once one does, they're encrypted from rynx's next start, with a key in the system keychain".to_string())
+    } else {
+        ask_keychain().map_err(|e| format!("the system keychain isn't available: {}", e))
+    })
 }
 
 /// The key saved cookies are encrypted with, from the system keychain, in a thread of its own: on
