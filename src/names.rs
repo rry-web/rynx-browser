@@ -10,16 +10,15 @@ use std::borrow::Cow;
 enum Script {
     /// Digits and hyphens, which go with any script
     Common,
-    Latin,
     Cyrillic,
     Greek,
+    /// Latin, and every other script
     Other,
 }
 
 fn script(ch: char) -> Script {
     match ch as u32 {
         0x30..=0x39 | 0x2d => Script::Common,
-        0x61..=0x7a | 0x41..=0x5a | 0xc0..=0x24f | 0x1e00..=0x1eff | 0x2c60..=0x2c7f | 0xa720..=0xa7ff => Script::Latin,
         0x370..=0x3ff | 0x1f00..=0x1fff => Script::Greek,
         0x400..=0x52f | 0x2de0..=0x2dff | 0xa640..=0xa69f | 0x1c80..=0x1c8f => Script::Cyrillic,
         _ => Script::Other,
@@ -49,12 +48,10 @@ fn safe_label(label: &str, ending: Option<Script>) -> bool {
     }
     let scripts: Vec<Script> = label.chars().map(script).filter(|s| *s != Script::Common).collect();
     let has = |wanted: Script| scripts.contains(&wanted);
-    let confusable = [Script::Latin, Script::Cyrillic, Script::Greek];
-    // Latin, Cyrillic and Greek mixed, or one of the last two with anything else
-    if confusable.iter().filter(|s| has(**s)).count() > 1 {
-        return false;
-    }
-    if (has(Script::Cyrillic) || has(Script::Greek)) && has(Script::Other) {
+    // Cyrillic or Greek mixed with each other, or with any other script (Latin included)
+    if (has(Script::Cyrillic) && has(Script::Greek))
+        || ((has(Script::Cyrillic) || has(Script::Greek)) && has(Script::Other))
+    {
         return false;
     }
     // Entirely Cyrillic or Greek letters that look Latin ("аррlе"), outside their own endings
@@ -126,5 +123,33 @@ pub fn host_for_lookup(host: &str) -> Cow<'_, str> {
     match idna::domain_to_ascii(&decoded) {
         Ok(ascii) => Cow::Owned(ascii),
         Err(_) => Cow::Borrowed(host),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn labels_with_hidden_or_address_like_characters_are_unsafe() {
+        // International names can't carry these once decoded, but the check doesn't rely on that
+        for label in ["ex\u{7}ample", "ex ample", "ex\tample", "pay⁄pal", "pay．pal"] {
+            assert!(!safe_label(label, None), "{label:?}");
+        }
+        assert!(safe_label("bücher", None));
+    }
+
+    #[test]
+    fn cyrillic_or_greek_mixed_with_any_other_script_is_unsafe() {
+        assert!(!safe_label("мир例え", Some(Script::Cyrillic)), "Cyrillic and Han");
+        assert!(!safe_label("λόγος例", Some(Script::Greek)), "Greek and Han");
+        assert!(!safe_label("мирλ", Some(Script::Cyrillic)), "Cyrillic and Greek");
+        assert!(safe_label("例え", None));
+        assert!(safe_label("мир", Some(Script::Cyrillic)));
+    }
+
+    #[test]
+    fn plain_addresses_are_shown_as_they_are_without_a_copy() {
+        assert!(matches!(show_address("https://example.com/a").0, Cow::Borrowed("https://example.com/a")));
     }
 }
