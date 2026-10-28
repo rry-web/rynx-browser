@@ -407,6 +407,11 @@ Worth repeating after any dependency upgrade.
       *Expected:* accented characters display correctly.
 - [ ] **SEC-07 Revoked certificates are rejected.** Open `https://revoked.badssl.com/`.
       *Expected:* an error mentioning the certificate is revoked (macOS and Windows).
+- [ ] **SEC-08 (priority) Names on your own network.** Open your router's or another device's
+      local name (e.g. `http://router.lan/`, or a `.local` name), then `http://localtest.me/` (a
+      public name that points at 127.0.0.1).
+      *Expected:* the local name opens; localtest.me is refused with "points at 127.0.0.1 (or ::1),
+      on this computer or your local network" and the hint about `local_names`.
 
 ## Platform security
 

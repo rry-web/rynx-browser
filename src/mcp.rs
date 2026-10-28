@@ -615,7 +615,7 @@ async fn post(
             request = request.header("Mcp-Session-Id", id);
         }
     }
-    request.send().await.map_err(|e| format!("Couldn't reach the tools server: {}", e))
+    request.send().await.map_err(|e| format!("Couldn't reach the tools server: {}", crate::network::request_error(&e)))
 }
 
 /// The data of each event in a text/event-stream body

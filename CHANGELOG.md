@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+- Public names that point at this computer or the local network are refused (DNS rebinding):
+  rynx looks every name up itself, for the web, images, tools, Gemini and Gopher, and connects
+  only to the addresses it checked. Names local by their form (`printer.local`, `router.lan`,
+  `*.home.arpa`, `*.internal`, single words) are now also treated as local, so public pages
+  can't redirect or link the browser to them; `local_names` allows a company network's names.
+- Failed requests say why (a refused name, a refused connection), not only "error sending
+  request".
+
 ## [0.2.0-beta.7]
 
 ### Added

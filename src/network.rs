@@ -237,6 +237,12 @@ impl NetworkManager {
             builder = builder.proxy(proxy);
         }
 
+        // Names are looked up by rynx, refusing public names that point at the local network
+        // (through the I2P proxy, the proxy looks them up instead)
+        if !use_proxy {
+            builder = builder.dns_resolver(std::sync::Arc::new(crate::dns::Resolver));
+        }
+
         // Redirects are followed by get_following_redirects so every hop is checked and upgraded
         builder = builder.redirect(reqwest::redirect::Policy::none());
 
@@ -337,7 +343,7 @@ fn host_of(url: &Url) -> Option<Host<String>> {
 
 fn is_loopback_host(url: &Url) -> bool {
     match host_of(url) {
-        Some(Host::Domain(d)) => d.eq_ignore_ascii_case("localhost") || d.ends_with(".localhost"),
+        Some(Host::Domain(d)) => d.eq_ignore_ascii_case("localhost") || d.to_ascii_lowercase().ends_with(".localhost"),
         Some(Host::Ipv4(ip)) => ip.is_loopback(),
         Some(Host::Ipv6(ip)) => ip.is_loopback(),
         None => false,
@@ -350,17 +356,12 @@ fn is_local_network_host(url: &Url) -> bool {
         return true;
     }
     match host_of(url) {
-        Some(Host::Ipv4(ip)) => ip.is_private() || ip.is_link_local() || ip.is_unspecified() || ip.is_broadcast(),
-        Some(Host::Ipv6(ip)) => {
-            let first = ip.segments()[0];
-            ip.is_unspecified()
-                || (first & 0xfe00) == 0xfc00 // unique local fc00::/7
-                || (first & 0xffc0) == 0xfe80 // link-local fe80::/10
-                || ip.to_ipv4_mapped().is_some_and(|v4| {
-                    v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified()
-                })
-        }
-        _ => false,
+        Some(Host::Ipv4(ip)) => crate::dns::is_local_address(ip.into()),
+        Some(Host::Ipv6(ip)) => crate::dns::is_local_address(ip.into()),
+        // Names that are local by their form (printer.local, router.lan, a single word); .i2p
+        // names are I2P sites, not local ones
+        Some(Host::Domain(name)) => crate::dns::is_local_name(&name) && !name.ends_with(".i2p"),
+        None => false,
     }
 }
 
@@ -392,6 +393,21 @@ pub fn check_redirect(from: &Url, to: &Url) -> Result<(), String> {
         return Err("Blocked redirect to local network (SSRF Protection)".to_string());
     }
     Ok(())
+}
+
+/// A failed request, with its cause: reqwest's own message ("error sending request for url")
+/// leaves out why, which is at the end of the chain (a refused name, a refused connection)
+pub fn request_error(error: &reqwest::Error) -> String {
+    let mut cause = None;
+    let mut source = std::error::Error::source(error);
+    while let Some(next) = source {
+        cause = Some(next.to_string());
+        source = next.source();
+    }
+    match cause {
+        Some(cause) if !error.to_string().contains(&cause) => format!("{}: {}", error, cause),
+        _ => error.to_string(),
+    }
 }
 
 /// GET a URL, following redirects manually so every hop is upgraded to HTTPS and SSRF-checked
@@ -434,7 +450,7 @@ pub async fn send_with_headers(
             None => client.get(current.clone()),
         }
         .headers(headers.clone());
-        let response = request.send().await.map_err(|e| e.to_string())?;
+        let response = request.send().await.map_err(|e| request_error(&e))?;
         // A 3xx without Location (e.g. 304) is returned as-is
         let location = match response.headers().get(reqwest::header::LOCATION) {
             Some(location) if response.status().is_redirection() => location,

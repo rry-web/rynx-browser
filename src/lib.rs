@@ -5,6 +5,7 @@ pub mod app;
 pub mod bookmarks;
 pub mod cache;
 pub mod constants;
+pub mod dns;
 pub mod event_handler;
 pub mod feeds;
 pub mod forms;

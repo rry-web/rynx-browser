@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 144 (31 priority).
+Total checks: 145 (32 priority).
 
 
 ## Automated checks
@@ -170,6 +170,7 @@ Total checks: 144 (31 priority).
 | SEC-05 | Compression bomb rejected |  |  |  |  |
 | SEC-06 | Non-UTF-8 pages still render |  |  |  |  |
 | SEC-07 | Revoked certificates are rejected |  |  |  |  |
+| SEC-08 | Names on your own network | Yes |  |  |  |
 
 ## Platform security
 

@@ -71,7 +71,7 @@ pub async fn load(url: &str, limit: u64) -> Result<Page, String> {
     };
     let host_port = format!("{}:{}", target.host, target.port);
     let exchange = async {
-        let mut stream = tokio::net::TcpStream::connect((target.host.as_str(), target.port))
+        let mut stream = crate::dns::connect(&target.host, target.port)
             .await
             .map_err(|e| format!("Couldn't connect to {}: {}", host_port, e))?;
         stream.write_all(request.as_bytes()).await.map_err(|e| e.to_string())?;

@@ -41,6 +41,14 @@ const DOCUMENTED: &[Documented] = &[
         examples: &["http://127.0.0.1:4444"],
     },
     Documented {
+        key: "local_names",
+        about: "Names on your own network (a company's, say) that point at local addresses, comma-separated,\n\
+                with their subdomains. Other public names that point at this computer or the local network are\n\
+                refused, so a site can't use its name to reach your router or printer. Names like printer.local,\n\
+                router.lan or a single word never need listing.",
+        examples: &["intranet.example.com, wiki.example.org"],
+    },
+    Documented {
         key: "i2p_router",
         about: "Start the I2P router, i2pd, when rynx starts, if it's installed and no router is already\n\
                 running at i2p_proxy. Off by default. It has its own data folder, apart from any i2pd set up by hand.",
@@ -212,6 +220,8 @@ pub struct Settings {
     pub start_i2p_router: bool,
     pub keep_i2p_router: bool,
     pub i2pd_path: Option<PathBuf>,
+    /// Public-looking names allowed to point at local addresses
+    pub local_names: Vec<String>,
 }
 
 impl Default for Settings {
@@ -236,6 +246,7 @@ impl Default for Settings {
             start_i2p_router: false,
             keep_i2p_router: false,
             i2pd_path: None,
+            local_names: Vec::new(),
         }
     }
 }
@@ -253,6 +264,11 @@ pub fn cache_dir() -> Option<PathBuf> {
 /// The folder snapshots are kept in: the user's own data, unlike the cache
 pub fn snapshots_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("", "", "rynx-browser").map(|dirs| dirs.data_dir().join("snapshots"))
+}
+
+/// A host name: letters, digits, hyphens and dots (or nothing, between commas)
+fn is_host_name(name: &str) -> bool {
+    name.len() <= 253 && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.')
 }
 
 fn is_web_url(value: &str) -> bool {
@@ -286,6 +302,10 @@ impl Settings {
                 "i2p_router" if matches!(value, "start" | "off") => settings.start_i2p_router = value == "start",
                 "i2p_router_keep" if matches!(value, "on" | "off") => settings.keep_i2p_router = value == "on",
                 "i2pd_path" if !value.is_empty() => settings.i2pd_path = Some(PathBuf::from(value)),
+                "local_names" if value.split(',').all(|n| is_host_name(n.trim())) => {
+                    settings.local_names =
+                        value.split(',').map(|n| n.trim().to_ascii_lowercase()).filter(|n| !n.is_empty()).collect()
+                }
                 "history" if matches!(value, "on" | "off") => settings.save_history = value == "on",
                 "anubis" if matches!(value, "on" | "off") => settings.solve_anubis = value == "on",
                 "images" if matches!(value, "ask" | "site" | "all") => {
@@ -332,7 +352,7 @@ impl Settings {
                 }
                 "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" | "user_agent" | "anubis"
                 | "cache" | "cache_i2p" | "cache_size" | "images" | "image_display" | "image_protocol" | "updates"
-                | "update_channel" | "i2p_router" | "i2p_router_keep" | "i2pd_path" => {
+                | "update_channel" | "i2p_router" | "i2p_router_keep" | "i2pd_path" | "local_names" => {
                     problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
                 }
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),
@@ -387,6 +407,7 @@ impl Settings {
             "cache_i2p" => self.disk_cache_i2p.then(|| "on".to_string()),
             "i2p_router" => self.start_i2p_router.then(|| "start".to_string()),
             "i2p_router_keep" => self.keep_i2p_router.then(|| "on".to_string()),
+            "local_names" => (!self.local_names.is_empty()).then(|| self.local_names.join(", ")),
             "i2pd_path" => self.i2pd_path.as_ref().map(|d| d.to_string_lossy().into_owned()),
             "cache_size" => changed(self.cache_size_mb.to_string(), default.cache_size_mb.to_string()),
             _ => None,

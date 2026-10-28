@@ -210,6 +210,7 @@ images = site
 image_display = inline
 updates = daily
 update_channel = beta
+local_names = intranet.example.com
 i2p_router = start
 i2p_router_keep = on
 i2pd_path = /opt/i2pd/i2pd
@@ -364,6 +365,13 @@ that:
 - **Hostile pages are contained:** escape sequences that could take over your terminal are
   stripped; oversized, deeply nested or compressed "bomb" pages can't freeze or crash the browser;
   public pages can't redirect into your local network.
+- **Names can't reach your local network either:** rynx looks every name up itself and refuses a
+  public name that points at this computer or your local network (a site's DNS answering
+  `192.168.1.1`, or changing its answer between visits, "DNS rebinding"), for pages, redirects,
+  images, tools, Gemini and Gopher alike. The connection goes to exactly the addresses checked.
+  Names that are local by their form (`printer.local`, `router.lan`, `nas.home.arpa`,
+  `*.internal`, a single word) work when you open them, but public pages can't send you to them.
+  Names on a company network that point at internal addresses can be allowed with `local_names`.
 - **Careful with links and forms:** the destination of every link and form is shown before you
   use it. `mailto:`, `javascript:` and `file:` links are refused, and so are links and forms that
   disguise their real site with a user name (`https://paypal.com@evil.example/`). A form is never
@@ -438,8 +446,9 @@ rynx is a beta. What's missing or rough today:
   i2pd is found only through `i2pd_path` or `PATH`, and is untested there. Changes to the router
   settings take effect when rynx next starts. A router that stops when rynx quits leaves nothing
   behind on macOS only if rynx quits normally or panics; if rynx is killed, the next start stops it.
-- **Smaller things:** the history page shows times in UTC; a public site whose name points at
-  your local network isn't caught (only addresses are).
+- **Smaller things:** the history page shows times in UTC. A proxy set in the system's settings
+  (`HTTPS_PROXY` and the like) looks names up itself, so the local-network check for names
+  doesn't apply through it (addresses are still checked).
 - **Untested by hand:** [TEST_LOG.md](TEST_LOG.md) lists the checks still waiting for a person
   with the right system (I2P, other terminals, Linux distributions, Windows).
 

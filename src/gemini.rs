@@ -187,7 +187,7 @@ async fn request(url: &Url, known_hosts: &Mutex<KnownHosts>, limit: u64) -> Resu
         .map_err(|_| format!("Invalid Gemini host {}", host))?;
 
     let exchange = async {
-        let tcp = tokio::net::TcpStream::connect((host.trim_matches(['[', ']']), port))
+        let tcp = crate::dns::connect(host.trim_matches(['[', ']']), port)
             .await
             .map_err(|e| format!("Couldn't connect to {}: {}", host_key, e))?;
         let mut tls = tokio_rustls::TlsConnector::from(Arc::new(config)).connect(name, tcp).await.map_err(|e| {
