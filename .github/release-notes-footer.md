@@ -26,7 +26,8 @@ Every file is listed in `SHA256SUMS`, which is signed with the release key
 provenance attestation proving it was built from this repository by GitHub Actions:
 
 ```sh
-# The signature, with the public key from the repository (.github/release-signing-key.pub.pem)
+# The signature, with the public key from the repository (.github/release-signing-key.pub.pem;
+# in an emergency a release may be signed with the backup key, release-signing-key-backup.pub.pem)
 openssl pkeyutl -verify -pubin -inkey release-signing-key.pub.pem -rawin -in SHA256SUMS -sigfile SHA256SUMS.sig
 sha256sum -c SHA256SUMS --ignore-missing          # macOS: shasum -a 256 -c SHA256SUMS
 gh attestation verify <archive> --repo rry-web/rynx-browser

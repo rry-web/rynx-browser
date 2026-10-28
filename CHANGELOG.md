@@ -15,6 +15,9 @@
   signed in. Cookies carry over when settings change.
 
 ### Security
+- A backup release key is built in alongside the release key, its private half kept offline: if
+  the release key is ever lost or exposed, a release signed with the backup key still updates
+  every copy (CONTRIBUTING.md has the steps). The release workflow accepts either signature.
 - Look-alike site names are flagged: international names are shown readably only when safe;
   ones mixing Latin, Cyrillic or Greek letters, made of Cyrillic or Greek letters that look
   Latin (outside their own endings), or containing slash- or dot-like characters stay encoded,

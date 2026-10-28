@@ -20,6 +20,17 @@ pub const RELEASE_KEY: [u8; 32] = [
     0xdf, 0x0e, 0x84, 0x28, 0x77, 0x4e, 0x43, 0x2a, 0x6a, 0x67, 0x5f, 0xcb, 0xd7,
 ];
 
+/// The backup release key's public half (also in .github/release-signing-key-backup.pub.pem).
+/// Its private half is kept offline, never in CI. If the release key is lost or exposed, a
+/// release signed with this one still reaches every copy, and can stop trusting the old key.
+pub const BACKUP_KEY: [u8; 32] = [
+    0xeb, 0x1e, 0x89, 0x59, 0xa8, 0x98, 0xaa, 0x9e, 0x18, 0x33, 0x59, 0xcd, 0xff, 0x33, 0xf3, 0x3e, 0x87, 0xe9, 0x71,
+    0xef, 0x1b, 0xe9, 0xb3, 0xb3, 0x8a, 0x10, 0x49, 0xdc, 0xc0, 0x94, 0xbd, 0x21,
+];
+
+/// The keys an update's signature may come from
+pub const RELEASE_KEYS: [[u8; 32]; 2] = [RELEASE_KEY, BACKUP_KEY];
+
 /// Where releases are listed
 pub const RELEASES_API: &str = "https://api.github.com/repos/rry-web/rynx-browser/releases?per_page=20";
 
@@ -131,6 +142,11 @@ pub fn verify(message: &[u8], signature: &[u8], key: &[u8; 32]) -> bool {
     ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, key).verify(message, signature).is_ok()
 }
 
+/// Whether `signature` is any of `keys`' signature of `message`
+pub fn verify_any(message: &[u8], signature: &[u8], keys: &[[u8; 32]]) -> bool {
+    keys.iter().any(|key| verify(message, signature, key))
+}
+
 /// The checksum a SHA256SUMS list gives `name` ("<hex>  <name>" lines)
 pub fn checksum_for(list: &str, name: &str) -> Option<String> {
     list.lines().find_map(|line| {
@@ -216,11 +232,11 @@ pub async fn download(
     client: &reqwest::Client,
     release: &Release,
     dir: &Path,
-    key: &[u8; 32],
+    keys: &[[u8; 32]],
 ) -> Result<Pending, String> {
     let sums = fetch(client, &release.sums_url, MAX_LIST_BYTES).await?;
     let signature = fetch(client, &release.signature_url, 1024).await?;
-    if !verify(&sums, &signature, key) {
+    if !verify_any(&sums, &signature, keys) {
         return Err("the release's signature isn't valid, so it wasn't installed".to_string());
     }
     let name = program_name(&release.version);

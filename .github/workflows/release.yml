@@ -159,9 +159,16 @@ jobs:
           printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key"
           openssl pkeyutl -sign -inkey "$key" -rawin -in SHA256SUMS -out SHA256SUMS.sig
           rm -f "$key"
-          # A wrong or missing secret fails here, before anything is published
-          openssl pkeyutl -verify -pubin -inkey ../.github/release-signing-key.pub.pem -rawin \
-            -in SHA256SUMS -sigfile SHA256SUMS.sig
+          # A wrong or missing secret fails here, before anything is published. The backup key is
+          # accepted too: in an emergency (the release key lost or exposed) it's put in the secret
+          # for one release, which rynx trusts as well
+          verified=no
+          for public in ../.github/release-signing-key.pub.pem ../.github/release-signing-key-backup.pub.pem; do
+            if openssl pkeyutl -verify -pubin -inkey "$public" -rawin -in SHA256SUMS -sigfile SHA256SUMS.sig; then
+              verified=yes
+            fi
+          done
+          [ "$verified" = yes ]
 
       - name: Release notes
         run: |

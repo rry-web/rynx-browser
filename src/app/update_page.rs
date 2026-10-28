@@ -169,11 +169,11 @@ impl App {
         }
         let tab_id = self.current_tab().id;
         let client = self.network_manager.get_download_client(false).clone();
-        let key = self.release_key;
+        let keys = self.release_keys.clone();
         let tx = self.tx.clone();
         self.current_tab().status_message = format!("Downloading rynx {}...", release.version);
         tokio::spawn(async move {
-            let result = crate::update::download(&client, &release, &dir, &key).await.map(|p| p.version);
+            let result = crate::update::download(&client, &release, &dir, &keys).await.map(|p| p.version);
             let _ = tx.send(NetworkResponse::UpdateDownloaded(tab_id, result)).await;
         });
     }

@@ -58,6 +58,26 @@ It sets the version, runs the checks, pushes, waits for CI, and tags; the releas
 builds every platform, signs the checksums with the release key, and publishes the GitHub release
 and the crate (trusted publishing). Tags with a `-` are pre-releases.
 
+### The release keys
+
+Releases' checksums are signed with the **release key** (Ed25519; the `RELEASE_SIGNING_KEY`
+secret, public half `RELEASE_KEY` in `src/update.rs` and `.github/release-signing-key.pub.pem`).
+rynx also trusts a **backup key** (`BACKUP_KEY`, `.github/release-signing-key-backup.pub.pem`),
+whose private half is kept offline by the maintainer and is never in CI.
+
+If the release key is lost, or may have been exposed:
+
+1. Make a new key pair (`openssl genpkey -algorithm ed25519 -out new-key.pem`), and put its
+   public half in place of `RELEASE_KEY` and `.github/release-signing-key.pub.pem` (keep
+   `BACKUP_KEY`). If the old key may have been exposed, this release is what stops copies trusting
+   it.
+2. Put the **backup** key's private half in the `RELEASE_SIGNING_KEY` secret, and release. Every
+   copy trusts the backup key, so this release reaches them all, and they then trust the new key.
+3. Put the new key's private half in the secret, and the backup key back offline.
+
+`tests/update.rs` checks that the built-in keys match the real ones (a real release's
+signature, and a message signed with the backup key, in `tests/data/`).
+
 ## Automation
 
 | Workflow | When | What |

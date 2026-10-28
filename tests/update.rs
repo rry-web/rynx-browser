@@ -122,7 +122,7 @@ fn test_app(server: &MockServer, key: [u8; 32], dir: &std::path::Path) -> App {
     app.clipboard = None;
     app.render_in_background = false;
     app.update_api = format!("{}/releases", server.uri());
-    app.release_key = key;
+    app.release_keys = vec![key];
     app.update_dir = Some(dir.join("update"));
     app.installed = Installed::Updatable(dir.join("rynx"));
     app
@@ -283,4 +283,38 @@ async fn live_github_release_list_is_read() {
     let found = update::check(manager.get_client(false), update::RELEASES_API, true).await.expect("the list is read");
     // Releases before signing began have no SHA256SUMS.sig, so they're never offered
     println!("offered: {:?}", found.map(|r| r.version));
+}
+
+/// The keys built into rynx are the real ones: the release key verifies a real release's
+/// signed checksums, and the backup key a message signed with its (offline) private half
+#[test]
+fn the_built_in_keys_are_the_real_ones() {
+    let sums = include_bytes!("data/release-0.2.0-beta.7-SHA256SUMS");
+    let sums_signature = include_bytes!("data/release-0.2.0-beta.7-SHA256SUMS.sig");
+    assert!(verify(sums, sums_signature, &update::RELEASE_KEY));
+    assert!(!verify(sums, sums_signature, &update::BACKUP_KEY));
+    let message = include_bytes!("data/backup-key-message.txt");
+    let message_signature = include_bytes!("data/backup-key-message.sig");
+    assert!(verify(message, message_signature, &update::BACKUP_KEY));
+    assert!(!verify(message, message_signature, &update::RELEASE_KEY));
+    assert_eq!(update::RELEASE_KEYS, [update::RELEASE_KEY, update::BACKUP_KEY]);
+}
+
+/// A release signed with the backup key (after the release key was lost) is installed
+#[tokio::test]
+async fn a_release_signed_with_the_backup_key_is_accepted() {
+    let (release_key, backup_key) = (key_pair(), key_pair());
+    let program = b"#!/bin/sh\necho signed with the backup key\n".to_vec();
+    let server = github(&backup_key, &program, None).await;
+    let dir = temp_dir("backup");
+    let manager = rynx::network::NetworkManager::new().unwrap();
+    let client = manager.get_client(false);
+    let release = update::check(client, &format!("{}/releases", server.uri()), true).await.unwrap().expect("a release");
+    let keys = [public(&release_key), public(&backup_key)];
+    let pending = update::download(client, &release, &dir.join("update"), &keys).await.expect("accepted");
+    assert_eq!(std::fs::read(&pending.file).unwrap(), program);
+    // Signed by neither, it's refused
+    let others = [public(&key_pair()), public(&release_key)];
+    assert!(update::download(client, &release, &dir.join("update2"), &others).await.is_err());
+    let _ = std::fs::remove_dir_all(&dir);
 }

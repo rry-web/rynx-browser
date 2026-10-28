@@ -79,7 +79,8 @@ pub struct App {
     pub update_note: Option<String>,
     /// Where releases are listed, and the key their checksums must be signed with (tests change them)
     pub update_api: String,
-    pub release_key: [u8; 32],
+    /// The keys an update must be signed with (one of)
+    pub release_keys: Vec<[u8; 32]>,
     /// The I2P router rynx started, if any, and how far it has got
     pub router_state: crate::i2pd::RouterState,
     pub router_progress: Option<crate::i2pd::Progress>,
@@ -149,7 +150,7 @@ impl App {
             update_dir: None,
             update_note: None,
             update_api: crate::update::RELEASES_API.to_string(),
-            release_key: crate::update::RELEASE_KEY,
+            release_keys: crate::update::RELEASE_KEYS.to_vec(),
             keymap: crate::keys::Keymap::default(),
             router_state: crate::i2pd::RouterState::NotManaged,
             router_progress: None,
