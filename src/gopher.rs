@@ -26,7 +26,8 @@ pub struct Target {
 /// Split a gopher:// address into what's sent and how the answer is shown
 pub fn parse(url: &str) -> Result<Target, String> {
     let url = Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
-    let host = url.host_str().ok_or("Invalid Gopher address: no host")?.trim_matches(['[', ']']).to_string();
+    let host = url.host_str().ok_or("Invalid Gopher address: no host")?.trim_matches(['[', ']']);
+    let host = crate::names::host_for_lookup(host).into_owned();
     let port = url.port().unwrap_or(DEFAULT_PORT);
     // The path is "/<type><selector>"; the query part of the URL belongs to the selector too
     let mut path = url.path().strip_prefix('/').unwrap_or(url.path()).to_string();

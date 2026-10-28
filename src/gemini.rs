@@ -153,11 +153,14 @@ struct Response {
 
 /// Send one request and read the whole response
 async fn request(url: &Url, known_hosts: &Mutex<KnownHosts>, limit: u64) -> Result<Response, String> {
-    let host = url.host_str().ok_or("Invalid Gemini address: no host")?.to_string();
+    // International names are sent and looked up encoded (the url crate leaves them
+    // percent-encoded in gemini:// addresses)
+    let host = crate::names::host_for_lookup(url.host_str().ok_or("Invalid Gemini address: no host")?).into_owned();
     let port = url.port().unwrap_or(DEFAULT_PORT);
     let host_key = format!("{}:{}", host, port);
     let mut line = url.clone();
     line.set_fragment(None);
+    let _ = line.set_host(Some(&host));
     let line = line.to_string();
     if line.len() > MAX_REQUEST_BYTES {
         return Err("Gemini address too long".to_string());

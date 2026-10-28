@@ -20,6 +20,8 @@ ratatui = "0.30.2"
 crossterm = "0.29.0"
 tokio = { version = "1.54.1", features = ["full"] }
 url = "2.5.8"
+# International names (the version url uses)
+idna = "1.1.0"
 percent-encoding = "2.3.2"
 encoding_rs = "0.8.42"
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }

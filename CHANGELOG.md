@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- Gemini and Gopher sites with international names can be reached (their names are now
+  encoded for the lookup and the request).
+
 ### Added
 - Staying signed in: `C` lets the site you're on keep cookies (before signing in), `C` again
   forgets them, and `about:cookies` lists the sites. A site is everything under its registered
@@ -11,6 +15,12 @@
   signed in. Cookies carry over when settings change.
 
 ### Security
+- Look-alike site names are flagged: international names are shown readably only when safe;
+  ones mixing Latin, Cyrillic or Greek letters, made of Cyrillic or Greek letters that look
+  Latin (outside their own endings), or containing slash- or dot-like characters stay encoded,
+  with a red warning saying what they'd pass for, in the address bar and link and form previews.
+  Invisible direction controls (which can make `report‮fdp.exe` read as `reportexe.pdf`) are
+  removed from all text shown.
 - The sandbox now also forbids starting programs (Landlock: no Execute anywhere; Seatbelt:
   process-exec and fork denied) and listening for connections (Landlock's TCP bind rule;
   Seatbelt's network-bind), which rynx never does once running. Crash dumps are turned off.

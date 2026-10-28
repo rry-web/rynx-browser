@@ -17,6 +17,7 @@ pub mod i2pd;
 pub mod keys;
 pub mod mcp;
 pub mod models;
+pub mod names;
 pub mod network;
 pub mod renderer;
 pub mod sandbox;

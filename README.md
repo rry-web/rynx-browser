@@ -391,6 +391,14 @@ that:
   allowed to put a password in a web address, and a public page's form can't send data to your
   router or other devices on your local network. Passwords typed into the address bar are hidden
   on screen and never saved in bookmarks.
+- **Look-alike names are flagged:** international site names are shown readably (`bücher.de`)
+  only when they can't pass for another name. One that mixes Latin, Cyrillic or Greek letters
+  (`аpple.com` with a Cyrillic `а`), is made entirely of Cyrillic or Greek letters that look
+  Latin under a Latin ending, or contains characters that look like `/` or `.`, stays in its
+  encoded form (`xn--pple-43d.com`) with a red warning naming what it would pass for, in the
+  address bar and wherever a link's or form's destination is shown. Invisible characters that
+  reverse the order of text (which can make `report‮fdp.exe` read as `reportexe.pdf`) are removed
+  from everything shown.
 - **Safe downloads:** files are tagged as coming from the internet (macOS quarantine, Windows Mark
   of the Web, Linux `user.xdg.origin.url`) so your OS checks them before they run; filenames are
   made safe on every OS, and existing files are never overwritten silently. A resumed download

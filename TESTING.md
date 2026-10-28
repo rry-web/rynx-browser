@@ -419,6 +419,11 @@ Worth repeating after any dependency upgrade.
       offers "remember me". `about:cookies` lists the site; Forget there (or `C` on its page)
       signs you out. Without `C`, the sign-in page's status line says to press it first.
 
+- [ ] **SEC-10 Look-alike names.** Open `https://xn--pple-43d.com/` (Cyrillic а + "pple"; it may
+      not exist, which doesn't matter) and `https://xn--bcher-kva.de/`.
+      *Expected:* the first stays encoded in the address bar, with a red warning saying it passes
+      for аpple.com; the second shows as bücher.de, with no warning.
+
 ## Platform security
 
 - [ ] **PLAT-01 (priority) Linux sandbox status.** On Linux, start the browser.

@@ -23,20 +23,27 @@ use menus::{looks_like_menu, menu_items};
 
 /// Make untrusted text safe to draw. Control characters are dropped because a terminal acts on
 /// them (escape sequences can set the title, clear the screen or write the clipboard) instead of
-/// displaying them. Tabs become spaces so they can't move the cursor.
+/// displaying them. Tabs become spaces so they can't move the cursor. Invisible direction
+/// controls are dropped too: they reorder what's shown ("evil\u{202e}fdp.exe" shows as
+/// "evilexe.pdf"), which terminals rarely need and pages use to disguise names.
 pub fn sanitize_for_terminal(text: &str) -> Cow<'_, str> {
-    if !text.contains(char::is_control) {
+    if !text.contains(|c: char| c.is_control() || is_direction_control(c)) {
         return Cow::Borrowed(text);
     }
     let mut clean = String::with_capacity(text.len());
     for ch in text.chars() {
         if ch == '\t' {
             clean.push_str("    ");
-        } else if !ch.is_control() {
+        } else if !ch.is_control() && !is_direction_control(ch) {
             clean.push(ch);
         }
     }
     Cow::Owned(clean)
+}
+
+/// Unicode's invisible controls of text direction (embeddings, overrides, isolates, marks)
+fn is_direction_control(ch: char) -> bool {
+    matches!(ch, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}' | '\u{200e}' | '\u{200f}' | '\u{061c}')
 }
 
 /// Width of a rendered line as drawn: one cell per character's width. This can differ from

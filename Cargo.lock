@@ -2827,6 +2827,7 @@ dependencies = [
  "flate2",
  "futures-util",
  "httpdate",
+ "idna",
  "image",
  "landlock",
  "libc",

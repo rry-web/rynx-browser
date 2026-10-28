@@ -77,6 +77,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "names"
+path = "fuzz_targets/names.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "update_list"
 path = "fuzz_targets/update_list.rs"
 test = false

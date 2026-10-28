@@ -98,7 +98,16 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
                 _ => Line::from(" Address "),
             };
             let style = if mode == InputMode::Editing { Style::default().fg(Color::Yellow) } else { Style::default() };
-            (label, Line::styled(sanitize_for_terminal(&address).into_owned(), style))
+            // Shown as typed while editing; otherwise with its site's name readable when safe
+            let line = if mode == InputMode::Editing {
+                Line::styled(sanitize_for_terminal(&address).into_owned(), style)
+            } else {
+                let (shown, lookalike) = crate::names::show_address(&address);
+                let mut spans = vec![Span::styled(sanitize_for_terminal(&shown).into_owned(), style)];
+                spans.extend(lookalike_warning(lookalike));
+                Line::from(spans)
+            };
+            (label, line)
         }
     };
 
@@ -347,6 +356,26 @@ fn split_into_characters<'a>(line: &'a Line<'a>) -> Line<'a> {
 }
 
 /// A warning for addresses that disguise their real site with a user name
+/// A site name that could pass for another (mixed alphabets, look-alike letters): what it
+/// looks like, kept apart from the encoded name shown
+fn lookalike_warning(lookalike: Option<String>) -> Option<Span<'static>> {
+    lookalike.map(|name| {
+        Span::styled(
+            format!(" ⚠ look-alike name, written to pass for {} ", sanitize_for_terminal(&name)),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )
+    })
+}
+
+/// A destination as shown in the link preview: its site's name readable when safe, and warnings
+fn destination(target: &str, style: Style) -> Vec<Span<'static>> {
+    let (shown, lookalike) = crate::names::show_address(target);
+    let mut spans = vec![Span::styled(sanitize_for_terminal(&shown).into_owned(), style)];
+    spans.extend(lookalike_warning(lookalike));
+    spans.extend(hidden_destination_warning(target));
+    spans
+}
+
 fn hidden_destination_warning(target: &str) -> Option<Span<'static>> {
     crate::network::hidden_destination(target).map(|host| {
         Span::styled(
@@ -372,8 +401,7 @@ fn link_preview(tab: &crate::app::BrowserTab) -> Line<'static> {
             };
             let target = crate::forms::form_target(form, tab.link_base());
             spans.push(Span::raw(format!(" → sends to{} ", method)));
-            spans.push(Span::styled(sanitize_for_terminal(&target).into_owned(), link_style));
-            spans.extend(hidden_destination_warning(&target));
+            spans.extend(destination(&target, link_style));
         }
         spans.push(Span::raw(" "));
         return Line::from(spans);
@@ -381,12 +409,9 @@ fn link_preview(tab: &crate::app::BrowserTab) -> Line<'static> {
     match tab.link_regions.get(tab.selected_link_index) {
         Some(link) => {
             let target = crate::network::resolve_url(tab.link_base(), &link.url);
-            let mut spans = vec![
-                Span::raw(" Link: "),
-                Span::styled(sanitize_for_terminal(&target).into_owned(), Style::default().fg(Color::Cyan)),
-                Span::raw(" "),
-            ];
-            spans.extend(hidden_destination_warning(&target));
+            let mut spans = vec![Span::raw(" Link: ")];
+            spans.extend(destination(&target, link_style));
+            spans.push(Span::raw(" "));
             Line::from(spans)
         }
         None => Line::from(""),

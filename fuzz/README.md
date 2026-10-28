@@ -19,6 +19,7 @@ cargo +nightly fuzz run render fuzz/artifacts/render/crash-...   # replay a cras
 | `cookies` | Set-Cookie headers | kept only for Anubis and allowed sites; nothing sent to another site |
 | `settings` | settings files | written back and read again, nothing changes |
 | `keys` | keys.conf files | no crash |
+| `names` | addresses and site names | a name shown readably can't pass for another; no direction controls |
 | `update_list` | the release list, checksum lists | only newer releases, with this platform's build |
 
 CI runs every target nightly (`.github/workflows/fuzz.yml`) and keeps each one's corpus between
