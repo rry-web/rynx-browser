@@ -15,6 +15,12 @@
   signed in. Cookies carry over when settings change.
 
 ### Security
+- Saved cookies, and the list of sites allowed them, are encrypted (ChaCha20-Poly1305) with a
+  random key kept in the system keychain: `cookies.enc` replaces the plain files, which are
+  encrypted and removed on the first start with a keychain. Without one they're saved as before,
+  and `about:cookies` says how they're kept. On Linux the key is asked for after the sandbox, so
+  the keychain library's threads are sandboxed too; on macOS before, since the sandbox closes
+  the keychain's files.
 - Release programs carry their exact dependency list (`cargo auditable`), so a downloaded copy
   can be checked for known vulnerabilities with `cargo audit bin rynx`; the release workflow
   checks each build's list.

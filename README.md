@@ -112,9 +112,13 @@ There are no cookies, so sites forget you between pages, unless you let one keep
 the site's "remember me" cookie says so). **`C`** again forgets its cookies, which signs you out;
 `about:cookies` lists the sites you've allowed. A page asking for a password says this on the
 status line. A site means everything under its registered name (`accounts.example.com` and
-`www.example.com` are both `example.com`), and its cookies are sent only to it. Cookies are saved
-in `cookies.json` in the settings folder, readable only by you; I2P sites are allowed until rynx
-quits, and their cookies are never saved.
+`www.example.com` are both `example.com`), and its cookies are sent only to it. Saved cookies and the list of
+sites are encrypted (`cookies.enc` in the settings folder) with a key kept in the system keychain
+(macOS Keychain, the Secret Service on Linux, Windows' Credential Manager), so a backup or synced
+copy of the folder doesn't carry your sign-ins; where there's no keychain they're saved as plain
+files readable only by you, and `about:cookies` says which. On macOS, the first start after an
+update may ask whether rynx can use its key ("Always Allow" stops it asking until the next
+update). I2P sites are allowed until rynx quits, and their cookies are never saved.
 
 Type `gemini://` or `gopher://` addresses as you would a web address. Gemini input prompts and
 Gopher searches appear as a form with one text field. Opening an RSS or Atom feed shows its posts
@@ -454,7 +458,8 @@ rynx is a beta. What's missing or rough today:
   Anubis bot checks are passed natively, except the `hashx` kind.
 - **Cookies are all or nothing per site:** a site you allow (`C`) gets its cookies sent with every
   request to it, including images other pages load from it; there are no per-cookie choices and
-  no third-party cookie rules beyond "only allowed sites". Saved cookies aren't encrypted (see
+  no third-party cookie rules beyond "only allowed sites". Saved cookies are encrypted only
+  where there's a system keychain; history, the cache and snapshots aren't encrypted yet (see
   encryption at rest on the roadmap).
 - **Images:** SVG isn't supported; an image only partly on screen shows as its caption until it's
   scrolled fully into view; macOS Terminal can only show rough coloured blocks. Forcing an image

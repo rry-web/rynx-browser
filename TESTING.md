@@ -424,6 +424,13 @@ Worth repeating after any dependency upgrade.
       *Expected:* the first stays encoded in the address bar, with a red warning saying it passes
       for аpple.com; the second shows as bücher.de, with no warning.
 
+- [ ] **SEC-11 (priority) Cookies encrypted in the keychain.** After SEC-09, look at
+      `about:cookies`, the settings folder, and (macOS) Keychain Access, searching "rynx-browser".
+      *Expected:* the page says "encrypted, with a key in the system keychain"; the folder has
+      `cookies.enc` and no `cookies.json`; the keychain has a "rynx-browser" entry. Start rynx
+      again: still signed in. On Linux, the same with GNOME Keyring or KWallet running; without
+      one, the page says they're not encrypted and why.
+
 ## Platform security
 
 - [ ] **PLAT-01 (priority) Linux sandbox status.** On Linux, start the browser.

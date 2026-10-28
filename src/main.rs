@@ -110,6 +110,11 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         rynx::i2pd::data_dir(),
     );
 
+    // On macOS the keychain's files are in the home folder, which the sandbox closes, so the
+    // cookie key is asked for first; Seatbelt confines the whole process, threads and all
+    #[cfg(target_os = "macos")]
+    let cookie_key = config_dir.as_ref().map(|_| ask_keychain());
+
     // Sandbox while this is still the only thread: every thread started afterwards (the async
     // runtime, clipboard, background rendering) inherits the restrictions. The writable folders
     // must exist first, since nothing outside them can be created later.
@@ -130,6 +135,10 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         SandboxStatus::Disabled
     };
 
+    // On Linux the cookie key is asked for after the sandbox (see ask_keychain)
+    #[cfg(not(target_os = "macos"))]
+    let cookie_key = config_dir.as_ref().map(|_| ask_keychain());
+
     tokio::runtime::Builder::new_multi_thread().enable_all().build()?.block_on(run(
         settings,
         problems,
@@ -137,7 +146,21 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         sandbox,
         (installed, update_dir, update_note),
         (router_state, router),
+        cookie_key,
     ))
+}
+
+/// The key saved cookies are encrypted with, from the system keychain, in a thread of its own: on
+/// Linux this runs after the sandbox, which Landlock applies per thread, so threads a keychain
+/// library starts (D-Bus) are sandboxed too. A keychain that doesn't answer (locked, say) isn't
+/// waited on.
+fn ask_keychain() -> Result<[u8; 32], String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(rynx::cookies::keychain_key(rynx::cookies::KEYCHAIN_SERVICE));
+    });
+    rx.recv_timeout(Duration::from_secs(10))
+        .unwrap_or_else(|_| Err("the keychain didn't answer within 10 seconds".to_string()))
 }
 
 /// Start the newly installed version in place of this one, with the same arguments
@@ -170,6 +193,7 @@ async fn run(
     sandbox: SandboxStatus,
     (installed, update_dir, update_note): (rynx::update::Installed, Option<std::path::PathBuf>, Option<String>),
     (router_state, router): (rynx::i2pd::RouterState, Option<rynx::i2pd::Router>),
+    cookie_key: Option<Result<[u8; 32], String>>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // This hook catches panics and restores the terminal before printing the error
     let original_hook = std::panic::take_hook();
@@ -212,7 +236,8 @@ async fn run(
     }
     if let Some(dir) = &config_dir {
         // The clearweb cookies of the sites you allowed; I2P's are never saved
-        app.network_manager.cookies(false).load(dir);
+        let key = cookie_key.unwrap_or_else(|| Err("no settings folder".to_string()));
+        app.network_manager.cookies(false).load(dir, key);
         let (keymap, problems) = rynx::keys::Keymap::load_or_create(dir);
         app.keymap = keymap;
         if let Some(problem) = problems.first() {

@@ -2,8 +2,16 @@
 # dependencies come from. Run in CI on every push and weekly.
 
 [advisories]
-# Known vulnerabilities fail the check (cargo-deny's default); nothing is ignored
-ignore = []
+# Known vulnerabilities fail the check (cargo-deny's default), and so do unmaintained crates,
+# with these exceptions (none is a vulnerability; each says why and when it goes)
+ignore = [
+    # zvariant, zbus_names and zvariant_derive: "unmaintained" because they were merged into
+    # zbus 6. They come from the Linux keychain support (keyring -> secret-service -> zbus 5),
+    # and go once secret-service moves to zbus 6 (Dependabot will propose it). Added 2026-10-28.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant merged into zbus 6; from secret-service's zbus 5" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names merged into zbus 6; from secret-service's zbus 5" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive merged into zbus 6; from secret-service's zbus 5" },
+]
 
 [licenses]
 # Licences that allow distributing rynx under GPL-3.0-or-later

@@ -54,6 +54,8 @@ semver = "1.0.28"
 # Cookies for the sites you allow (the same store reqwest uses), and what counts as one site
 cookie_store = "0.22.1"
 psl = "2.1.245"
+# The key that encrypts saved cookies, kept in the system keychain
+keyring = "4.2.0"
 
 # Tagging downloads with their origin (macOS quarantine, Linux xdg origin)
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]

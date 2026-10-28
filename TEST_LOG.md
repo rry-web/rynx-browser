@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Priority items could not be verified during development.
 
-Total checks: 147 (33 priority).
+Total checks: 148 (34 priority).
 
 
 ## Automated checks
@@ -173,6 +173,7 @@ Total checks: 147 (33 priority).
 | SEC-08 | Names on your own network | Yes |  |  |  |
 | SEC-09 | Staying signed in | Yes |  |  |  |
 | SEC-10 | Look-alike names |  |  |  |  |
+| SEC-11 | Cookies encrypted in the keychain | Yes |  |  |  |
 
 ## Platform security
 

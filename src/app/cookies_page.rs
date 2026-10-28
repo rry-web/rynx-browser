@@ -46,6 +46,10 @@ impl App {
              or to forget it. Cookies meant to outlast the session are saved in the settings folder, readable \
              only by you; I2P sites are allowed until rynx quits, and their cookies are never saved.</p>",
         );
+        html.push_str(&format!(
+            "<p><b>Saved cookies</b>: {}.</p>",
+            escape_html(&self.network_manager.cookies(false).storage_note())
+        ));
         for (heading, i2p) in [("Clearweb", false), ("I2P (until rynx quits)", true)] {
             let sites = self.network_manager.cookies(i2p).sites();
             if sites.is_empty() && i2p {
