@@ -283,7 +283,10 @@ async fn the_real_i2pd_starts_reports_and_stops() {
     let Some(progress) = progress else {
         // Why: the router's log, and what the console answers, raw
         let raw = std::process::Command::new("curl").args(["-s", "-m", "5", &format!("http://127.0.0.1:{console}/")]).output();
-        let raw = raw.map(|o| String::from_utf8_lossy(&o.stdout).chars().take(1500).collect::<String>()).unwrap_or_default();
+        let raw = raw.map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
+        let parsed = parse_console(&raw);
+        let around = raw.find("Uptime").map(|i| raw[i.saturating_sub(200)..(i + 600).min(raw.len())].to_string()).unwrap_or_else(|| raw.chars().take(300).collect());
+        let raw = format!("parsed as {parsed:?}; {} bytes; around Uptime:\n{around}", raw.len());
         let printed = std::fs::read_to_string(dir.join("i2pd-start.txt")).unwrap_or_default();
         panic!(
             "the console didn't answer. Alive: {}. Printed: {printed}\nLog:\n{}\nConsole:\n{raw}",
