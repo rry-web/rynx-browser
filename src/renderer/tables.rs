@@ -177,6 +177,18 @@ fn table_rows<'a>(table: ElementRef<'a>) -> (Option<ElementRef<'a>>, Vec<TableRo
     (caption, rows)
 }
 
+/// Widen the `span` columns from `start` so that together, with the separators between them, they
+/// give a spanning cell `wanted` columns. The shortfall is shared evenly, the last columns taking
+/// any remainder.
+fn widen_for_span(widths: &mut [usize], start: usize, span: usize, wanted: usize) {
+    let columns = &mut widths[start..start + span];
+    let have = columns.iter().sum::<usize>() + COLUMN_SEPARATOR_WIDTH * (span - 1);
+    let short = wanted.saturating_sub(have);
+    for (i, width) in columns.iter_mut().enumerate() {
+        *width += short / span + usize::from(i >= span - short % span);
+    }
+}
+
 /// Share `available` columns between table columns. Each gets at least its longest word (capped);
 /// the rest goes to the columns wanting the least first, so short columns ("12 KB") stay on one
 /// line and long text takes what's left. None if even the minimums don't fit.
@@ -231,19 +243,31 @@ impl DomRenderer {
         let separators = COLUMN_SEPARATOR_WIDTH * (columns - 1);
         let available = self.max_width.saturating_sub(prefix_width);
 
-        // Measure from cells that occupy a single column; spanning cells wrap within their columns
+        // Measure from cells that occupy a single column, then widen the columns a spanning cell
+        // covers when they are too narrow for it together (narrower spans first)
         let mut natural = vec![0; columns];
         let mut minimum = vec![0; columns];
+        let mut spanning = Vec::new();
         for row in &rows {
             let mut column = 0;
             for cell in &row.cells {
+                let (wanted, least) = measure_cell(cell.element);
                 if cell.colspan == 1 {
-                    let (wanted, least) = measure_cell(cell.element);
                     natural[column] = natural[column].max(wanted.min(available));
                     minimum[column] = minimum[column].max(least);
+                } else {
+                    spanning.push((column, cell.colspan, wanted.min(available), least));
                 }
                 column += cell.colspan;
             }
+        }
+        spanning.sort_by_key(|&(_, span, _, _)| span);
+        for (start, span, wanted, least) in spanning {
+            widen_for_span(&mut natural, start, span, wanted);
+            widen_for_span(&mut minimum, start, span, least);
+        }
+        for (wanted, least) in natural.iter_mut().zip(&minimum) {
+            *wanted = (*wanted).max(*least);
         }
 
         match available.checked_sub(separators).and_then(|space| column_widths(&natural, &minimum, space)) {
@@ -256,6 +280,10 @@ impl DomRenderer {
     fn render_table_grid(&mut self, rows: &[TableRow], widths: &[usize]) {
         let column_x =
             |column: usize| -> usize { widths[..column].iter().sum::<usize>() + COLUMN_SEPARATOR_WIDTH * column };
+        // Columns a cell spanning `span` columns from `column` takes, with the separators it covers
+        let span_width = |column: usize, span: usize| -> usize {
+            widths[column..column + span].iter().sum::<usize>() + COLUMN_SEPARATOR_WIDTH * (span - 1)
+        };
         let separator_style = Style::default().fg(Color::DarkGray);
         let mut header_rule_drawn = false;
 
@@ -267,7 +295,7 @@ impl DomRenderer {
                     break;
                 }
                 let span = cell.colspan.min(widths.len() - column);
-                let width = widths[column..column + span].iter().sum::<usize>() + COLUMN_SEPARATOR_WIDTH * (span - 1);
+                let width = span_width(column, span);
                 cells.push(self.render_cell(cell, column, width));
                 column += span;
             }
@@ -321,12 +349,32 @@ impl DomRenderer {
                 }
             }
 
-            // A rule under the header rows, when data rows follow
-            let next_is_data = rows.get(row_index + 1).is_some_and(|next| !next.header);
-            if row.header && next_is_data && !header_rule_drawn {
+            // A rule under the header rows, when data rows follow, crossing the columns where the
+            // next row's cells divide
+            let next_data = rows.get(row_index + 1).filter(|next| !next.header);
+            if let Some(next) = next_data.filter(|_| row.header && !header_rule_drawn) {
                 header_rule_drawn = true;
                 self.apply_prefix();
-                let rule: Vec<String> = widths.iter().map(|w| "─".repeat(*w)).collect();
+                let mut rule = Vec::new();
+                let mut column = 0;
+                for cell in &next.cells {
+                    if column >= widths.len() {
+                        break;
+                    }
+                    let span = cell.colspan.min(widths.len() - column);
+                    let width = span_width(column, span);
+                    rule.push("─".repeat(width));
+                    column += span;
+                }
+                if column < widths.len() {
+                    // A short row: the rule still runs the table's width
+                    let rest =
+                        widths[column..].iter().sum::<usize>() + COLUMN_SEPARATOR_WIDTH * (widths.len() - column);
+                    match rule.last_mut() {
+                        Some(last) => last.push_str(&"─".repeat(rest)),
+                        None => rule.push("─".repeat(rest - COLUMN_SEPARATOR_WIDTH)),
+                    }
+                }
                 self.emit(&rule.join("─┼─"), separator_style, None);
                 self.line_has_text = true;
                 self.flush_line();

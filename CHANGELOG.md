@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Tables whose cells span columns, like Wikipedia's navigation boxes, made those columns only a
+  few characters wide, breaking every word onto its own line. The rule under a table's header
+  also crosses only where the next row's cells divide.
+
+### Changed
+- A Cloudflare bot check says what it is: it needs JavaScript, and `A` opens the Internet
+  Archive's copy instead.
+
 ## [0.3.0]
 
 The first release out of beta. rynx reads the web, Gemini, Gopher and feeds with no JavaScript;

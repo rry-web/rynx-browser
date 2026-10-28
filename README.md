@@ -146,8 +146,8 @@ JavaScript; when one shows an Anubis check anyway, rynx does its proof of work i
   installed; and the started router's progress with older i2pd versions, whose console can be
   slow to answer while starting
 
-Known limits: sites that need JavaScript won't work (the Internet Archive's copy or reader mode
-sometimes help); macOS Terminal draws images only as coloured blocks; a proxy set in the
+Known limits: sites that need JavaScript won't work, including those behind Cloudflare's bot
+check (the Internet Archive's copy or reader mode sometimes help); macOS Terminal draws images only as coloured blocks; a proxy set in the
 system's settings bypasses the local-network check for names.
 
 ## Development

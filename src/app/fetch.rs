@@ -249,6 +249,8 @@ async fn fetch_web(
             return Err("Page too large".to_string());
         }
         let cache = cache_info(&response, crate::cache::now());
+        // Cloudflare marks its "checking your browser" pages; they need JavaScript to pass
+        let cloudflare = response.headers().get("cf-mitigated").is_some_and(|v| v.as_bytes() == b"challenge");
         let body = crate::network::read_text_limited(response, MAX_PAGE_SIZE_BYTES).await?;
 
         // An Anubis "making sure you're not a bot" page: do its proof of work natively and load
@@ -279,8 +281,14 @@ async fn fetch_web(
         }
         // A bot check's page or an MCP server's notice isn't worth keeping
         let endpoint = crate::mcp::is_endpoint_answer(content_type.as_deref(), &body);
-        let cache = cache.filter(|_| problem.is_none() && !endpoint);
-        let note = problem.map(|p| format!("This is a bot check (Anubis), and {}", p));
+        let cache = cache.filter(|_| problem.is_none() && !cloudflare && !endpoint);
+        let note = match problem {
+            Some(p) => Some(format!("This is a bot check (Anubis), and {}", p)),
+            None if cloudflare => Some(String::from(
+                "This is a bot check (Cloudflare) that needs JavaScript; A opens the Internet Archive's copy",
+            )),
+            None => None,
+        };
         let page = page_from_body(url, content_type.as_deref(), &class, body);
         return Ok(Fetched { page, note, cache, unchanged: false, server_error: status.is_server_error() });
     }

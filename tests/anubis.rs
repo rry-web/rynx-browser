@@ -276,6 +276,26 @@ async fn unsupported_methods_and_the_setting_show_the_check() {
     assert!(state.lock().unwrap().paths.iter().all(|p| p != API));
 }
 
+#[tokio::test]
+async fn cloudflare_checks_are_explained() {
+    // Cloudflare's check needs JavaScript, so rynx says what it is and where to go instead
+    let server = MockServer::builder().start().await;
+    Mock::given(wiremock::matchers::any())
+        .respond_with(
+            ResponseTemplate::new(403).insert_header("cf-mitigated", "challenge").set_body_raw(
+                "<title>Just a moment...</title><p>Enable JavaScript and cookies to continue",
+                "text/html",
+            ),
+        )
+        .mount(&server)
+        .await;
+    let mut app = test_app();
+    load(&mut app, &format!("{}/", server.uri())).await;
+    let status = app.current_tab().status_message.clone();
+    assert!(status.contains("Cloudflare") && status.contains("Internet Archive"), "{status}");
+    assert!(text(&mut app).contains("Enable JavaScript"));
+}
+
 #[test]
 fn challenges_are_read_from_the_page() {
     let page = r#"<script id="anubis_challenge" type="application/json">{"rules":{"algorithm":"fast","difficulty":4},"challenge":"0123abcd"}</script>

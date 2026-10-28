@@ -221,6 +221,22 @@ fn tables_line_up_in_columns_with_a_header_rule() {
 }
 
 #[test]
+fn columns_are_wide_enough_for_cells_spanning_them() {
+    // Like Wikipedia's navboxes: a title across all three columns, then a list spanning two
+    // beside an image. Only the image's column had a single-column cell to measure, so the
+    // list's columns were a few characters wide and broke every word.
+    let html = "<table><tr><th colspan='3'>Potato cultivars</th></tr>\
+        <tr><td colspan='2'><ul><li>Adirondack Blue</li><li>Adirondack Red</li><li>Agata</li></ul></td>\
+        <td><img src='p.jpg' alt='Potatoes'></td></tr></table>";
+    let lines = text_lines(html, 60);
+    assert!(lines.iter().any(|l| l.contains("Adirondack Blue")), "{lines:#?}");
+    assert!(lines.iter().any(|l| l.contains("[Potatoes]")), "{lines:#?}");
+    // The rule under the title divides where the list and image do, not at every column
+    let rule = lines.iter().find(|l| l.starts_with('─')).expect("a header rule");
+    assert_eq!(rule.matches('┼').count(), 1, "{lines:#?}");
+}
+
+#[test]
 fn links_inside_table_cells_stay_clickable() {
     let r = render_full(FILES_TABLE, 40);
     let link = &r.links[0];
