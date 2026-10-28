@@ -13,6 +13,7 @@ use std::time::Duration;
 mod browsing;
 mod downloads;
 mod forms;
+mod pages;
 mod scrolling;
 mod security;
 mod settings;

@@ -120,7 +120,7 @@ pub(super) async fn fetch(request: PageRequest, shared: Shared) {
         }
         // The site (or, for I2P, the router) says it can't serve the page, but there's a copy
         (Ok(fetched), Some(entry)) if fetched.server_error => {
-            let note = format!("The site answered with an error; this is the copy saved {}", when(entry.stored));
+            let note = format!("This is the copy saved {}: the site answered with an error", when(entry.stored));
             deliver(tx, id, entry.page.clone(), Some(note)).await;
         }
         (Ok(Fetched { page, note, cache, .. }), _) => {
@@ -142,7 +142,8 @@ pub(super) async fn fetch(request: PageRequest, shared: Shared) {
         }
         // The site can't be reached, but there's a copy: show it, saying from when
         (Err(e), Some(entry)) => {
-            let note = format!("Couldn't reach the site ({}); this is the copy saved {}", e, when(entry.stored));
+            // What it is first: the status line may cut the end off
+            let note = format!("This is the copy saved {}: couldn't reach the site ({})", when(entry.stored), e);
             deliver(tx, id, entry.page.clone(), Some(note)).await;
         }
         (Err(e), None) => {

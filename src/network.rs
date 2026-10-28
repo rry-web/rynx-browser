@@ -410,8 +410,9 @@ pub fn check_redirect(from: &Url, to: &Url) -> Result<(), String> {
     Ok(())
 }
 
-/// A failed request, with its cause: reqwest's own message ("error sending request for url")
-/// leaves out why, which is at the end of the chain (a refused name, a refused connection)
+/// Why a request failed: the end of the error's chain (a refused name, a refused connection),
+/// which reqwest's own message ("error sending request for url (...)") leaves out, then the
+/// address tried (after a redirect, not the one in the address bar)
 pub fn request_error(error: &reqwest::Error) -> String {
     let mut cause = None;
     let mut source = std::error::Error::source(error);
@@ -419,9 +420,14 @@ pub fn request_error(error: &reqwest::Error) -> String {
         cause = Some(next.to_string());
         source = next.source();
     }
-    match cause {
-        Some(cause) if !error.to_string().contains(&cause) => format!("{}: {}", error, cause),
-        _ => error.to_string(),
+    let cause = match cause {
+        Some(cause) if error.is_timeout() => format!("timed out: {}", cause),
+        Some(cause) => cause,
+        None => return error.to_string(),
+    };
+    match error.url() {
+        Some(url) => format!("{} ({})", cause, url),
+        None => cause,
     }
 }
 

@@ -264,7 +264,12 @@ async fn an_unreachable_site_shows_the_saved_copy() {
     open(&mut app, &home).await;
     assert!(text(&mut app).contains("Version one"));
     let status = app.current_tab().status_message.clone();
-    assert!(status.contains("Couldn't reach the site") && status.contains("UTC"), "{status}");
+    assert!(
+        status.starts_with("This is the copy saved")
+            && status.contains("couldn't reach the site")
+            && status.contains("UTC"),
+        "{status}"
+    );
 
     // The I2P proxy answers an unreachable site with a server error: the saved copy shows then too
     let site = site("no-cache").await;

@@ -408,7 +408,8 @@ impl Site {
     /// Pages of HTML at these paths (for GET)
     pub fn new(pages: &[(&str, &str)]) -> Site {
         let runtime = tokio::runtime::Runtime::new().unwrap();
-        let server = runtime.block_on(wiremock::MockServer::start());
+        // Not from wiremock's pool, whose servers keep listening when dropped: a dropped site is gone
+        let server = runtime.block_on(wiremock::MockServer::builder().start());
         let site = Site { server, runtime };
         for (at, html) in pages {
             site.page(at, html);
