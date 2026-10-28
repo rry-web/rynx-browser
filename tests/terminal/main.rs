@@ -11,7 +11,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 mod browsing;
+mod downloads;
 mod forms;
+mod scrolling;
 mod security;
 mod settings;
 

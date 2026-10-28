@@ -255,6 +255,33 @@ impl Rynx {
         self.keys("\r");
     }
 
+    /// Cells of the page area (inside its border) drawn reversed: the cursor
+    pub fn reversed_cells(&self) -> Vec<(u16, u16)> {
+        self.page_cells(|cell| cell.inverse())
+    }
+
+    /// Cells of the page area with this background (ANSI colour number: 2 green, 3 yellow, 6 cyan)
+    pub fn cells_with_background(&self, colour: u8) -> Vec<(u16, u16)> {
+        self.page_cells(|cell| cell.bgcolor() == vt100::Color::Idx(colour))
+    }
+
+    fn page_cells(&self, wanted: impl Fn(&vt100::Cell) -> bool) -> Vec<(u16, u16)> {
+        let parser = self.screen.lock().unwrap();
+        let screen = parser.screen();
+        let (rows, cols) = screen.size();
+        let (rows, cols) = (rows.get(), cols.get());
+        let mut found = Vec::new();
+        // The page sits below the tab bar and address bar (rows 0..=5) and its top border (6)
+        for row in 7..rows.saturating_sub(1) {
+            for col in 1..cols.saturating_sub(1) {
+                if screen.cell(row, col).is_some_and(&wanted) {
+                    found.push((row, col));
+                }
+            }
+        }
+        found
+    }
+
     /// Where `text` is on the screen: (row, column), from 0
     pub fn find(&self, text: &str) -> Option<(u16, u16)> {
         self.rows()

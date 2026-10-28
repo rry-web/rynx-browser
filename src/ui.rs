@@ -278,10 +278,16 @@ fn apply_cursor_highlight(
                 if cursor_char >= current_x && cursor_char < span_end {
                     // Apply REVERSED style to the span containing the cursor
                     span.style = span.style.add_modifier(Modifier::REVERSED);
-                    break; // Stop looking once the cursor position is styled
+                    return; // Stop looking once the cursor position is styled
                 }
                 current_x = span_end;
             }
+            // Past the end of the line (an empty line, between paragraphs): a reversed space
+            // there, so the cursor can still be seen
+            if cursor_char > current_x {
+                line.spans.push(Span::raw(" ".repeat(cursor_char - current_x)));
+            }
+            line.spans.push(Span::styled(" ", Style::default().add_modifier(Modifier::REVERSED)));
         }
     }
 }
