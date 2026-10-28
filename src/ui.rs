@@ -301,6 +301,11 @@ fn overlay_form_controls(lines: &mut [Line], tab: &crate::app::BrowserTab, start
         let (Some(control), Some(value)) = (tab.controls.get(index), tab.control_values.get(index)) else {
             continue;
         };
+        // A button's label never changes, and a <button>'s is the page's own text, laid out by
+        // the renderer with no width reserved: redrawing it would cut it short
+        if control.kind == crate::forms::ControlKind::Submit {
+            continue;
+        }
         let Some(line) = lines.get_mut(region.line_index - start_index) else {
             continue;
         };

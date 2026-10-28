@@ -252,6 +252,21 @@ async fn run(
     }
     app.installed = installed;
     app.update_dir = update_dir;
+    // Development builds only: where the end-to-end tests' fake GitHub is, and the key their
+    // releases are signed with. Release builds have neither, so neither can be pointed elsewhere.
+    #[cfg(debug_assertions)]
+    {
+        if let Ok(api) = std::env::var("RYNX_TEST_UPDATE_API") {
+            app.update_api = api;
+        }
+        if let Some(key) = std::env::var("RYNX_TEST_RELEASE_KEY").ok().and_then(|hex| {
+            let bytes: Vec<u8> =
+                (0..hex.len()).step_by(2).filter_map(|i| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok()).collect();
+            <[u8; 32]>::try_from(bytes).ok()
+        }) {
+            app.release_keys = vec![key];
+        }
+    }
     if let Some(note) = &update_note {
         app.current_tab().status_message = note.clone();
     }

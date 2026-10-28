@@ -70,5 +70,8 @@ libc = "0.2.191"
 landlock = "0.4.7"
 
 [dev-dependencies]
+# Running the real program in a pseudo-terminal, and reading its screen (tests/terminal.rs)
+portable-pty = "0.9.0"
+vt100 = "0.18.1"
 wiremock = "0.6.5"
 rcgen = { version = "0.14.10", default-features = false, features = ["ring", "crypto"] }
