@@ -1,6 +1,8 @@
 # Changelog
 
-## [0.2.0-beta.8]
+## [Unreleased]
+
+(Tagged as 0.2.0-beta.8 at first, but that release's builds failed and nothing was published.)
 
 ### Fixed
 - Gemini and Gopher sites with international names can be reached (their names are now
