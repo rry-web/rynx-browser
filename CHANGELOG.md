@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.0]
 
 The first release out of beta. rynx reads the web, Gemini, Gopher and feeds with no JavaScript;
 draws images in capable terminals; keeps a cache and snapshots; lets you stay signed in to the
