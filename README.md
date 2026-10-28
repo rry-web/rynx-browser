@@ -3,7 +3,7 @@
 A private, hardened terminal web browser written in Rust, loosely inspired by **Lynx** and
 **w3m**, with **no JavaScript**. It also browses Gemini, Gopher, RSS feeds and I2P.
 
-> **Status: beta.** Version 0.2.0-beta.9 is the latest release. rynx is under active development,
+> **Status: beta.** Version 0.2.0-beta.10 is the latest release. rynx is under active development,
 > and some protections (the filesystem sandbox in particular) haven't yet been checked on a wide
 > range of systems. Please report problems, and anything that looks like a security issue (see
 > [SECURITY.md](SECURITY.md)), on [GitHub](https://github.com/rry-web/rynx-browser/issues).
@@ -13,7 +13,7 @@ A private, hardened terminal web browser written in Rust, loosely inspired by **
 With [Rust](https://rustup.rs) 1.90 or newer:
 
 ```sh
-cargo install rynx --version 0.2.0-beta.9
+cargo install rynx --version 0.2.0-beta.10
 ```
 
 Or download your system's build from the [releases page](https://github.com/rry-web/rynx-browser/releases)
@@ -153,7 +153,7 @@ system's settings bypasses the local-network check for names.
 ```sh
 scripts/check.sh --quick          # formatting, lints and tests
 scripts/check.sh                  # everything CI checks
-scripts/release.sh 0.2.0-beta.9   # a release, start to finish
+scripts/release.sh 0.2.0-beta.10   # a release, start to finish
 ```
 
 CI tests every push on Linux, macOS and Windows, including terminal tests that run the real

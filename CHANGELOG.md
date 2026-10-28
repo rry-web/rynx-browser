@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0-beta.10]
 
 ### Fixed
 - Text in scripts whose width terminals disagree about (Indic and Myanmar vowel signs and
