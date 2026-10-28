@@ -17,6 +17,8 @@ mod pages;
 mod scrolling;
 mod security;
 mod settings;
+mod small_web;
+mod tools;
 
 #[test]
 fn it_starts_sandboxed_shows_the_start_page_and_quits_cleanly() {
