@@ -132,6 +132,8 @@ JavaScript; when one shows an Anubis check anyway, rynx does its proof of work i
 
 ## Features to add
 
+The longer list, with notes and ideas, is in [ROADMAP.md](ROADMAP.md).
+
 - **Your own MCP servers:** tools from servers you configure, usable on any page
 - **Sign-in for site tools** (OAuth), and servers asking questions while a tool runs
 - **Encryption at rest** for history, the cache and snapshots (cookies are encrypted already)
