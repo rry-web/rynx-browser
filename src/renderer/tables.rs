@@ -22,9 +22,9 @@ struct TableRow<'a> {
     header: bool,
 }
 
-/// A cell rendered at its column width, ready to be placed into table lines
-struct RenderedCell {
-    column: usize,
+/// A cell (or a block of columns) rendered at its column width, ready to be placed into lines
+pub(super) struct RenderedCell {
+    pub(super) column: usize,
     pub(super) lines: Vec<Line<'static>>,
     pub(super) links: Vec<LinkRegion>,
     pub(super) anchors: Vec<(String, usize)>,
@@ -296,7 +296,7 @@ impl DomRenderer {
                 }
                 let span = cell.colspan.min(widths.len() - column);
                 let width = span_width(column, span);
-                cells.push(self.render_cell(cell, column, width));
+                cells.push(self.render_block(cell.element, cell.header, column, width));
                 column += span;
             }
 
@@ -382,8 +382,14 @@ impl DomRenderer {
         }
     }
 
-    /// Render one cell with its own renderer at the column's width
-    fn render_cell(&mut self, cell: &TableCell, column: usize, width: usize) -> RenderedCell {
+    /// Render one cell (or block) with its own renderer at the column's width, in bold for a header
+    pub(super) fn render_block(
+        &mut self,
+        element: ElementRef,
+        bold: bool,
+        column: usize,
+        width: usize,
+    ) -> RenderedCell {
         let mut renderer = DomRenderer::with_content_width(width);
         renderer.forms = std::mem::take(&mut self.forms);
         renderer.controls = std::mem::take(&mut self.controls);
@@ -393,12 +399,12 @@ impl DomRenderer {
         renderer.current_form = self.current_form;
         renderer.depth = self.depth + 1;
         let mut style = self.current_style();
-        if cell.header {
+        if bold {
             style = style.add_modifier(Modifier::BOLD);
         }
         renderer.style_stack = vec![style];
         renderer.active_link_url = self.active_link_url.clone();
-        for child in cell.element.children() {
+        for child in element.children() {
             renderer.walk(child);
         }
         renderer.marker_pending = false;

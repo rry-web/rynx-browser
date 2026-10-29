@@ -562,3 +562,28 @@ fn ctrl_h_is_backspace() {
     rynx.wait_for("FIND match 1 of 1");
     assert!(!rynx.text().contains("pagexh"), "{}", rynx.screen());
 }
+
+/// The start page's sections sit side by side on a wide screen, and one under another on a narrow
+/// one, following the window as it's resized
+#[test]
+fn start_page_uses_the_width() {
+    let (_home, mut rynx) = started("help-columns");
+    let same_row = |rynx: &Rynx| rynx.rows().iter().any(|r| r.contains("Moving around") && r.contains("Tabs"));
+    rynx.resize(50, 220);
+    rynx.wait_for("Find on page, copying");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !same_row(&rynx) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(same_row(&rynx), "{}", rynx.screen());
+    // Everything up to the last key fits on one screen
+    assert!(rynx.text().contains("This page"), "{}", rynx.screen());
+
+    rynx.resize(40, 80);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while same_row(&rynx) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(!same_row(&rynx), "{}", rynx.screen());
+    assert!(rynx.text().contains("Moving around"), "{}", rynx.screen());
+}

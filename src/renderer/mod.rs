@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use unicode_width::UnicodeWidthChar;
 
+mod columns;
 mod forms;
 mod head;
 mod images;
@@ -788,6 +789,12 @@ impl DomRenderer {
             "textarea" => return self.render_textarea(element),
             "select" => return self.render_select(element),
             "table" => return self.outside_one_line(|r| r.render_table(element)),
+            _ if elem.attr(columns::COLUMNS_ATTRIBUTE).is_some() => {
+                let count = self.column_count(element);
+                if count > 1 {
+                    return self.outside_one_line(|r| r.render_columns(element, count));
+                }
+            }
             _ => {}
         }
 

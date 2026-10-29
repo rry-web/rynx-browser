@@ -236,6 +236,30 @@ fn columns_are_wide_enough_for_cells_spanning_them() {
     assert_eq!(rule.matches('┼').count(), 1, "{lines:#?}");
 }
 
+const COLUMNS: &str = "<div data-rynx-columns='20'>\
+    <section><h2>First</h2><p>one two three</p></section>\
+    <section><h2>Second</h2><p>see <a href='/s'>settings</a> here</p></section>\
+    <section><h2>Third</h2><p>last</p></section></div>";
+
+#[test]
+fn marked_blocks_flow_into_columns_when_wide_enough() {
+    // 50 columns fit two 20-wide columns. Like a newspaper, the first column fills first: First
+    // and Second down the left, Third beside First
+    let lines = text_lines(COLUMNS, 50);
+    assert!(lines[0].starts_with("First") && lines[0].contains("Third"), "{lines:#?}");
+    assert!(lines.iter().any(|l| l.starts_with("Second")), "{lines:#?}");
+    // The link is still where its text is drawn
+    let r = render_full(COLUMNS, 50);
+    let link = &r.links[0];
+    let line = r.lines[link.line_index].to_string();
+    let text: String = line.chars().skip(link.x_start).take(link.x_end - link.x_start).collect();
+    assert_eq!(text, "settings");
+    // Too narrow for two: drawn one after another, as without the attribute
+    let narrow = text_lines(COLUMNS, 30);
+    assert_eq!(narrow, text_lines(&COLUMNS.replace(" data-rynx-columns='20'", ""), 30));
+    assert_eq!(narrow[0], "First");
+}
+
 #[test]
 fn links_inside_table_cells_stay_clickable() {
     let r = render_full(FILES_TABLE, 40);

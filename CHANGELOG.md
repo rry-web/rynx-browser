@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- The start page (`?`) uses a wide screen: its sections flow into two or three columns, so most
+  or all of it fits without scrolling, and it stays in one column on narrow screens.
+
 ## [0.3.1]
 
 ### Fixed
