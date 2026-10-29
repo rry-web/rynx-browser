@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.2]
 
 ### Changed
 - The start page (`?`) uses a wide screen: its sections flow into two or three columns, so most
