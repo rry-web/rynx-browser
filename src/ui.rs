@@ -11,14 +11,107 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Gauge, Paragraph, Tabs},
 };
 
-/// Render the tab bar showing all open tabs
-fn render_tabs(f: &mut Frame, app: &App, area: Rect) {
-    let titles: Vec<Line> =
-        app.tabs.iter().map(|t| Line::from(format!(" {} ", sanitize_for_terminal(&t.page_title)))).collect();
+fn text_width(text: &str) -> usize {
+    unicode_width::UnicodeWidthStr::width(text)
+}
 
-    let tabs = Tabs::new(titles)
-        .select(app.active_tab_index)
-        .block(Block::default().borders(Borders::ALL).title("Tabs"))
+/// `text` cut to at most `width` columns, ending in "…" when cut
+fn fit(text: &str, width: usize) -> String {
+    if text_width(text) <= width {
+        return text.to_string();
+    }
+    let mut shown = String::new();
+    let mut used = 0;
+    for ch in text.chars() {
+        let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used + w + 1 > width {
+            break;
+        }
+        shown.push(ch);
+        used += w;
+    }
+    if width > 0 {
+        shown.push('…');
+    }
+    shown
+}
+
+/// The end of `text` within `width` columns, starting with "…" when cut: for text being typed,
+/// whose end is where the typing happens
+fn fit_end(text: &str, width: usize) -> String {
+    if text_width(text) <= width {
+        return text.to_string();
+    }
+    let mut kept = Vec::new();
+    let mut used = 0;
+    for ch in text.chars().rev() {
+        let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used + w + 1 > width {
+            break;
+        }
+        kept.push(ch);
+        used += w;
+    }
+    let mut shown = String::from(if width > 0 { "…" } else { "" });
+    shown.extend(kept.into_iter().rev());
+    shown
+}
+
+/// Tab titles shorter than this are cut no further; past it, only some tabs are shown
+const MIN_TAB_TITLE: usize = 12;
+
+/// Fit tab titles into `width` columns, each drawn as " title " with a divider between: as they
+/// are if they fit, else each shortened (down to MIN_TAB_TITLE), else the run of tabs around the
+/// selected one that fits. Returns the first tab shown and the titles shown.
+pub fn fit_tabs(titles: &[String], selected: usize, width: usize) -> (usize, Vec<String>) {
+    let cost = |titles: &[String]| -> usize {
+        titles.iter().map(|t| text_width(t) + 2).sum::<usize>() + titles.len().saturating_sub(1)
+    };
+    let longest = titles.iter().map(|t| text_width(t)).max().unwrap_or(0);
+    let mut capped: Vec<String> = titles.to_vec();
+    for cap in (MIN_TAB_TITLE.min(longest)..=longest).rev() {
+        capped = titles.iter().map(|t| fit(t, cap)).collect();
+        if cost(&capped) <= width {
+            return (0, capped);
+        }
+    }
+    // Too many tabs even shortened: the selected one, then its neighbours while they fit
+    let selected = selected.min(capped.len().saturating_sub(1));
+    let (mut first, mut last) = (selected, selected);
+    loop {
+        let grew_right = last + 1 < capped.len() && cost(&capped[first..=last + 1]) <= width;
+        if grew_right {
+            last += 1;
+        }
+        let grew_left = first > 0 && cost(&capped[first - 1..=last]) <= width;
+        if grew_left {
+            first -= 1;
+        }
+        if !grew_right && !grew_left {
+            break;
+        }
+    }
+    let mut shown = capped[first..=last].to_vec();
+    if shown.len() == 1 {
+        shown[0] = fit(&shown[0], width.saturating_sub(2));
+    }
+    (first, shown)
+}
+
+/// Render the tab bar: every tab when they fit, else shortened titles, else the tabs around the
+/// current one with its number in the title
+fn render_tabs(f: &mut Frame, app: &App, area: Rect) {
+    let titles: Vec<String> = app.tabs.iter().map(|t| sanitize_for_terminal(&t.page_title).into_owned()).collect();
+    let (first, shown) = fit_tabs(&titles, app.active_tab_index, area.width.saturating_sub(2) as usize);
+    let title = if shown.len() < titles.len() {
+        format!("Tabs {}/{}", app.active_tab_index + 1, titles.len())
+    } else {
+        String::from("Tabs")
+    };
+    // Each title gets a space either side (the widget's padding), as fit_tabs counts
+    let tabs = Tabs::new(shown.into_iter().map(Line::from))
+        .select(app.active_tab_index - first)
+        .block(Block::default().borders(Borders::ALL).title(title))
         .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
 
     f.render_widget(tabs, area);
@@ -29,13 +122,49 @@ fn badge(text: &str, color: Color) -> Span<'static> {
     Span::styled(format!(" {} ", text), Style::default().fg(Color::Black).bg(color).add_modifier(Modifier::BOLD))
 }
 
+/// The address bar title's parts, each with a shorter form for narrow screens
+struct BarLabel {
+    badge: Option<(&'static str, &'static str, Color)>,
+    hint: String,
+    short_hint: String,
+}
+
+/// The address bar's title: the mode on the left and the network on the right, shortened step by
+/// step to fit `width`. The I2P label always stays; "Clearweb", the default, goes first.
+fn bar_title(label: &BarLabel, i2p: bool, width: usize) -> (Line<'static>, Line<'static>) {
+    let network_style = Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD);
+    let (network, short_network) = if i2p {
+        (Span::styled(" I2P mode ", network_style), Span::styled(" I2P ", network_style))
+    } else {
+        (Span::raw(" Clearweb "), Span::raw(""))
+    };
+    let left = |long_badge: bool, hint: &str| -> Line<'static> {
+        let mut spans = Vec::new();
+        if let Some((long, short, color)) = label.badge {
+            spans.push(badge(if long_badge { long } else { short }, color));
+        }
+        spans.push(Span::raw(hint.to_string()));
+        Line::from(spans)
+    };
+    let tries = [
+        (left(true, &label.hint), network.clone()),
+        (left(true, &label.short_hint), network.clone()),
+        (left(true, &label.short_hint), short_network.clone()),
+        (left(false, &label.short_hint), short_network.clone()),
+    ];
+    let fits = |(l, r): &(Line, Span)| l.width() + r.width() + usize::from(r.width() > 0) <= width;
+    let (l, r) = tries.iter().find(|t| fits(t)).unwrap_or(&tries[3]).clone();
+    (l, Line::from(r))
+}
+
 /// Render the address bar: the address (or what the current mode needs), with the mode as a
-/// label on the left of its title and the network on the right
+/// label on the left of its title and the network on the right, all fitted to the width
 fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
     let active_tab = &app.tabs[app.active_tab_index];
     let key = |text: &'static str| Span::styled(text, Style::default().add_modifier(Modifier::BOLD));
+    let width = area.width.saturating_sub(2) as usize;
 
-    let (label, body): (Line, Line) = match active_tab.input_mode {
+    let (label, body): (BarLabel, Line) = match active_tab.input_mode {
         InputMode::Search => {
             let (query, count, current) = active_tab
                 .search_state
@@ -48,34 +177,39 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
                     )
                 })
                 .unwrap_or(("", 0, 0));
+            let (hint, short_hint) = if count == 0 {
+                (String::from(" no matches "), String::from(" 0 "))
+            } else {
+                (format!(" match {} of {} ", current, count), format!(" {}/{} ", current, count))
+            };
             (
-                Line::from(vec![
-                    badge("FIND", Color::Magenta),
-                    Span::raw(if count == 0 {
-                        String::from(" no matches ")
-                    } else {
-                        format!(" match {} of {} ", current, count)
-                    }),
-                ]),
-                Line::from(sanitize_for_terminal(query).into_owned()),
+                BarLabel { badge: Some(("FIND", "FIND", Color::Magenta)), hint, short_hint },
+                Line::from(fit_end(&sanitize_for_terminal(query), width)),
             )
         }
         InputMode::Visual => {
             let selected = active_tab.extract_text_from_selection().chars().count();
+            let full = Line::from(vec![
+                Span::raw("Move with "),
+                key("h j k l"),
+                Span::raw(" or arrows to select · "),
+                key("y"),
+                Span::raw(" copies · "),
+                key("Esc"),
+                Span::raw(" cancels"),
+            ]);
+            let body = if full.width() <= width {
+                full
+            } else {
+                Line::from(vec![key("hjkl"), Span::raw(" select · "), key("y"), Span::raw(" copy · "), key("Esc")])
+            };
             (
-                Line::from(vec![
-                    badge("COPY MODE", Color::Cyan),
-                    Span::raw(format!(" {} characters selected ", selected)),
-                ]),
-                Line::from(vec![
-                    Span::raw("Move with "),
-                    key("h j k l"),
-                    Span::raw(" or arrows to select · "),
-                    key("y"),
-                    Span::raw(" copies · "),
-                    key("Esc"),
-                    Span::raw(" cancels"),
-                ]),
+                BarLabel {
+                    badge: Some(("COPY MODE", "COPY", Color::Cyan)),
+                    hint: format!(" {} characters selected ", selected),
+                    short_hint: format!(" {} ", selected),
+                },
+                body,
             )
         }
         mode => {
@@ -85,37 +219,34 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
             } else {
                 crate::network::mask_password(&active_tab.url_input)
             };
-            let label = match mode {
-                InputMode::Editing => {
-                    Line::from(vec![badge("EDITING ADDRESS", Color::Yellow), Span::raw(" Enter goes, Esc cancels ")])
-                }
-                InputMode::FormEdit => {
-                    Line::from(vec![badge("TYPING INTO FORM", Color::Green), Span::raw(" Enter sends, Esc stops ")])
-                }
+            let (badge, hint) = match mode {
+                InputMode::Editing => (Some(("EDITING ADDRESS", "EDIT", Color::Yellow)), " Enter goes, Esc cancels "),
+                InputMode::FormEdit => (Some(("TYPING INTO FORM", "FORM", Color::Green)), " Enter sends, Esc stops "),
                 _ if active_tab.reader_mode => {
-                    Line::from(vec![badge("READER", Color::LightBlue), Span::raw(" R shows the whole page ")])
+                    (Some(("READER", "READER", Color::LightBlue)), " R shows the whole page ")
                 }
-                _ => Line::from(" Address "),
+                _ => (None, " Address "),
             };
+            let short_hint = if badge.is_some() { "" } else { " Address " };
+            let label = BarLabel { badge, hint: hint.to_string(), short_hint: short_hint.to_string() };
             let style = if mode == InputMode::Editing { Style::default().fg(Color::Yellow) } else { Style::default() };
-            // Shown as typed while editing; otherwise with its site's name readable when safe
+            // Shown as typed while editing, its end in view; otherwise with its site's name
+            // readable when safe, and any warning kept in view
             let line = if mode == InputMode::Editing {
-                Line::styled(sanitize_for_terminal(&address).into_owned(), style)
+                Line::styled(fit_end(&sanitize_for_terminal(&address), width), style)
             } else {
                 let (shown, lookalike) = crate::names::show_address(&address);
-                let mut spans = vec![Span::styled(sanitize_for_terminal(&shown).into_owned(), style)];
-                spans.extend(lookalike_warning(lookalike));
+                let warning = lookalike_warning(lookalike);
+                let room = width.saturating_sub(warning.as_ref().map_or(0, |w| w.width()));
+                let mut spans = vec![Span::styled(fit(&sanitize_for_terminal(&shown), room), style)];
+                spans.extend(warning);
                 Line::from(spans)
             };
             (label, line)
         }
     };
 
-    let network = if app.i2p_mode {
-        Line::from(Span::styled(" I2P mode ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)))
-    } else {
-        Line::from(" Clearweb ")
-    };
+    let (title, network) = bar_title(&label, app.i2p_mode, width);
     let border = match active_tab.input_mode {
         InputMode::Visual => Style::default().fg(Color::Cyan),
         InputMode::Editing => Style::default().fg(Color::Yellow),
@@ -123,7 +254,7 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
         InputMode::FormEdit => Style::default().fg(Color::Green),
         InputMode::Normal => Style::default(),
     };
-    let block = Block::default().borders(Borders::ALL).border_style(border).title(label).title(network.right_aligned());
+    let block = Block::default().borders(Borders::ALL).border_style(border).title(title).title(network.right_aligned());
     f.render_widget(Paragraph::new(body).block(block), area);
 }
 
@@ -429,6 +560,13 @@ fn link_preview(tab: &crate::app::BrowserTab) -> Line<'static> {
     }
 }
 
+/// The page border's title: "Browser - [Status: ...]" when it fits, else the status alone, cut
+/// short if need be
+fn status_title(status: &str, width: usize) -> String {
+    let full = format!("Browser - [Status: {}]", status);
+    if text_width(&full) <= width { full } else { fit(status, width) }
+}
+
 /// Render the main browser content area with all highlighting applied
 fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
     let active_tab = &app.tabs[app.active_tab_index];
@@ -474,11 +612,13 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
         );
     }
 
-    let status_text = format!("Status: {}", sanitize_for_terminal(&active_tab.status_message));
     let content = Paragraph::new(viewport_content).scroll((0, 0)).block(
         Block::default()
             .borders(Borders::ALL)
-            .title(format!("Browser - [{}]", status_text))
+            .title(status_title(
+                &sanitize_for_terminal(&active_tab.status_message),
+                area.width.saturating_sub(2) as usize,
+            ))
             .title_bottom(link_preview(active_tab)),
     );
 
@@ -713,5 +853,63 @@ fn render_download_prompt(f: &mut Frame, app: &App) {
         let paragraph = Paragraph::new(text).block(block).alignment(ratatui::layout::Alignment::Center);
 
         f.render_widget(paragraph, popup_area);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_is_cut_to_fit_with_an_ellipsis() {
+        assert_eq!(fit("Ready", 10), "Ready");
+        assert_eq!(fit("Images loaded", 8), "Images …");
+        assert_eq!(fit_end("https://example.com/long/path", 10), "…long/path");
+        assert_eq!(fit_end("short", 10), "short");
+        // Wide characters count as two columns
+        assert_eq!(fit("日本語のページ", 7), "日本語…");
+        assert_eq!(fit("anything", 0), "");
+    }
+
+    #[test]
+    fn tabs_are_shortened_then_windowed_around_the_current_one() {
+        let titles: Vec<String> =
+            ["Potato - Wikipedia", "Rust Programming Language", "Start"].iter().map(|t| t.to_string()).collect();
+        // Room for all as they are
+        assert_eq!(fit_tabs(&titles, 0, 80), (0, titles.clone()));
+        // Shortened to fit
+        let (first, shown) = fit_tabs(&titles, 1, 50);
+        assert_eq!(first, 0);
+        assert_eq!(shown.len(), 3);
+        assert!(shown.iter().map(|t| text_width(t) + 2).sum::<usize>() + 2 <= 50, "{shown:?}");
+        assert!(shown[1].ends_with('…'), "{shown:?}");
+        // Too narrow for all: the current tab is always among those shown
+        for selected in 0..3 {
+            let (first, shown) = fit_tabs(&titles, selected, 20);
+            assert!(first <= selected && selected < first + shown.len(), "{selected}: {first} {shown:?}");
+        }
+    }
+
+    #[test]
+    fn the_address_bar_title_shortens_but_keeps_i2p() {
+        let editing = BarLabel {
+            badge: Some(("EDITING ADDRESS", "EDIT", Color::Yellow)),
+            hint: String::from(" Enter goes, Esc cancels "),
+            short_hint: String::new(),
+        };
+        let (left, right) = bar_title(&editing, false, 80);
+        assert_eq!(left.to_string(), " EDITING ADDRESS  Enter goes, Esc cancels ");
+        assert_eq!(right.to_string(), " Clearweb ");
+        let (left, right) = bar_title(&editing, true, 20);
+        assert_eq!((left.to_string().as_str(), right.to_string().as_str()), (" EDIT ", " I2P "));
+        let (left, right) = bar_title(&editing, false, 20);
+        assert_eq!((left.to_string().as_str(), right.to_string().as_str()), (" EDITING ADDRESS ", ""));
+    }
+
+    #[test]
+    fn the_status_drops_its_frame_before_its_words() {
+        assert_eq!(status_title("Ready", 80), "Browser - [Status: Ready]");
+        assert_eq!(status_title("Loaded 3 images", 20), "Loaded 3 images");
+        assert_eq!(status_title("Couldn't connect to example.com", 20), "Couldn't connect to…");
     }
 }

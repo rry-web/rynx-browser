@@ -5,6 +5,11 @@
 ### Changed
 - The start page (`?`) uses a wide screen: its sections flow into two or three columns, so most
   or all of it fits without scrolling, and it stays in one column on narrow screens.
+- The top of the window fits narrow screens. The status drops its "Browser - [Status: ...]"
+  frame before cutting its words, and ends in "…" when cut; tab titles shorten, and when there
+  are too many tabs the current one stays in view with its number ("Tabs 3/8"); the address bar's
+  title shortens its labels (the I2P label always stays); and a long address being typed shows
+  its end, where the typing is.
 
 ## [0.3.1]
 

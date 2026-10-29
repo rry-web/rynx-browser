@@ -587,3 +587,47 @@ fn start_page_uses_the_width() {
     assert!(!same_row(&rynx), "{}", rynx.screen());
     assert!(rynx.text().contains("Moving around"), "{}", rynx.screen());
 }
+
+/// On a narrow screen the top of the window fits itself: the status loses its "Browser - [...]"
+/// frame before its words, many tabs show the current one and its number, and a long address
+/// being typed shows its end
+#[test]
+fn the_top_fits_a_narrow_window() {
+    let site = two_pages();
+    let (_home, mut rynx) = started("narrow-top");
+    // The frame shows whole, or not at all
+    let status_fits = |rynx: &Rynx| {
+        let row = rynx.rows()[6].clone();
+        !row.contains("Browser - [") || row.contains(']')
+    };
+    rynx.resize(40, 40);
+    rynx.settle();
+    assert!(status_fits(&rynx), "{}", rynx.screen());
+    rynx.open(&site.url("/a"));
+    rynx.wait_for("Alpha page");
+    assert!(status_fits(&rynx), "{}", rynx.screen());
+
+    // Six tabs can't all fit 40 columns: the current one stays in view, with its number
+    for _ in 0..5 {
+        rynx.keys("t");
+    }
+    rynx.keys("J");
+    rynx.wait_for("Tabs 5/6");
+    rynx.keys("K");
+    rynx.wait_for("Tabs 6/6");
+    assert!(rynx.rows()[1].contains("Start") || rynx.rows()[1].contains("New Tab"), "{}", rynx.screen());
+
+    // Typing past the edge: the end, where the typing is, stays in view
+    rynx.keys("e");
+    rynx.type_text("https://example.com/a/very/long/path/that/goes/past/the/edge/xyzzy");
+    rynx.wait_for("xyzzy");
+    assert!(rynx.rows()[4].contains("…"), "{}", rynx.screen());
+    assert!(rynx.rows()[3].contains("EDITING ADDRESS"), "{}", rynx.screen());
+    rynx.keys("\x1b");
+
+    // I2P mode is always named, however narrow
+    rynx.resize(40, 24);
+    rynx.keys("p");
+    rynx.wait_for("I2P");
+    assert!(rynx.rows()[3].contains("I2P"), "{}", rynx.screen());
+}

@@ -189,7 +189,8 @@ fn cache_03_disk_cache() {
     rynx.wait_for("RYNX BROWSER");
     rynx.open(&address);
     rynx.wait_for("A page worth keeping");
-    rynx.wait_for("Status: This is the copy saved");
+    rynx.wait_for("This is the copy saved");
+    assert!(rynx.status().starts_with("This is the copy saved"), "{}", rynx.screen());
     rynx.keys("S");
     rynx.scroll_to("Clear cache");
     rynx.click_text("Clear cache");

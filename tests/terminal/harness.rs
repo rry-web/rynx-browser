@@ -198,8 +198,14 @@ impl Rynx {
 
     /// The status line's text (in the page's top border)
     pub fn status(&self) -> String {
-        let text = self.text();
-        text.split("[Status: ").nth(1).and_then(|s| s.split(']').next()).unwrap_or("").to_string()
+        // The page border's title, below the tab bar and address bar: "Browser - [Status: ...]",
+        // or the status alone when that won't fit
+        let row = self.rows()[6].clone();
+        let title = row.trim_start_matches('┌').trim_end_matches(['─', '┐']);
+        match title.strip_prefix("Browser - [Status: ") {
+            Some(status) => status.strip_suffix(']').unwrap_or(status).to_string(),
+            None => title.to_string(),
+        }
     }
 
     /// Wait until `wanted` is on the screen
