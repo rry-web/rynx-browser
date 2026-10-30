@@ -50,7 +50,8 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
   tools, shown as forms; nothing is sent until you've seen it and confirmed
 - I2P: `.i2p` sites through a local router, which rynx can start for you (i2pd); a setting locks
   rynx to I2P so a stray key can't leave it. `about:i2p` shows how to get torrents and mail through
-  the router's own programs, and magnet links are copied for a torrent client
+  the router's own programs, and magnet links are copied for a torrent client. The router rynx
+  starts can let torrent clients and other I2P programs on your computer use it (SAM, opt-in)
 
 **Slow connections and staying in control**
 - A page cache: Back is instant, unchanged pages aren't downloaded again, unreachable sites show

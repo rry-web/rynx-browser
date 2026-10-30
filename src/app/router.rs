@@ -59,14 +59,22 @@ impl App {
                 String::from("rynx is set to always use the clearweb, so it didn't start the router.")
             }
             RouterState::Failed(why) => format!("The router didn't start: {}", why),
-            RouterState::Started { pid, console_port, keep } => {
+            RouterState::Started { pid, console_port, sam_port, keep } => {
                 let progress = match (&self.router_progress, console_port) {
                     (Some(progress), _) => progress.describe(),
                     (None, Some(_)) => String::from("starting"),
                     (None, None) => String::from("running (its console's port was taken, so its progress isn't known)"),
                 };
                 let after = if *keep { "keeps running after rynx quits" } else { "stops when rynx quits" };
-                format!("rynx started i2pd (process {}): {}. It {}.", pid, progress, after)
+                let sam = match sam_port {
+                    Some(port) => format!(" Other programs can use it through SAM at 127.0.0.1:{}.", port),
+                    None if self.settings.i2p_router_sam => format!(
+                        " SAM is off: another program had its port, {}, when the router started.",
+                        crate::i2pd::SAM_PORT
+                    ),
+                    None => String::new(),
+                };
+                format!("rynx started i2pd (process {}): {}. It {}.{}", pid, progress, after, sam)
             }
         }
     }
@@ -94,6 +102,11 @@ impl App {
             "i2p_router_keep",
             s.keep_i2p_router,
             "Keep it running after rynx quits (ready sooner next time, and it carries others' traffic, as routers do)",
+        ));
+        html.push_str(&checkbox(
+            "i2p_router_sam",
+            s.i2p_router_sam,
+            "Let other programs on this computer use it through SAM, at 127.0.0.1:7656 (torrent clients, pboted)",
         ));
         html.push_str(&format!(
             "<p><b>i2pd program</b>: empty to look on PATH and where package managers install it.<br>\
@@ -129,20 +142,34 @@ impl App {
              <h2>Torrents</h2>\
              <p>A magnet link on a page is copied when you open it, to paste into a torrent client.</p>\
              <p><b>Java I2P</b> comes with one, I2PSnark: {snark}</p>\
-             <p><b>With i2pd</b>, use a client that talks to the router over SAM, such as XD (which has a \
-             web page of its own, to open in rynx), qBittorrent or BiglyBT (with its I2P plugin). SAM is \
-             off in the i2pd rynx starts; for torrents, run your own i2pd with <b>sam.enabled = true</b> in \
-             its i2pd.conf. rynx uses a router that's already running and leaves it alone.</p>\
+             <p><b>With i2pd</b>, use a client that talks to the router over SAM, at 127.0.0.1:{sam_port}, \
+             such as XD (which has a web page of its own, to open in rynx), qBittorrent or BiglyBT (with its \
+             I2P plugin). {sam}</p>\
              <h2>Mail</h2>\
              <p><b>Java I2P</b> comes with SusiMail: {susi}</p>\
              <p><b>With i2pd</b>, add these to {tunnels}, restart it, and point any mail client (aerc and \
              neomutt work in a terminal) at 127.0.0.1: port 7659 to send, 7660 to receive. Accounts are made \
              at {postman}.</p>\
+             <p><b>I2P-Bote</b>, mail without a server, works the same way through pboted, which talks to the \
+             router over SAM and gives a mail client SMTP and POP3. Its last release was in 2022, so it's \
+             best kept to mail that doesn't matter.</p>\
              <pre>[smtp-postman]\ntype = client\naddress = 127.0.0.1\nport = 7659\n\
              destination = smtp.postman.i2p\ndestinationport = 25\nkeys = transient-smtp\n\n\
              [pop3-postman]\ntype = client\naddress = 127.0.0.1\nport = 7660\n\
              destination = pop.postman.i2p\ndestinationport = 110\nkeys = transient-pop3</pre>",
             status = escape_html(&self.router_status()),
+            sam_port = crate::i2pd::SAM_PORT,
+            sam = match self.router_state {
+                RouterState::Started { sam_port: Some(_), .. } => "The i2pd rynx started has SAM on.",
+                RouterState::Started { .. } if self.settings.i2p_router_sam => {
+                    "SAM is asked for, but another program had its port when the router started."
+                }
+                _ => {
+                    "For the i2pd rynx starts, tick \"Let other programs on this computer use it through SAM\" in \
+                     settings (S); in your own i2pd, set sam.enabled = true in its i2pd.conf. rynx uses a router \
+                     that's already running and leaves it alone."
+                }
+            },
             console = link(&console),
             java = link(JAVA_I2P_CONSOLE),
             snark = link(&format!("{JAVA_I2P_CONSOLE}i2psnark/")),

@@ -11,6 +11,7 @@
 //! How far it has got (joining the network, building tunnels) is read from its web console, on
 //! 127.0.0.1 only.
 
+use crate::settings::{NetworkMode, Settings};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -18,6 +19,10 @@ use std::time::Duration;
 
 /// The console's port, if it's free; i2pd's own default
 pub const CONSOLE_PORT: u16 = 7070;
+
+/// SAM's port, for other programs (torrent clients, mail) to use the router through, when asked
+/// for and free; the usual one
+pub const SAM_PORT: u16 = 7656;
 
 const PID_FILE: &str = "i2pd.pid";
 pub const LOG_FILE: &str = "i2pd.log";
@@ -86,6 +91,8 @@ pub struct Plan {
     pub proxy: SocketAddr,
     /// None turns the console off (its port is taken)
     pub console_port: Option<u16>,
+    /// None turns SAM off (not asked for, or its port is taken)
+    pub sam_port: Option<u16>,
     /// Kept running after rynx quits
     pub keep: bool,
 }
@@ -106,7 +113,6 @@ impl Plan {
             format!("--httpproxy.address={}", self.proxy.ip()),
             format!("--httpproxy.port={}", self.proxy.port()),
             "--socksproxy.enabled=0".to_string(),
-            "--sam.enabled=0".to_string(),
             "--bob.enabled=0".to_string(),
             "--i2cp.enabled=0".to_string(),
             "--i2pcontrol.enabled=0".to_string(),
@@ -117,6 +123,15 @@ impl Plan {
                 args.push(format!("--http.port={}", port));
             }
             None => args.push("--http.enabled=0".to_string()),
+        }
+        // Only on this computer: other programs here may use the router, nothing else can
+        match self.sam_port {
+            Some(port) => {
+                args.push("--sam.enabled=1".to_string());
+                args.push("--sam.address=127.0.0.1".to_string());
+                args.push(format!("--sam.port={}", port));
+            }
+            None => args.push("--sam.enabled=0".to_string()),
         }
         if let Some(certificates) = &self.certificates {
             args.push(format!("--certsdir={}", path(certificates)));
@@ -141,10 +156,11 @@ pub enum RouterState {
     NotFound,
     /// Turned on, but the settings keep rynx on the clearweb
     Clearweb,
-    /// Started by rynx: its process, and the console's port if it has one
+    /// Started by rynx: its process, and the console's and SAM's ports if it has them
     Started {
         pid: u32,
         console_port: Option<u16>,
+        sam_port: Option<u16>,
         keep: bool,
     },
     Failed(String),
@@ -326,30 +342,27 @@ impl Drop for Router {
     }
 }
 
-/// Decide what to do about the router at startup, and do it. `explicit` is i2pd_path.
-pub fn start_if_wanted(
-    wanted: bool,
-    keep: bool,
-    clearweb_only: bool,
-    i2p_proxy: &str,
-    explicit: Option<&Path>,
-    data_dir: Option<PathBuf>,
-) -> (RouterState, Option<Router>) {
-    if !wanted {
+/// Decide what to do about the router at startup, as the settings ask, and do it
+pub fn start_if_wanted(settings: &Settings, data_dir: Option<PathBuf>) -> (RouterState, Option<Router>) {
+    let keep = settings.keep_i2p_router;
+    if !settings.start_i2p_router {
         return (RouterState::NotManaged, None);
     }
-    if clearweb_only {
+    if settings.network == NetworkMode::Clearweb {
         return (RouterState::Clearweb, None);
     }
-    let Some(proxy) = local_proxy(i2p_proxy) else { return (RouterState::RemoteProxy, None) };
-    let program = find(explicit);
+    let Some(proxy) = local_proxy(&settings.i2p_proxy) else { return (RouterState::RemoteProxy, None) };
+    let program = find(settings.i2pd_path.as_deref());
+    let sam = SocketAddr::from(([127, 0, 0, 1], SAM_PORT));
     if listening(proxy) {
         // One an earlier rynx left running is taken back, to be stopped (or kept) as now set
         if let (Some(program), Some(dir)) = (&program, &data_dir)
             && let Some(router) = Router::left_running(dir, program, keep)
         {
             let console = (listening(SocketAddr::from(([127, 0, 0, 1], CONSOLE_PORT)))).then_some(CONSOLE_PORT);
-            return (RouterState::Started { pid: router.pid(), console_port: console, keep }, Some(router));
+            // As it was started; the setting applies once it's started again
+            let sam_port = listening(sam).then_some(SAM_PORT);
+            return (RouterState::Started { pid: router.pid(), console_port: console, sam_port, keep }, Some(router));
         }
         return (RouterState::AlreadyRunning, None);
     }
@@ -364,10 +377,19 @@ pub fn start_if_wanted(
         data_dir,
         proxy,
         console_port: (!listening(console)).then_some(CONSOLE_PORT),
+        sam_port: (settings.i2p_router_sam && !listening(sam)).then_some(SAM_PORT),
         keep,
     };
     match Router::start(&plan) {
-        Ok(router) => (RouterState::Started { pid: router.pid(), console_port: plan.console_port, keep }, Some(router)),
+        Ok(router) => {
+            let state = RouterState::Started {
+                pid: router.pid(),
+                console_port: plan.console_port,
+                sam_port: plan.sam_port,
+                keep,
+            };
+            (state, Some(router))
+        }
         Err(why) => (RouterState::Failed(why), None),
     }
 }

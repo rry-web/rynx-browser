@@ -240,6 +240,7 @@ impl App {
         let mut encrypt_cookies = false;
         let mut router = false;
         let mut router_keep = false;
+        let mut router_sam = false;
         let mut engine = None;
         for (control, value) in tab.controls.iter().zip(&tab.control_values) {
             if control.form != Some(form) {
@@ -253,6 +254,7 @@ impl App {
                 ("cookie_encryption", ControlValue::Checked(on)) => encrypt_cookies = *on,
                 ("i2p_router", ControlValue::Checked(on)) => router = *on,
                 ("i2p_router_keep", ControlValue::Checked(on)) => router_keep = *on,
+                ("i2p_router_sam", ControlValue::Checked(on)) => router_sam = *on,
                 ("cache_i2p", ControlValue::Checked(on)) => cache_i2p = *on,
                 ("search_engine", ControlValue::Selected(i)) => {
                     if let ControlKind::Select { options } = &control.kind {
@@ -290,6 +292,7 @@ impl App {
         lines.push(format!("cookie_encryption = {}", if encrypt_cookies { "keychain" } else { "off" }));
         lines.push(format!("i2p_router = {}", if router { "start" } else { "off" }));
         lines.push(format!("i2p_router_keep = {}", if router_keep { "on" } else { "off" }));
+        lines.push(format!("i2p_router_sam = {}", if router_sam { "on" } else { "off" }));
 
         let (settings, problems) = crate::settings::Settings::parse(&lines.join("\n"));
         if let Some(problem) = problems.first() {
@@ -312,6 +315,7 @@ impl App {
                 let restart = settings.download_dir != self.settings.download_dir
                     || settings.start_i2p_router != self.settings.start_i2p_router
                     || settings.keep_i2p_router != self.settings.keep_i2p_router
+                    || settings.i2p_router_sam != self.settings.i2p_router_sam
                     || settings.i2pd_path != self.settings.i2pd_path;
                 let message = match self.apply_settings(settings) {
                     Err(e) => e,

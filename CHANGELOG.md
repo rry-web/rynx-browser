@@ -15,6 +15,10 @@
 - `about:i2p`: the router's console, and how to get torrents and mail over I2P with the programs
   made for them (Java I2P's I2PSnark and SusiMail, or a SAM torrent client and mail tunnels with
   i2pd, with the lines to add). It's linked from the start page and settings.
+- The i2pd rynx starts can let other programs on this computer use it through SAM, at
+  `127.0.0.1:7656`: torrent clients (XD, qBittorrent, BiglyBT), pboted for I2P-Bote, and others.
+  Off by default; a checkbox in settings, or `i2p_router_sam = on`. If another program has the
+  port, SAM stays off and the settings page says so.
 - Opening a magnet link copies it, to paste into a torrent client, instead of "Unsupported link
   type".
 

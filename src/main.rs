@@ -101,14 +101,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     rynx::dns::allow_local_names(&settings.local_names);
 
     // The I2P router, if the settings ask for it: started now, so the sandbox doesn't confine it
-    let (router_state, router) = rynx::i2pd::start_if_wanted(
-        settings.start_i2p_router,
-        settings.keep_i2p_router,
-        settings.network == rynx::settings::NetworkMode::Clearweb,
-        &settings.i2p_proxy,
-        settings.i2pd_path.as_deref(),
-        rynx::i2pd::data_dir(),
-    );
+    let (router_state, router) = rynx::i2pd::start_if_wanted(&settings, rynx::i2pd::data_dir());
 
     // On macOS the keychain's files are in the home folder, which the sandbox closes, so the
     // cookie key is asked for first; Seatbelt confines the whole process, threads and all

@@ -1,4 +1,5 @@
 use rynx::i2pd::{Plan, Progress, RouterState, local_proxy, parse_console, start_if_wanted};
+use rynx::settings::{NetworkMode, Settings};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
@@ -20,6 +21,17 @@ fn fake_i2pd(dir: &Path, script: &str) -> PathBuf {
 }
 
 #[cfg(unix)]
+/// Settings asking for the router (or not), with the proxy and i2pd given
+fn router_settings(start: bool, keep: bool, proxy: &str, program: Option<&Path>) -> Settings {
+    Settings {
+        start_i2p_router: start,
+        keep_i2p_router: keep,
+        i2p_proxy: proxy.to_string(),
+        i2pd_path: program.map(Path::to_path_buf),
+        ..Settings::default()
+    }
+}
+
 fn alive(pid: u32) -> bool {
     std::process::Command::new("kill")
         .args(["-0", &pid.to_string()])
@@ -89,6 +101,7 @@ fn the_router_gets_only_what_rynx_needs() {
         certificates: Some(PathBuf::from("/usr/share/i2pd/certificates")),
         proxy: SocketAddr::from(([127, 0, 0, 1], 4444)),
         console_port: Some(7070),
+        sam_port: None,
         keep: false,
     };
     let args = plan.args();
@@ -110,10 +123,16 @@ fn the_router_gets_only_what_rynx_needs() {
     ] {
         assert!(args.iter().any(|a| a == expected), "{expected} missing from {args:?}");
     }
-    let kept = Plan { keep: true, console_port: None, certificates: None, ..plan }.args();
+    let kept = Plan { keep: true, console_port: None, certificates: None, ..plan.clone() }.args();
     assert!(!kept.iter().any(|a| a == "--notransit"));
     assert!(kept.iter().any(|a| a == "--http.enabled=0"));
     assert!(!kept.iter().any(|a| a.starts_with("--certsdir")));
+    // SAM, when asked for, listens on this computer only
+    let sam = Plan { sam_port: Some(7656), ..plan }.args();
+    for expected in ["--sam.enabled=1", "--sam.address=127.0.0.1", "--sam.port=7656"] {
+        assert!(sam.iter().any(|a| a == expected), "{expected} missing from {sam:?}");
+    }
+    assert!(!sam.iter().any(|a| a == "--sam.enabled=0"));
 }
 
 #[test]
@@ -121,8 +140,12 @@ fn nothing_is_started_unless_it_should_be() {
     let dir = temp_dir("decide");
     let proxy = NOTHING_LISTENING.to_string();
     let missing = dir.join("no-such-i2pd");
-    let decide = |wanted, clearweb, proxy: &str| {
-        start_if_wanted(wanted, false, clearweb, proxy, Some(&missing), Some(dir.clone())).0
+    let decide = |wanted, clearweb: bool, proxy: &str| {
+        let mut settings = router_settings(wanted, false, proxy, Some(&missing));
+        if clearweb {
+            settings.network = NetworkMode::Clearweb;
+        }
+        start_if_wanted(&settings, Some(dir.clone())).0
     };
     assert_eq!(decide(false, false, &proxy), RouterState::NotManaged);
     assert_eq!(decide(true, true, &proxy), RouterState::Clearweb);
@@ -156,8 +179,10 @@ fn a_router_rynx_starts_is_stopped_when_rynx_quits() {
     let program = fake_i2pd(&dir, "echo \"$@\" > \"$(dirname \"$0\")/args.txt\"\nexec sleep 30");
     let data = dir.join("data");
     let proxy = NOTHING_LISTENING.to_string();
-    let (state, router) = start_if_wanted(true, false, false, &proxy, Some(&program), Some(data.clone()));
-    let RouterState::Started { pid, keep: false, .. } = state else { panic!("{state:?}") };
+    let mut settings = router_settings(true, false, &proxy, Some(&program));
+    settings.i2p_router_sam = true;
+    let (state, router) = start_if_wanted(&settings, Some(data.clone()));
+    let RouterState::Started { pid, keep: false, sam_port, .. } = state else { panic!("{state:?}") };
     let router = router.expect("a router");
     assert!(alive(pid));
     // Empty configuration files for it, never a hand-made i2pd's
@@ -165,6 +190,13 @@ fn a_router_rynx_starts_is_stopped_when_rynx_quits() {
     let args = std::fs::read_to_string(dir.join("args.txt")).unwrap();
     assert!(args.contains(&format!("--datadir={}", data.display())), "{args}");
     assert!(args.contains("--notransit"));
+    // SAM was asked for: on at its usual port, unless something here already has that port
+    if rynx::i2pd::listening(SocketAddr::from(([127, 0, 0, 1], rynx::i2pd::SAM_PORT))) && sam_port.is_none() {
+        assert!(args.contains("--sam.enabled=0"), "{args}");
+    } else {
+        assert_eq!(sam_port, Some(rynx::i2pd::SAM_PORT));
+        assert!(args.contains("--sam.enabled=1") && args.contains("--sam.address=127.0.0.1"), "{args}");
+    }
     router.stop();
     assert!(!alive(pid), "still running after rynx quit");
     let _ = std::fs::remove_dir_all(&dir);
@@ -176,7 +208,7 @@ fn a_router_kept_running_outlives_rynx() {
     let dir = temp_dir("keep");
     let program = fake_i2pd(&dir, "exec sleep 30");
     let proxy = NOTHING_LISTENING.to_string();
-    let (state, router) = start_if_wanted(true, true, false, &proxy, Some(&program), Some(dir.join("data")));
+    let (state, router) = start_if_wanted(&router_settings(true, true, &proxy, Some(&program)), Some(dir.join("data")));
     let RouterState::Started { pid, keep: true, .. } = state else { panic!("{state:?}") };
     router.unwrap().stop();
     assert!(alive(pid), "a router kept running was stopped");
@@ -190,7 +222,8 @@ fn a_router_that_wont_start_says_why() {
     let dir = temp_dir("fail");
     let program = fake_i2pd(&dir, "echo 'missing/unreadable config file: x' >&2\nexit 1");
     let proxy = NOTHING_LISTENING.to_string();
-    let (state, router) = start_if_wanted(true, false, false, &proxy, Some(&program), Some(dir.join("data")));
+    let (state, router) =
+        start_if_wanted(&router_settings(true, false, &proxy, Some(&program)), Some(dir.join("data")));
     assert!(router.is_none());
     assert_eq!(state, RouterState::Failed("missing/unreadable config file: x".to_string()));
     assert!(state.startup_note().unwrap().contains("didn't start: missing/unreadable"));
@@ -242,7 +275,7 @@ async fn the_settings_page_shows_the_router() {
     let (tx, rx) = tokio::sync::mpsc::channel(10);
     let mut app = rynx::app::App::new(tx, rx).unwrap();
     app.render_in_background = false;
-    app.router_state = RouterState::Started { pid: 4242, console_port: Some(7070), keep: false };
+    app.router_state = RouterState::Started { pid: 4242, console_port: Some(7070), sam_port: Some(7656), keep: false };
     app.finish_router_progress(parse_console(CONSOLE));
     assert!(app.current_tab().status_message.starts_with("The I2P router is ready"));
     // Said once, not every time the console is asked
@@ -256,7 +289,8 @@ async fn the_settings_page_shows_the_router() {
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(text.contains("rynx started i2pd (process 4242): ready: 24 tunnels"), "{text}");
     assert!(text.contains("It stops when rynx quits"), "{text}");
-    for name in ["i2p_router", "i2p_router_keep", "i2pd_path"] {
+    assert!(text.contains("Other programs can use it through SAM at 127.0.0.1:7656"), "{text}");
+    for name in ["i2p_router", "i2p_router_keep", "i2p_router_sam", "i2pd_path"] {
         assert!(tab.controls.iter().any(|c| c.name == name), "no {name} on the page");
     }
 }
@@ -273,9 +307,12 @@ async fn the_real_i2pd_starts_reports_and_stops() {
     let dir = rynx::i2pd::data_dir().unwrap().with_file_name(format!("rynx-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let port = free_port();
-    let (state, router) =
-        start_if_wanted(true, false, false, &format!("http://127.0.0.1:{}", port), None, Some(dir.clone()));
-    let RouterState::Started { pid, console_port: Some(console), .. } = state else { panic!("{state:?}") };
+    let mut settings = router_settings(true, false, &format!("http://127.0.0.1:{}", port), None);
+    settings.i2p_router_sam = true;
+    let (state, router) = start_if_wanted(&settings, Some(dir.clone()));
+    // The console and SAM are off when something here already has their ports (a router of
+    // your own, say)
+    let RouterState::Started { pid, console_port, sam_port, .. } = state else { panic!("{state:?}") };
     // It runs, with rynx's options, and opens its proxy
     let start = std::time::Instant::now();
     while !rynx::i2pd::listening(SocketAddr::from(([127, 0, 0, 1], port))) {
@@ -283,18 +320,28 @@ async fn the_real_i2pd_starts_reports_and_stops() {
         assert!(start.elapsed() < std::time::Duration::from_secs(60), "the proxy never opened");
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
+    // SAM, asked for, opens on this computer
+    if let Some(sam) = sam_port {
+        let start = std::time::Instant::now();
+        while !rynx::i2pd::listening(SocketAddr::from(([127, 0, 0, 1], sam))) {
+            assert!(start.elapsed() < std::time::Duration::from_secs(60), "SAM never opened");
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+    }
     // Its console says how far it's got. Newer i2pd answers within a second; 2.49 (Ubuntu
     // 24.04's) didn't answer within two minutes of starting on CI, which rynx shows as
     // "starting", so the console is only reported here, not required
-    let mut progress = None;
-    let start = std::time::Instant::now();
-    while progress.is_none() && start.elapsed() < std::time::Duration::from_secs(30) {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        progress = rynx::i2pd::progress(console).await;
-    }
-    match &progress {
-        Some(progress) => println!("console: {}", progress.describe()),
-        None => println!("console: no answer within 30 s (older i2pd versions are slow to answer while starting)"),
+    if let Some(console) = console_port {
+        let mut progress = None;
+        let start = std::time::Instant::now();
+        while progress.is_none() && start.elapsed() < std::time::Duration::from_secs(30) {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            progress = rynx::i2pd::progress(console).await;
+        }
+        match &progress {
+            Some(progress) => println!("console: {}", progress.describe()),
+            None => println!("console: no answer within 30 s (older i2pd versions are slow to answer while starting)"),
+        }
     }
     router.unwrap().stop();
     assert!(!alive(pid));

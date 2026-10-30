@@ -68,6 +68,12 @@ const DOCUMENTED: &[Documented] = &[
         examples: &["on"],
     },
     Documented {
+        key: "i2p_router_sam",
+        about: "Turn on SAM in that router, at 127.0.0.1:7656, so other programs on this computer can use it:\n\
+                torrent clients, I2P-Bote's pboted and others. Off by default.",
+        examples: &["on"],
+    },
+    Documented {
         key: "i2pd_path",
         about: "Where the i2pd program is, if it isn't on PATH or in the usual places",
         examples: &["/opt/i2pd/i2pd"],
@@ -227,6 +233,8 @@ pub struct Settings {
     /// Start i2pd when rynx starts, and keep it running after
     pub start_i2p_router: bool,
     pub keep_i2p_router: bool,
+    /// SAM on in that router, for other programs on this computer
+    pub i2p_router_sam: bool,
     pub i2pd_path: Option<PathBuf>,
     /// Public-looking names allowed to point at local addresses
     pub local_names: Vec<String>,
@@ -255,6 +263,7 @@ impl Default for Settings {
             beta_updates: false,
             start_i2p_router: false,
             keep_i2p_router: false,
+            i2p_router_sam: false,
             i2pd_path: None,
             local_names: Vec::new(),
             encrypt_cookies: true,
@@ -312,6 +321,7 @@ impl Settings {
                 "download_dir" if !value.is_empty() => settings.download_dir = Some(PathBuf::from(value)),
                 "i2p_router" if matches!(value, "start" | "off") => settings.start_i2p_router = value == "start",
                 "i2p_router_keep" if matches!(value, "on" | "off") => settings.keep_i2p_router = value == "on",
+                "i2p_router_sam" if matches!(value, "on" | "off") => settings.i2p_router_sam = value == "on",
                 "i2pd_path" if !value.is_empty() => settings.i2pd_path = Some(PathBuf::from(value)),
                 "cookie_encryption" if matches!(value, "keychain" | "off") => {
                     settings.encrypt_cookies = value == "keychain"
@@ -366,8 +376,10 @@ impl Settings {
                 }
                 "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" | "user_agent" | "anubis"
                 | "cache" | "cache_i2p" | "cache_size" | "images" | "image_display" | "image_protocol" | "updates"
-                | "update_channel" | "i2p_router" | "i2p_router_keep" | "i2pd_path" | "local_names"
-                | "cookie_encryption" => problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value)),
+                | "update_channel" | "i2p_router" | "i2p_router_keep" | "i2p_router_sam" | "i2pd_path"
+                | "local_names" | "cookie_encryption" => {
+                    problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
+                }
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),
             }
         }
@@ -420,6 +432,7 @@ impl Settings {
             "cache_i2p" => self.disk_cache_i2p.then(|| "on".to_string()),
             "i2p_router" => self.start_i2p_router.then(|| "start".to_string()),
             "i2p_router_keep" => self.keep_i2p_router.then(|| "on".to_string()),
+            "i2p_router_sam" => self.i2p_router_sam.then(|| "on".to_string()),
             "cookie_encryption" => (!self.encrypt_cookies).then(|| "off".to_string()),
             "local_names" => (!self.local_names.is_empty()).then(|| self.local_names.join(", ")),
             "i2pd_path" => self.i2pd_path.as_ref().map(|d| d.to_string_lossy().into_owned()),
