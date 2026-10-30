@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.5]
 
 ### Fixed
 - I2P pages often failed with "connection closed before message completed", until reloaded.
