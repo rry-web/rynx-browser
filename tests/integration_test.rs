@@ -1734,3 +1734,33 @@ async fn show_address_bar() {
     app.i2p_mode = true;
     show(&app, "editing, I2P");
 }
+
+#[tokio::test]
+async fn magnet_links_are_copied_for_a_torrent_client() {
+    let mut app = test_app();
+    // No real clipboard in tests: the note says what happened instead
+    app.clipboard = None;
+    load_page(&mut app, "<p><a href='magnet:?xt=urn:btih:abc&dn=Some+file'>Some file</a></p>");
+    let before = app.current_tab().url_input.clone();
+    handle_key_event(&mut app, key(KeyCode::Enter), 80, 40).unwrap();
+    let status = app.current_tab().status_message.clone();
+    assert!(status.contains("Magnet links open in a torrent client"), "{status}");
+    assert!(!status.contains("Unsupported"), "{status}");
+    assert_eq!(app.current_tab().url_input, before, "a magnet link isn't loaded as a page");
+}
+
+#[tokio::test]
+async fn the_i2p_page_explains_torrents_and_mail_and_its_links_work_in_i2p_mode() {
+    let mut app = test_app();
+    app.i2p_mode = true;
+    app.follow_link("about:i2p".to_string());
+    let page: String = app.current_tab().rendered_content.iter().map(|l| l.to_string() + "\n").collect();
+    for wanted in ["I2PSnark", "SusiMail", "sam.enabled = true", "destination = smtp.postman.i2p", "127.0.0.1:7070"] {
+        assert!(page.contains(wanted), "{wanted} missing:\n{page}");
+    }
+    // The console is on this computer; from rynx's own page it opens even in I2P mode
+    let console = app.current_tab().link_regions.iter().find(|l| l.url.contains(":7070")).unwrap().url.clone();
+    app.follow_link(console.clone());
+    assert!(!app.current_tab().status_message.contains("Blocked"), "{}", app.current_tab().status_message);
+    assert_eq!(app.current_tab().url_input, console);
+}

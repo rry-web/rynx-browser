@@ -29,6 +29,9 @@ allow = [
     "0BSD",
     "BSL-1.0",
     "CDLA-Permissive-2.0",
+    # hashx (Anubis's hashx check), from the Tor Project: the LGPL's version 3 is compatible with
+    # the GPL's
+    "LGPL-3.0-only",
 ]
 confidence-threshold = 0.9
 

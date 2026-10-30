@@ -20,11 +20,13 @@ cargo test -- --ignored                      # the ones that need the internet (
 Items marked **(priority)** haven't been checked by a person yet.
 
 ### Settings and bookmarks
-- [ ] **SET-12 (priority) Anubis.** Open `https://www.royalroad.com/` and a story page there.
-      *Expected:* "Passing www.royalroad.com's bot check (Anubis), without JavaScript..." for a
-      moment, then the real page (not "Making sure you're not a bot"). Later pages on the site
-      load straight away. With `anubis = off`, the check's page shows and the status line says
-      passing is turned off. This has only been tested against a simulated Anubis.
+- [ ] **SET-12 (priority) Anubis.** Open a site behind Anubis (Royal Road has moved to
+      Cloudflare; Anubis's documentation lists sites using it) and a second page there.
+      *Expected:* "Passing the site's bot check (Anubis), without JavaScript..." for a moment,
+      then the real page (not "Making sure you're not a bot"). Later pages on the site load
+      straight away. With `anubis = off`, the check's page shows and the status line says
+      passing is turned off. Every method (fast, sha256, argon2id, hashx, metarefresh) has only
+      been tested against a simulated Anubis.
 
 ### Scrolling and input
 - [ ] **SCROLL-01 (priority) Touchpad scrolling keeps up.** On the Moby Dick page, scroll
@@ -137,6 +139,15 @@ Items marked **(priority)** haven't been checked by a person yet.
       *Automated already:* everything about I2P mode against a fake proxy (`i2p::*`), the router
       started and stopped with the real i2pd (`tests/i2pd.rs`, CI's Linux job too); only the
       real network needs a person.
+- [ ] **I2P-07 The router's own pages.** Open the i2pd console (`127.0.0.1:7070`) in I2P mode by
+      typing it. With Java I2P running instead, open its console (`127.0.0.1:7657`), I2PSnark
+      (`/i2psnark/`) and SusiMail (`/susimail/`), all linked from `about:i2p`.
+      *Expected:* each is readable and its forms work without JavaScript: in I2PSnark, adding a
+      magnet link (copied by opening one on a page) and seeing its progress; in SusiMail,
+      signing in and reading a message. Anything that needs JavaScript is noted here.
+      *Automated already:* this computer reached directly in I2P mode while sites' links to it
+      are refused (`i2p::i2p_06_*`), magnet links copied, and `about:i2p`
+      (`integration_test`).
 
 ## Automated
 

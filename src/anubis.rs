@@ -6,8 +6,8 @@
 //! so the site gets exactly what it asked for. The pass is a cookie, which only this module's
 //! cookie store keeps (in memory, for Anubis's cookies alone): rynx otherwise has no cookies.
 //!
-//! Supported methods: fast/slow (SHA-256, difficulty in hex digits), sha256 and argon2id
-//! (difficulty in bits), and metarefresh (wait, then follow a link). hashx isn't supported.
+//! Supported methods: fast/slow (SHA-256, difficulty in hex digits), sha256, argon2id and hashx
+//! (difficulty in bits), and metarefresh (wait, then follow a link).
 
 use reqwest::header::HeaderValue;
 use scraper::{Html, Selector};
@@ -138,8 +138,26 @@ fn leading_zero_bits(hash: &[u8], bits: u32) -> bool {
     remaining == 0
 }
 
-/// The hash a method gives for `nonce`, or None for an unsupported method
-fn work(algorithm: &str, random_data: &str, data: &[u8], nonce: u64) -> Option<[u8; 32]> {
+/// The HashX function the hashx method uses: seeded with the challenge's bytes, or, for the few
+/// seeds HashX rejects, with a little-endian counter appended until one is accepted. Anubis's
+/// client and server do exactly this, so all three agree on the function.
+fn hashx_for(data: &[u8]) -> hashx::HashX {
+    if let Ok(function) = hashx::HashX::new(data) {
+        return function;
+    }
+    let mut counter: u32 = 0;
+    loop {
+        let seed = [data, &counter.to_le_bytes()].concat();
+        if let Ok(function) = hashx::HashX::new(&seed) {
+            return function;
+        }
+        counter = counter.wrapping_add(1);
+    }
+}
+
+/// The hash a method gives for `nonce`, or None for an unsupported method. `hashx` is the
+/// challenge's HashX function, for the hashx method.
+fn work(algorithm: &str, random_data: &str, data: &[u8], hashx: Option<&hashx::HashX>, nonce: u64) -> Option<[u8; 32]> {
     // The WebAssembly methods encode the nonce in either byte order, picked by the challenge
     let little_endian = data.last().is_some_and(|&b| b >= 128);
     match algorithm {
@@ -155,6 +173,8 @@ fn work(algorithm: &str, random_data: &str, data: &[u8], nonce: u64) -> Option<[
             argon2::Argon2::default().hash_password_into(data, &bytes, &mut out).ok()?;
             Some(out)
         }
+        // The nonce is 32 bits, given to HashX as a number
+        "hashx" => Some(hashx?.hash_to_bytes(u64::from(nonce as u32))),
         _ => None,
     }
 }
@@ -170,28 +190,30 @@ fn good_enough(algorithm: &str, hash: &[u8; 32], difficulty: u32) -> bool {
 /// Do the proof of work on every CPU core. Slow: run it on a blocking thread.
 pub fn solve(challenge: &Challenge) -> Result<Answer, String> {
     let algorithm = challenge.algorithm.as_str();
-    if !matches!(algorithm, "fast" | "slow" | "sha256" | "argon2id") {
+    if !matches!(algorithm, "fast" | "slow" | "sha256" | "argon2id" | "hashx") {
         return Err(format!("this site's bot check uses \"{}\", which rynx can't do yet", algorithm));
     }
     // The WebAssembly methods hash the random data's bytes; fast/slow hash its text
-    let data = if matches!(algorithm, "sha256" | "argon2id") {
+    let data = if matches!(algorithm, "sha256" | "argon2id" | "hashx") {
         unhex(&challenge.random_data).ok_or("the bot check's data is malformed")?
     } else {
         Vec::new()
     };
+    // Generating a HashX function is costly next to hashing with it: once per challenge
+    let hashx = (algorithm == "hashx").then(|| hashx_for(&data));
     let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1) as u64;
     let found: Mutex<Option<Answer>> = Mutex::new(None);
     let stop = AtomicBool::new(false);
     let started = Instant::now();
     std::thread::scope(|scope| {
         for worker in 0..workers {
-            let (data, found, stop) = (&data, &found, &stop);
+            let (data, found, stop, hashx) = (&data, &found, &stop, hashx.as_ref());
             scope.spawn(move || {
                 let mut nonce = worker;
-                // The sha256 method's nonce is 32 bits
-                let limit = if algorithm == "sha256" { u32::MAX as u64 } else { u64::MAX };
+                // The sha256 and hashx methods' nonces are 32 bits
+                let limit = if matches!(algorithm, "sha256" | "hashx") { u32::MAX as u64 } else { u64::MAX };
                 while nonce <= limit && !stop.load(Ordering::Relaxed) {
-                    let Some(hash) = work(algorithm, &challenge.random_data, data, nonce) else { break };
+                    let Some(hash) = work(algorithm, &challenge.random_data, data, hashx, nonce) else { break };
                     if good_enough(algorithm, &hash, challenge.difficulty) {
                         *found.lock().unwrap_or_else(|e| e.into_inner()) = Some(Answer { response: hex(&hash), nonce });
                         stop.store(true, Ordering::Relaxed);
@@ -399,6 +421,22 @@ impl reqwest::cookie::CookieStore for Cookies {
 mod tests {
     use super::*;
     use reqwest::cookie::CookieStore;
+
+    #[test]
+    fn hashx_seeds_it_rejects_get_a_counter() {
+        // HashX turns down a small share of seeds; find one, and check the counter fallback
+        // gives the function seeded with the first counter it accepts
+        let rejected = (0u64..100_000)
+            .map(|n| n.to_le_bytes().to_vec())
+            .find(|seed| hashx::HashX::new(seed).is_err())
+            .expect("HashX rejects some seed");
+        let accepted =
+            (0u32..).find_map(|n| hashx::HashX::new(&[rejected.as_slice(), &n.to_le_bytes()].concat()).ok()).unwrap();
+        assert_eq!(hashx_for(&rejected).hash_to_bytes(7), accepted.hash_to_bytes(7));
+        // An accepted seed is used as it is
+        let seed = b"anubis";
+        assert_eq!(hashx_for(seed).hash_to_bytes(7), hashx::HashX::new(seed).unwrap().hash_to_bytes(7));
+    }
 
     #[test]
     fn zero_bits_are_counted() {

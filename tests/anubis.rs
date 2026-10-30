@@ -93,6 +93,19 @@ impl FakeAnubis {
                 };
                 *response == hex(&hash) && leading_zero_bits(&hash, self.difficulty)
             }
+            "hashx" => {
+                // As Anubis's anubis_validate: HashX seeded with the data (a counter appended to
+                // seeds HashX rejects), the 32-bit nonce hashed
+                let data = unhex(&issued.random);
+                let function = hashx::HashX::new(&data).unwrap_or_else(|_| {
+                    (0u32..)
+                        .find_map(|n| hashx::HashX::new(&[data.as_slice(), &n.to_le_bytes()].concat()).ok())
+                        .unwrap()
+                });
+                let Ok(nonce) = u32::try_from(nonce) else { return false };
+                let hash = function.hash_to_bytes(u64::from(nonce));
+                *response == hex(&hash) && leading_zero_bits(&hash, self.difficulty)
+            }
             _ => false,
         }
     }
@@ -210,6 +223,7 @@ async fn each_method_is_passed_without_javascript() {
         // The last byte picks the nonce's byte order
         ("sha256", 10, "0a1b2c3d4e5f60f1", false),
         ("argon2id", 1, "c0ffee00deadbeef", false),
+        ("hashx", 10, "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", false),
         ("metarefresh", 1, "5eed5eed", false),
     ];
     for (algorithm, difficulty, random, css_load) in cases {
@@ -258,10 +272,10 @@ async fn a_check_that_keeps_refusing_is_shown_not_retried_forever() {
 
 #[tokio::test]
 async fn unsupported_methods_and_the_setting_show_the_check() {
-    let (server, state) = guarded_site("hashx", 4, "abcd", false, false).await;
+    let (server, state) = guarded_site("equix", 4, "abcd", false, false).await;
     let mut app = test_app();
     load(&mut app, &format!("{}/", server.uri())).await;
-    assert!(app.current_tab().status_message.contains("hashx"), "{}", app.current_tab().status_message);
+    assert!(app.current_tab().status_message.contains("equix"), "{}", app.current_tab().status_message);
     assert!(text(&mut app).contains("Making sure you're not a bot"));
     assert_eq!(state.lock().unwrap().passes, 0);
 

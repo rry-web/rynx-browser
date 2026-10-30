@@ -26,7 +26,10 @@ working one. Bugs found in testing come before all of it.
 - **Images, together:** SVG (rendered to pixels, e.g. with resvg), and drawing images that are
   only partly on screen. Image work is shared, not something to hand over.
 - **Gemini and Gopher downloads**, and Gemini client certificates.
-- **Anubis's `hashx` checks.** Only the SHA-256 methods are passed now (`src/anubis.rs`).
+- **I2P's other uses** (`about:i2p` is the guide): send a magnet link straight to a local torrent
+  client's web interface (I2PSnark, XD, qBittorrent) instead of copying it; an opt-in setting
+  turning on SAM in the i2pd rynx starts, so torrent clients can use it; and fixes from checking
+  Java I2P's console, I2PSnark and SusiMail in rynx (TESTING.md's I2P-07).
 - **Finer cookie control:** per cookie, and rules for third-party cookies.
 - **History times in the local time zone.**
 - **Site tools:** your own MCP servers usable on any page; sign-in (OAuth); servers asking

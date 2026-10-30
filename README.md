@@ -49,7 +49,8 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
 - Site tools: sites can offer interactive features as [MCP](https://modelcontextprotocol.io)
   tools, shown as forms; nothing is sent until you've seen it and confirmed
 - I2P: `.i2p` sites through a local router, which rynx can start for you (i2pd); a setting locks
-  rynx to I2P so a stray key can't leave it
+  rynx to I2P so a stray key can't leave it. `about:i2p` shows how to get torrents and mail through
+  the router's own programs, and magnet links are copied for a torrent client
 
 **Slow connections and staying in control**
 - A page cache: Back is instant, unchanged pages aren't downloaded again, unreachable sites show
@@ -58,7 +59,7 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
 - Downloads that resume where they stopped, tagged so your system checks them
 - Staying signed in to the sites you choose (`C`), with their cookies encrypted by a key in the
   system keychain (asked for only once a site keeps cookies; `cookie_encryption = off` skips it)
-- Anubis bot checks passed without JavaScript
+- Anubis bot checks passed without JavaScript, by every method it uses
 - Changeable keys (`keys.conf`), settings in the browser (`S`) or in `settings.conf`
 - Signed updates, checked daily and installed when you agree (`U`)
 
@@ -141,7 +142,6 @@ The longer list, with notes and ideas, is in [ROADMAP.md](ROADMAP.md).
 - **Session restore** (opt-in): reopen your tabs
 - **SVG images**, and drawing images only partly on screen
 - **Downloads from Gemini and Gopher**, and Gemini client certificates
-- **Anubis's `hashx` checks**
 - **Finer cookie control** (per cookie, and third-party rules), and history times in your time zone
 - **A Windows sandbox**, and **code-signed** macOS and Windows builds
 - **Packages:** Homebrew, the AUR and others

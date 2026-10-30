@@ -8,6 +8,16 @@
   says that starting a router doesn't keep rynx in I2P. Turning I2P mode on with `p` mentions the
   lock.
 
+### Added
+- Anubis's `hashx` check is passed without JavaScript, like its other methods: HashX (the Tor
+  Project's `hashx` crate, as Anubis uses, here without its JIT compiler) seeded with the
+  challenge, as Anubis's own client does.
+- `about:i2p`: the router's console, and how to get torrents and mail over I2P with the programs
+  made for them (Java I2P's I2PSnark and SusiMail, or a SAM torrent client and mail tunnels with
+  i2pd, with the lines to add). It's linked from the start page and settings.
+- Opening a magnet link copies it, to paste into a torrent client, instead of "Unsupported link
+  type".
+
 ### Fixed
 - In I2P mode, addresses on your own computer, such as the I2P router's console at
   `127.0.0.1:7070`, couldn't be opened: they went to the I2P proxy, which can't reach them. They

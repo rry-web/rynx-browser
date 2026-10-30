@@ -344,8 +344,16 @@ impl App {
         self.submit_request();
     }
 
-    /// Refuse links the browser can't open, explaining why in the status line
+    /// Refuse links the browser can't open, explaining why in the status line. A magnet link is
+    /// for a torrent client: it's copied, to paste into one.
     fn reject_unsupported_link(&mut self, url: &str) -> bool {
+        if url.get(..7).is_some_and(|scheme| scheme.eq_ignore_ascii_case("magnet:")) {
+            self.current_tab().status_message = match self.copy_to_clipboard(url.to_string()) {
+                Ok(()) => format!("Copied the magnet link: paste it into a torrent client ({})", router::I2P_PAGE),
+                Err(e) => format!("Magnet links open in a torrent client, and this one couldn't be copied: {}", e),
+            };
+            return true;
+        }
         if let Some(scheme) = crate::network::unsupported_link_scheme(url) {
             self.current_tab().status_message = format!("Unsupported link type: {}", scheme);
             return true;
@@ -402,6 +410,7 @@ impl App {
             || url == crate::update::UPDATE_PAGE
             || url == crate::keys::KEYS_PAGE
             || url == crate::cookies::COOKIES_PAGE
+            || url == router::I2P_PAGE
             || url.starts_with(crate::snapshots::SNAPSHOTS_PAGE)
             || url.starts_with(crate::snapshots::SNAPSHOT)
             || url.starts_with(crate::mcp::TOOLS_PAGE);

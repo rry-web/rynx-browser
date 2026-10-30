@@ -29,6 +29,7 @@ impl App {
             SETTINGS_PAGE => ("Settings", self.settings_page_html()),
             crate::keys::KEYS_PAGE => ("Keys", self.keymap.page_html()),
             crate::cookies::COOKIES_PAGE => ("Cookies", self.cookies_page_html()),
+            router::I2P_PAGE => ("I2P", self.i2p_page_html()),
             crate::update::UPDATE_PAGE => {
                 self.show_update_page();
                 return true;

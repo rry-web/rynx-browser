@@ -1225,6 +1225,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80bb028c8b4148c9ee0cca68fcd9add6044e81d3619f48577ddf13a263d047a2"
 
 [[package]]
+name = "fixed-capacity-vec"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b31a14f5ee08ed1a40e1252b35af18bed062e3f39b69aab34decde36bc43e40"
+
+[[package]]
 name = "fixedbitset"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1481,6 +1487,19 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash",
+]
+
+[[package]]
+name = "hashx"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "251f57cd29f763c476d7b027f69d9d2298496ca48f68e488a7ca0a8015461004"
+dependencies = [
+ "arrayvec",
+ "blake2",
+ "fixed-capacity-vec",
+ "rand_core 0.10.1",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3350,6 +3369,7 @@ dependencies = [
  "encoding_rs",
  "flate2",
  "futures-util",
+ "hashx",
  "httpdate",
  "idna",
  "image",

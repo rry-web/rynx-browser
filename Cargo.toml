@@ -57,6 +57,8 @@ cookie_store = "0.22.1"
 psl = "2.1.245"
 # The key that encrypts saved cookies, kept in the system keychain
 keyring = "4.2.0"
+# Without its JIT compiler: the interpreter gives the same hashes without writing code into memory
+hashx = { version = "0.8", default-features = false }
 
 # Tagging downloads with their origin (macOS quarantine, Linux xdg origin)
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
