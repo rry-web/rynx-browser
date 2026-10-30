@@ -24,6 +24,8 @@ pub(super) struct PageRequest {
     pub(super) url: String,
     /// A form submitted with POST
     pub(super) form_body: Option<String>,
+    /// Sent as Referer; rynx otherwise sends none
+    pub(super) referer: Option<String>,
     pub(super) i2p_mode: bool,
     pub(super) solve_anubis: bool,
     pub(super) cache_use: CacheUse,
@@ -203,6 +205,9 @@ async fn fetch_web(
     let id = request.tab_id;
     // Ask whether the cached copy changed, instead of for the page again
     let mut headers = reqwest::header::HeaderMap::new();
+    if let Some(referer) = request.referer.as_deref().and_then(|r| reqwest::header::HeaderValue::from_str(r).ok()) {
+        headers.insert(reqwest::header::REFERER, referer);
+    }
     if let Some(entry) = revalidate {
         let mut add = |name, value: &Option<String>| {
             if let Some(value) = value.as_deref().and_then(|v| reqwest::header::HeaderValue::from_str(v).ok()) {
@@ -223,7 +228,10 @@ async fn fetch_web(
 
     // An .i2p address the router doesn't know yet: ask the jump services for it
     let domain = Url::parse(&request.url).ok().and_then(|u| u.domain().map(str::to_string)).unwrap_or_default();
-    if should_attempt_jump(request.i2p_mode, &domain, response.status())
+    // An address helper link's 500 is the router asking to confirm, not a name it doesn't know
+    let helper = Url::parse(&request.url).is_ok_and(|u| crate::network::is_address_helper(&u, &domain));
+    if !helper
+        && should_attempt_jump(request.i2p_mode, &domain, response.status())
         && let Ok(jumped) = attempt_jump(client, &domain, tx.clone(), id).await
     {
         response = jumped;

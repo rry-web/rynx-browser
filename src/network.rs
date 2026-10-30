@@ -466,7 +466,7 @@ pub async fn send_with_headers(
     url: &str,
     i2p_mode: bool,
     mut form_body: Option<String>,
-    headers: reqwest::header::HeaderMap,
+    mut headers: reqwest::header::HeaderMap,
 ) -> Result<reqwest::Response, String> {
     let mut current = Url::parse(&enforce_https(url, i2p_mode)).map_err(|e| format!("Invalid URL: {}", e))?;
     for _ in 0..=MAX_REDIRECTS {
@@ -497,9 +497,19 @@ pub async fn send_with_headers(
         if !matches!(response.status().as_u16(), 307 | 308) {
             form_body = None;
         }
+        // A Referer never follows a redirect to another site
+        if next.origin() != current.origin() {
+            headers.remove(reqwest::header::REFERER);
+        }
         current = next;
     }
     Err("Too many redirects".to_string())
+}
+
+/// Whether `url` is an I2P address helper link for `host` (http://host/?i2paddresshelper=...),
+/// which teaches the router the name's address once you confirm it
+pub fn is_address_helper(url: &Url, host: &str) -> bool {
+    url.host_str() == Some(host) && url.query_pairs().any(|(key, _)| key == "i2paddresshelper")
 }
 
 /// Jump services only know I2P addresses, so only consult them for .i2p sites in I2P mode
@@ -527,11 +537,16 @@ pub async fn attempt_jump_with(
     id: usize,
 ) -> Result<reqwest::Response, Box<dyn std::error::Error + Send + Sync>> {
     let _ = tx.send(NetworkResponse::Info(id, "Address not found. Requesting Jump Helper...".to_string())).await;
-    for service_base in services {
-        let jump_url = format!("{}{}", service_base, target_domain);
-        let _ = tx.send(NetworkResponse::Info(id, format!("Contacting jump service: {}", service_base))).await;
+    for service in services {
+        let jump_url = service.replace("{}", target_domain);
+        let host = Url::parse(&jump_url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+        let _ = tx.send(NetworkResponse::Info(id, format!("Contacting jump service: {}", host))).await;
         match get_following_redirects(client, &jump_url, true).await {
-            Ok(response) if response.status() == StatusCode::OK => return Ok(response),
+            // A page from the service (usually with the name's address helper link), or, when it
+            // sent us to the helper link, the router's page asking to confirm adding the name
+            Ok(response) if response.status() == StatusCode::OK || is_address_helper(response.url(), target_domain) => {
+                return Ok(response);
+            }
             // Unreachable or no entry; try the next service
             Ok(_) | Err(_) => continue,
         }

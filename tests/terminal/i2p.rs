@@ -153,14 +153,44 @@ fn i2p_01_04_browsing_through_the_proxy_and_back() {
     rynx.quit();
 }
 
-/// I2P-03: an address the router doesn't know is looked up with the jump services in turn
+/// I2P-03: an address the router doesn't know is looked up with the jump services in turn; one
+/// that sends you to the name's address helper shows the router's confirmation, and Continue
+/// adds the name (I2P-08 has the Referer rules)
 #[test]
 fn i2p_03_jump_services() {
-    let proxy = Proxy::start(Arc::new(|seen: &Seen| {
+    const REG: &str = "http://shx5vqsw7usdaunyzr2qmes2fq37oumybpudrd4jjj4e4vk4uusa.b32.i2p/jump/newsite.i2p";
+    const NOTBOB: &str =
+        "http://nytzrhrjjfsutowojvxi7hphesskpqqr65wpistz6wa7cpajhp7a.b32.i2p/cgi-bin/jump.cgi?q=newsite.i2p";
+    const STATS: &str =
+        "http://kqypgjpjwrphnzebod5ev3ts2vtii6e5tntrg4rnfijqc7rypldq.b32.i2p/cgi-bin/jump.cgi?a=newsite.i2p";
+    let known = Arc::new(Mutex::new(false));
+    let learned = Arc::clone(&known);
+    let proxy = Proxy::start(Arc::new(move |seen: &Seen| {
         let line = &seen.line;
-        if line.starts_with("GET http://i2p-projekt.i2p/jump/newsite.i2p ") {
+        if line.starts_with(&format!("GET {REG} ")) {
             Answer::status(500, "<h1>Jump service unreachable</h1>")
-        } else if line.starts_with("GET http://stats.i2p/jump/newsite.i2p ") {
+        } else if line.starts_with(&format!("GET {NOTBOB} ")) {
+            Answer {
+                status: 302,
+                headers: vec![("Location".into(), "http://newsite.i2p/?i2paddresshelper=KEY".into())],
+                body: Vec::new(),
+                cut_after: None,
+            }
+        } else if line.starts_with("GET http://newsite.i2p/?i2paddresshelper=KEY ") {
+            if seen.header("referer") == Some("http://newsite.i2p/") {
+                *learned.lock().unwrap() = true;
+                Answer::status(
+                    500,
+                    "<h1>Proxy info: Addresshelper adding</h1><p><a href=\"http://newsite.i2p/\">Continue</a>",
+                )
+            } else {
+                Answer::status(
+                    500,
+                    "<h1>Proxy info: Addresshelper request</h1>\
+                     <p><a href=\"http://newsite.i2p/?i2paddresshelper=KEY\">Continue</a>",
+                )
+            }
+        } else if line.starts_with("GET http://newsite.i2p/ ") && *learned.lock().unwrap() {
             Answer::page("<title>New site</title><h1>Found through a jump service</h1>")
         } else {
             Answer::status(500, "<h1>Proxy error: Host not found</h1>")
@@ -168,10 +198,14 @@ fn i2p_03_jump_services() {
     }));
     let (_home, mut rynx) = in_i2p_mode("i2p-jump", &proxy, "");
     rynx.open("http://newsite.i2p/");
+    rynx.wait_for("Addresshelper request");
+    rynx.keys("\r");
+    rynx.wait_for("Addresshelper adding");
+    rynx.keys("\r");
     rynx.wait_for("Found through a jump service");
-    assert_eq!(proxy.requests_for("http://i2p-projekt.i2p/jump/newsite.i2p"), 1);
-    assert_eq!(proxy.requests_for("http://stats.i2p/jump/newsite.i2p"), 1);
-    assert_eq!(proxy.requests_for("http://reg.i2p/jump/newsite.i2p"), 0, "kept going after one answered");
+    assert_eq!(proxy.requests_for(REG), 1);
+    assert_eq!(proxy.requests_for(NOTBOB), 1);
+    assert_eq!(proxy.requests_for(STATS), 0, "kept going after one answered");
     rynx.quit();
 }
 
@@ -316,5 +350,63 @@ fn i2p_06_this_computer_is_reached_directly_but_not_from_links() {
     assert_eq!(console.requests("/"), 1);
     assert_eq!(proxy.requests_for(&console_url), 0, "the console went to the I2P proxy");
     assert!(rynx.rows()[3].contains("I2P mode"), "{}", rynx.screen());
+    rynx.quit();
+}
+
+/// I2P-08: an address helper link (as on reg.i2p) works as in other browsers. i2pd shows its
+/// confirmation page, and only its Continue link, followed from that page, carries a Referer
+/// (the site's address alone), which i2pd requires before adding the name. Nothing else does.
+#[test]
+fn i2p_08_address_helpers_are_confirmed_on_the_routers_page() {
+    let known = Arc::new(Mutex::new(false));
+    let learned = Arc::clone(&known);
+    let proxy = Proxy::start(Arc::new(move |seen: &Seen| {
+        let line = &seen.line;
+        if line.starts_with("GET http://reg.i2p/ ") {
+            return Answer::page(
+                "<title>Registry</title><h1>Registry</h1><p><a href=\"http://new.i2p/?i2paddresshelper=KEY\">new.i2p</a>",
+            );
+        }
+        if line.starts_with("GET http://new.i2p/?i2paddresshelper=KEY ") {
+            // As i2pd: added only when the Referer is on the same site
+            let same_site = seen.header("referer").is_some_and(|r| r.starts_with("http://new.i2p/"));
+            if same_site {
+                *learned.lock().unwrap() = true;
+                return Answer::status(
+                    500,
+                    "<h1>Proxy info: Addresshelper adding</h1><p>Host new.i2p added. <a href=\"http://new.i2p/\">Continue</a>.",
+                );
+            }
+            return Answer::status(
+                500,
+                "<h1>Proxy info: Addresshelper request</h1><p>To add host new.i2p: \
+                 <a href=\"http://new.i2p/?i2paddresshelper=KEY\">Continue</a>.",
+            );
+        }
+        if line.starts_with("GET http://new.i2p/ ") && *learned.lock().unwrap() {
+            return Answer::page("<title>New</title><h1>The new site</h1>");
+        }
+        Answer::status(500, "<h1>Proxy error: Host not found</h1>")
+    }));
+    let (_home, mut rynx) = in_i2p_mode("i2p-helper", &proxy, "");
+    rynx.open("http://reg.i2p/");
+    rynx.wait_for("Registry");
+    rynx.keys("\r");
+    rynx.wait_for("Addresshelper request");
+    rynx.keys("\r");
+    rynx.wait_for("Addresshelper adding");
+    rynx.keys("\r");
+    rynx.wait_for("The new site");
+    assert!(*known.lock().unwrap());
+
+    let helper_requests: Vec<Seen> =
+        proxy.seen().into_iter().filter(|s| s.line.contains("i2paddresshelper=KEY")).collect();
+    assert_eq!(helper_requests.len(), 2, "{helper_requests:?}");
+    // From the registry's link: none; from the router's Continue: the site's address alone
+    assert_eq!(helper_requests[0].header("referer"), None);
+    assert_eq!(helper_requests[1].header("referer"), Some("http://new.i2p/"));
+    // Every other request went without one
+    let others = proxy.seen().into_iter().filter(|s| !s.line.contains("i2paddresshelper"));
+    assert!(others.clone().all(|s| s.header("referer").is_none()), "{:?}", others.collect::<Vec<_>>());
     rynx.quit();
 }

@@ -579,9 +579,9 @@ async fn test_jump_tries_next_service_after_failure() {
         .mount(&working)
         .await;
 
-    let unreachable = "http://127.0.0.1:1/jump/".to_string();
-    let no_entry_base = format!("{}/jump/", no_entry.uri());
-    let working_base = format!("{}/jump/", working.uri());
+    let unreachable = "http://127.0.0.1:1/jump/{}".to_string();
+    let no_entry_base = format!("{}/jump/{{}}", no_entry.uri());
+    let working_base = format!("{}/jump/{{}}", working.uri());
     let services = [unreachable.as_str(), no_entry_base.as_str(), working_base.as_str()];
 
     let (tx, _rx) = mpsc::channel(20);

@@ -71,6 +71,9 @@ pub struct BrowserTab {
     pub editing_control: Option<usize>,
     /// Form data to POST with the next request
     pub(super) pending_post: Option<String>,
+    /// A Referer to send with the request for one address, and only that address: confirming an
+    /// I2P address helper (App::address_helper_referer)
+    pub(super) pending_referer: Option<(String, String)>,
 }
 
 impl BrowserTab {
@@ -356,6 +359,7 @@ impl BrowserTab {
             control_values: Vec::new(),
             editing_control: None,
             pending_post: None,
+            pending_referer: None,
         }
     }
 

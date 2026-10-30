@@ -23,6 +23,13 @@
   type".
 
 ### Fixed
+- Sites listed on reg.i2p, and other names the router didn't know yet, couldn't be opened. i2pd
+  adds a name from an address helper link only after you press Continue on its confirmation page,
+  and checks that by the Referer, which rynx never sent, so the page came back again and again.
+  rynx now sends one, the site's address alone, for that Continue link only. And the jump
+  services rynx asks for unknown names were two dead addresses and one working one; it now asks
+  the ones i2pd lists (reg.i2p, notbob.i2p, stats.i2p), by their b32 addresses, and shows the
+  router's confirmation when one of them leads there.
 - In I2P mode, addresses on your own computer, such as the I2P router's console at
   `127.0.0.1:7070`, couldn't be opened: they went to the I2P proxy, which can't reach them. They
   now go directly when typed or opened from bookmarks or history; links to them from sites are

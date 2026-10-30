@@ -417,6 +417,7 @@ impl App {
         if !internal && self.reject_unsupported_link(&url) {
             return;
         }
+        let referer = self.address_helper_referer(&url);
         let tab = self.current_tab();
         if !tab.url_input.is_empty() {
             let entry = tab.history_entry(tab.url_input.clone());
@@ -424,8 +425,23 @@ impl App {
         }
         tab.forward_history.clear();
         tab.pending_restore = None;
+        tab.pending_referer = referer.map(|referer| (url.clone(), referer));
         tab.url_input = url;
         self.load_url_input(false);
+    }
+
+    /// The Referer that confirms an I2P address helper: i2pd adds a name from a link's
+    /// i2paddresshelper only when the Referer is on that same site, which in practice means its own
+    /// "Continue" link, so that sites can't add or change names in its address book behind your
+    /// back. rynx sends no Referer otherwise; for that link it sends the site's address alone.
+    fn address_helper_referer(&self, url: &str) -> Option<String> {
+        if !self.i2p_mode {
+            return None;
+        }
+        let target = Url::parse(url).ok()?;
+        let page = Url::parse(self.tabs[self.active_tab_index].page_url.as_deref()?).ok()?;
+        let helper = target.query_pairs().any(|(key, _)| key == "i2paddresshelper");
+        (helper && target.origin() == page.origin()).then(|| format!("{}/", target.origin().ascii_serialization()))
     }
 
     /// Return to the previous page, where it was scrolled to
@@ -611,10 +627,12 @@ impl App {
         tab.url_input = url.clone();
         // The server never sees the #fragment, so remember it to jump to after loading
         tab.pending_fragment = fragment_of(&url);
+        let referer = tab.pending_referer.take().filter(|(for_url, _)| *for_url == url).map(|(_, referer)| referer);
         let request = fetch::PageRequest {
             tab_id: tab.id,
             url,
             form_body: tab.pending_post.take(),
+            referer,
             i2p_mode,
             solve_anubis,
             cache_use: std::mem::take(&mut tab.pending_cache_use),

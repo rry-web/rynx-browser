@@ -32,7 +32,16 @@ pub const INITIAL_TAB_ID: usize = 0;
 pub const INITIAL_ID_COUNTER: usize = 1;
 
 // I2P jump services
-pub const JUMP_SERVICES: &[&str] = &["http://i2p-projekt.i2p/jump/", "http://stats.i2p/jump/", "http://reg.i2p/jump/"];
+/// Jump services, asked in turn for an .i2p name the router doesn't know; `{}` is the name. By
+/// their b32 addresses, as i2pd lists them, so they work before the address book knows them
+pub const JUMP_SERVICES: &[&str] = &[
+    // reg.i2p
+    "http://shx5vqsw7usdaunyzr2qmes2fq37oumybpudrd4jjj4e4vk4uusa.b32.i2p/jump/{}",
+    // notbob.i2p
+    "http://nytzrhrjjfsutowojvxi7hphesskpqqr65wpistz6wa7cpajhp7a.b32.i2p/cgi-bin/jump.cgi?q={}",
+    // stats.i2p
+    "http://kqypgjpjwrphnzebod5ev3ts2vtii6e5tntrg4rnfijqc7rypldq.b32.i2p/cgi-bin/jump.cgi?a={}",
+];
 
 // Event polling
 pub const EVENT_POLL_TIMEOUT_MS: u64 = 10;
