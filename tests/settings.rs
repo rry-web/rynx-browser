@@ -336,7 +336,9 @@ async fn the_settings_page_saves_and_applies_settings() {
     assert_eq!(app.current_tab().url_input, rynx::app::SETTINGS_PAGE);
     let page = text(&mut app);
     assert!(
-        page.contains("Clearweb, switch to I2P") && page.contains("History") && page.contains("Save settings"),
+        page.contains("Both: start on the clearweb, p switches")
+            && page.contains("History")
+            && page.contains("Save settings"),
         "{page}"
     );
 

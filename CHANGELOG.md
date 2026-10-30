@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- The settings page makes the I2P lock clearer: the network choice has a label ("Clearweb or I2P")
+  and options that say what they do ("I2P only: p can't leave it"), and the I2P router section
+  says that starting a router doesn't keep rynx in I2P. Turning I2P mode on with `p` mentions the
+  lock.
+
 ## [0.3.2]
 
 ### Changed

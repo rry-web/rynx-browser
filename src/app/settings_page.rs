@@ -47,14 +47,13 @@ impl App {
             format!("<option value=\"{value}\"{selected}>{label}</option>")
         };
         html.push_str(&format!(
-            "<h2>Network</h2><p>{}{}{}</p>\
-             <p>Locking to I2P starts rynx in I2P mode and stops p from leaving it, so a stray key press \
-             can't send a page outside I2P.</p>",
+            "<h2>Network</h2><p><b>Clearweb or I2P</b>: choose I2P only to keep rynx in I2P. It then starts \
+             in I2P mode and p can't leave it, so a stray key press can't send a page outside I2P.<br>{}{}{}</p>",
             "<select name=\"network\">",
             [
-                option("switchable", "Clearweb, switch to I2P with p", NetworkMode::Switchable),
-                option("clearweb", "Always the clearweb", NetworkMode::Clearweb),
-                option("i2p", "Always I2P", NetworkMode::I2p),
+                option("switchable", "Both: start on the clearweb, p switches", NetworkMode::Switchable),
+                option("clearweb", "Clearweb only", NetworkMode::Clearweb),
+                option("i2p", "I2P only: p can't leave it", NetworkMode::I2p),
             ]
             .concat(),
             "</select>",
@@ -364,7 +363,11 @@ impl App {
         let message = match self.settings.network {
             NetworkMode::Switchable => {
                 self.i2p_mode = !self.i2p_mode;
-                if self.i2p_mode { "I2P mode on" } else { "I2P mode off: clearweb" }
+                if self.i2p_mode {
+                    "I2P mode on (to stay in it, choose I2P only in settings: S)"
+                } else {
+                    "I2P mode off: clearweb"
+                }
             }
             NetworkMode::I2p => "I2P mode is locked on in settings (S)",
             NetworkMode::Clearweb => "I2P mode is turned off in settings (S)",

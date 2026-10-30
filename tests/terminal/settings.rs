@@ -194,7 +194,8 @@ fn set_14_settings_page() {
     let (home, mut rynx) = started_with("settings-page", "");
     rynx.wait_for("RYNX BROWSER");
     rynx.keys("S");
-    rynx.wait_for("Home page");
+    rynx.wait_for("Clearweb or I2P");
+    rynx.scroll_to("Home page:");
     // The home page field is the first text field after the search address: click below its label
     let (row, _) = rynx.find("Home page:").expect("the home page label");
     rynx.click(row + 1, 2);
@@ -205,7 +206,7 @@ fn set_14_settings_page() {
     rynx.wait_for("Save settings");
     rynx.click_text("Save settings");
     rynx.wait_for("Not saved: invalid home_page");
-    rynx.keys("g");
+    rynx.scroll_to("Home page:");
     let (row, _) = rynx.find("Home page:").unwrap();
     rynx.click(row + 1, 2);
     rynx.keys("\u{15}");
@@ -373,4 +374,31 @@ fn a_chosen_image_method_doesnt_ask_other_terminals() {
     kitty.wait_for("RYNX BROWSER");
     assert!(kitty.output().contains("\x1b_Gi="), "Kitty wasn't asked");
     kitty.quit();
+}
+
+/// SET-15, chosen on the settings page: I2P only, saved, holds after a restart; p explains rather
+/// than leaving it. The router's boxes don't lock anything, and the page says so.
+#[test]
+fn i2p_only_chosen_on_the_page_survives_a_restart() {
+    let (home, mut rynx) = started_with("i2p-only-page", "");
+    rynx.keys("S");
+    rynx.wait_for("Both: start on the clearweb, p switches");
+    assert!(rynx.text().contains("doesn't keep rynx there"), "{}", rynx.screen());
+    // Clicking a choice, or Enter on it, shows the next one: Clearweb only, then I2P only
+    rynx.click_text("Both: start on the clearweb");
+    rynx.wait_for("Clearweb only");
+    rynx.keys("\r");
+    rynx.wait_for("I2P only: p can't leave it");
+    rynx.keys("G");
+    rynx.click_text("Save settings");
+    rynx.wait_for("Settings saved");
+    assert!(home.read_config("settings.conf").unwrap().contains("\nnetwork = i2p\n"));
+    rynx.quit();
+
+    let mut again = Rynx::start(&home);
+    again.wait_for("I2P mode");
+    again.keys("p");
+    again.wait_for("locked on in settings");
+    assert!(again.rows()[3].contains("I2P mode"), "{}", again.screen());
+    again.quit();
 }

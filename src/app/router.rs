@@ -67,7 +67,12 @@ impl App {
             let checked = if on { " checked" } else { "" };
             format!("<p><input type=\"checkbox\" name=\"{name}\" value=\"on\"{checked}> {label}</p>")
         };
-        let mut html = format!("<h2>I2P router</h2><p><b>{}</b></p>", escape_html(&status));
+        let mut html = format!(
+            "<h2>I2P router</h2><p><b>{}</b></p>\
+             <p>A router lets rynx reach I2P; it doesn't keep rynx there. For that, choose I2P only under \
+             Network.</p>",
+            escape_html(&status)
+        );
         html.push_str(&checkbox(
             "i2p_router",
             s.start_i2p_router,
