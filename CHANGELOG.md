@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.4]
 
 ### Fixed
 - Text pasted into the terminal (`Cmd+V`, `Ctrl+Shift+V`) arrived as typed keys: a line break in
