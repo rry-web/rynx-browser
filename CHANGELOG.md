@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- NomadNet pages on the Reticulum network: `nomadnet://<node>/<path>` addresses (or NomadNet's own
+  `<node>:/path`, or a node's address alone), fetched by a small bridge program on your computer
+  (`reticulum-bridge` in the downloads, or `bridges/reticulum` in the source; it needs Reticulum's
+  `rns` from pip) and shown as NomadNet shows them. Files on nodes download with `d`; a node
+  that can't be reached shows a saved copy if rynx has one. `reticulum_bridge` in settings says
+  where the bridge listens. Locked to I2P only, rynx doesn't open them: Reticulum isn't I2P.
+- Micron, NomadNet's page markup, drawn as NomadNet draws it: sections and their indents,
+  headings (as anchors), colours, bold, italic and underline, centred and right-aligned lines,
+  dividers, tables, literal blocks, links and fields (shown; sending them comes later). Any page
+  ending in `.mu` is shown as Micron, whatever type a web server sends it as.
+
 ## [0.3.3]
 
 ### Changed
