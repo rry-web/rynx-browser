@@ -46,7 +46,11 @@ Items marked **(priority)** haven't been checked by a person yet.
 ### Clipboard
 - [ ] **CLIP-01 Copy and paste still work.** In Edit mode: `Ctrl+y` copies the address,
       `Ctrl+v` pastes, `Ctrl+k` replaces the address with the clipboard. In visual mode, `y`
-      copies the selection.
+      copies the selection. Paste with the terminal (`Cmd+V`) several lines of text into the
+      address bar, and onto a page.
+      *Expected:* the lines arrive on one line in the address bar; on a page, the status line
+      says where pasted text goes, and no key runs (no new tab, no quitting). Failed before the
+      fix after 0.3.3 (CLIP-03); retest.
 
 ### Security
 - [ ] **SEC-01 (priority) Escape codes are neutralised.** With the test servers running, open
@@ -114,12 +118,12 @@ Items marked **(priority)** haven't been checked by a person yet.
       Option-as-Meta setting is yours to check.
 
 ### Images
-- [ ] **IMG-01 (priority) Real images.** In iTerm2, Kitty, Ghostty or WezTerm, open a page with
+- [x] **IMG-01 Real images.** In iTerm2, Kitty, Ghostty or WezTerm, open a page with
       pictures (a Wikipedia article) and press `I`.
       *Expected:* "Loading N images...", then the pictures appear in the page under their
       captions, sharp, not as blocks. Scrolling keeps them in place; `i` on one shows it full
       screen, and Esc returns. The settings page says which method it draws with.
-- [ ] **IMG-02 macOS Terminal.** The same in macOS Terminal.
+- [x] **IMG-02 macOS Terminal.** The same in macOS Terminal.
       *Expected:* rynx starts normally (it doesn't ask this terminal about images), and pictures
       appear as rough coloured blocks.
 
@@ -242,6 +246,7 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | DL-07 | HTTP download links are upgraded | the same https:// upgrade as NAV-09 (tests/live_sites.rs) and tests/integration_test.rs |
 | DL-08 | Resuming over I2P | i2p::dl_08_resuming_over_i2p |
 | CLIP-02 | No clipboard available (Linux) | linux::clip_02_no_clipboard |
+| CLIP-03 | Pasted text arrives as text, not keys (bracketed paste) | browsing::pasted_text_is_text_not_keys |
 | SEC-01 | Escape codes are neutralised | security::sec_01_escape_codes_are_neutralised |
 | SEC-02 | Link destinations are shown | security::sec_02_link_destinations_are_shown |
 | SEC-03 | Non-web links are refused | security::sec_03_04_non_web_and_i2p_links |

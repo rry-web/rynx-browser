@@ -84,6 +84,48 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent, terminal_width: u16, termi
     }
 }
 
+/// Text pasted into the terminal (bracketed paste), as one piece: into the address bar, find or
+/// the field being typed into, never read as keys. Without this, a pasted line break was Enter
+/// and the text after it ran as commands (t opened a tab, q quit).
+pub fn handle_paste(app: &mut App, text: &str) {
+    // On one line, without control characters; text areas keep their line breaks
+    let one_line = |text: &str| -> String {
+        text.split(['\r', '\n'])
+            .filter(|l| !l.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
+            .chars()
+            .filter(|c| !c.is_control())
+            .collect()
+    };
+    let tab = app.current_tab();
+    match tab.input_mode {
+        InputMode::Editing => tab.url_input.push_str(&one_line(text)),
+        InputMode::Search => {
+            if let Some(search) = tab.search_state.as_mut() {
+                search.query.push_str(&one_line(text));
+                let query = search.query.clone();
+                tab.perform_search(&query);
+            }
+        }
+        InputMode::FormEdit => {
+            let multiline = tab
+                .editing_control
+                .and_then(|i| tab.controls.get(i))
+                .is_some_and(|c| c.kind == crate::forms::ControlKind::TextArea);
+            let pasted: String = if multiline {
+                text.replace("\r\n", "\n").chars().filter(|c| *c == '\n' || !c.is_control()).collect()
+            } else {
+                one_line(text)
+            };
+            tab.edit_field(|field| field.push_str(&pasted));
+        }
+        InputMode::Normal | InputMode::Visual => {
+            tab.status_message = String::from("Pasted text goes into the address bar (e), find (/) or a form field");
+        }
+    }
+}
+
 /// Typing into a form field
 fn handle_form_edit_mode(app: &mut App, key: KeyEvent, terminal_width: u16, terminal_height: u16) -> Result<bool> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);

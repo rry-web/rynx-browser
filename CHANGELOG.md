@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+- Text pasted into the terminal (`Cmd+V`, `Ctrl+Shift+V`) arrived as typed keys: a line break in
+  it was Enter, and the text after it ran as commands (a "t" opened a tab, a "q" quit). rynx now
+  turns on bracketed paste, so a paste arrives as one piece: on one line in the address bar or
+  find, into the form field being typed in, and on a page not at all.
+
 ### Added
 - NomadNet pages on the Reticulum network: `nomadnet://<node>/<path>` addresses (or NomadNet's own
   `<node>:/path`, or a node's address alone), fetched by a small bridge program on your computer

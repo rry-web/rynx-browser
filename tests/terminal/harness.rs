@@ -410,7 +410,10 @@ impl Rynx {
     pub fn left_terminal_as_found(&self) -> bool {
         let text = self.output();
         let after = |on: &str, off: &str| text.rfind(off).is_some_and(|o| text.rfind(on).is_none_or(|n| o > n));
-        after("\x1b[?1049h", "\x1b[?1049l") && after("\x1b[?25l", "\x1b[?25h") && after("\x1b[?1000h", "\x1b[?1000l")
+        after("\x1b[?1049h", "\x1b[?1049l")
+            && after("\x1b[?25l", "\x1b[?25h")
+            && after("\x1b[?1000h", "\x1b[?1000l")
+            && after("\x1b[?2004h", "\x1b[?2004l")
     }
 }
 

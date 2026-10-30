@@ -156,7 +156,7 @@ Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), th
 
 | ID | Check | Priority | Result | Date | Notes |
 |----|-------|:--------:|--------|------|-------|
-| CLIP-01 | Copy and paste still work |  |  |  |  |
+| CLIP-01 | Copy and paste still work |  | Fail | 2026-10-30 | Pasting text with line breaks into the address bar ran its lines as Enter and keys (a "t" opened a tab, so Back did nothing). Fixed after 0.3.3 (bracketed paste, CLIP-03); paste otherwise worked. |
 | CLIP-02 | No clipboard available (Linux) | Yes | Automated |  |  |
 
 ## Security
@@ -195,7 +195,7 @@ Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), th
 |----|-------|:--------:|--------|------|-------|
 | REL-01 | First beta release | Yes | Automated |  |  |
 | REL-02 | Verify a downloaded build | Yes |  |  |  |
-| REL-03 | Run each platform's build | Yes |  |  |  |
+| REL-03 | Run each platform's build | Yes | Partly | 2026-10-30 | macOS (Apple Silicon): yes. Linux x86_64 (openSUSE Tumbleweed, a tester): runs and updates; not tested in depth. Others not yet. |
 
 ## Gemini, Gopher and feeds
 
@@ -228,8 +228,8 @@ Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), th
 
 | ID | Check | Priority | Result | Date | Notes |
 |----|-------|:--------:|--------|------|-------|
-| IMG-01 | Real images | Yes |  |  |  |
-| IMG-02 | macOS Terminal |  |  |  |  |
+| IMG-01 | Real images | Yes | Pass | 2026-10-30 | Kitty, macOS. Wanted: images at their real size, or larger. |
+| IMG-02 | macOS Terminal |  | Pass | 2026-10-30 | Coloured blocks, blurry as expected without a graphics protocol. |
 | IMG-03 | Loading settings |  | Automated |  |  |
 
 ## Cache and snapshots
@@ -281,4 +281,5 @@ Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), th
 
 | ID | Check | Priority | Result | Date | Notes |
 |----|-------|:--------:|--------|------|-------|
-| I2P-05 | Real I2P sites | Yes |  |  |  |
+| I2P-05 | Real I2P sites | Yes | Partly | 2026-10-30 | Sites listed on reg.i2p wouldn't open (address helpers looped, jump services dead): fixed in 0.3.3, to retest. |
+| I2P-07 | The router's own pages |  | Partly | 2026-10-30 | i2pd's console works in I2P mode. Java I2P (console, I2PSnark, SusiMail) not installed. |

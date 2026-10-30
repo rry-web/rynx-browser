@@ -23,8 +23,9 @@ working one. Bugs found in testing come before all of it.
   programs and copied files, not against malware running as the user.
 - **A Windows sandbox.** Linux has Landlock and macOS Seatbelt; Windows has none yet. Candidates:
   AppContainer, or a restricted token with job objects.
-- **Images, together:** SVG (rendered to pixels, e.g. with resvg), and drawing images that are
-  only partly on screen. Image work is shared, not something to hand over.
+- **Images, together:** SVG (rendered to pixels, e.g. with resvg), drawing images that are only
+  partly on screen, and showing images at their real size, or larger (asked for after testing in
+  Kitty: they're fitted small now). Image work is shared, not something to hand over.
 - **Gemini and Gopher downloads**, and Gemini client certificates.
 - **I2P's other uses** (`about:i2p` is the guide): send a magnet link straight to a local torrent
   client's web interface (I2PSnark, XD, qBittorrent) instead of copying it; and fixes from checking

@@ -10,7 +10,7 @@ use std::{error::Error, fmt, io, time::Duration};
 
 use crossterm::{
     Command,
-    event::{self, DisableMouseCapture, Event},
+    event::{self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, Event},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -207,13 +207,14 @@ async fn run(
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
         let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture, DisableBracketedPaste);
         original_hook(panic_info);
     }));
     // Setup Terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableClickAndWheelCapture)?;
+    // Bracketed paste: pasted text arrives as one piece, not as keys
+    execute!(stdout, EnterAlternateScreen, EnableClickAndWheelCapture, EnableBracketedPaste)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -291,7 +292,7 @@ async fn run(
     let res = run_app(&mut terminal, app).await;
 
     // Teardown: stop mouse reporting and drain input while still in raw mode
-    execute!(terminal.backend_mut(), DisableMouseCapture)?;
+    execute!(terminal.backend_mut(), DisableMouseCapture, DisableBracketedPaste)?;
     drain_pending_input()?;
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -358,6 +359,7 @@ async fn run_app<B: Backend<Error = io::Error>>(terminal: &mut Terminal<B>, mut 
                 Event::Mouse(mouse) => {
                     handle_mouse_event(&mut app, mouse, size.width, size.height)?;
                 }
+                Event::Paste(text) => rynx::event_handler::handle_paste(&mut app, &text),
                 _ => {}
             }
         }

@@ -631,3 +631,29 @@ fn the_top_fits_a_narrow_window() {
     rynx.wait_for("I2P");
     assert!(rynx.rows()[3].contains("I2P"), "{}", rynx.screen());
 }
+
+/// CLIP-03: text pasted into the terminal arrives as one piece. Before, a pasted line break was
+/// Enter, and the text after it ran as commands: a "t" opened a tab, with no way back.
+#[test]
+fn pasted_text_is_text_not_keys() {
+    let site = two_pages();
+    let (_home, mut rynx) = started("paste");
+    assert!(rynx.output().contains("\x1b[?2004h"), "bracketed paste isn't turned on");
+    rynx.open(&site.url("/a"));
+    rynx.wait_for("Alpha page");
+    rynx.keys("e");
+    rynx.keys("\u{15}");
+    // As a terminal sends a paste: between ESC [200~ and ESC [201~
+    rynx.keys("\x1b[200~It was the best of times,\nit was the worst of times\x1b[201~");
+    rynx.wait_for("It was the best of times, it was the worst of times");
+    assert!(!rynx.rows()[1].contains("New Tab"), "a pasted t opened a tab: {}", rynx.screen());
+    rynx.keys("\x1b");
+    rynx.wait_for("Alpha page");
+    // On a page, a paste isn't keys either
+    rynx.keys("\x1b[200~tttq\x1b[201~");
+    rynx.wait_for("Pasted text goes into the address bar");
+    assert!(rynx.is_running(), "a pasted q quit");
+    assert!(!rynx.rows()[1].contains("New Tab"), "{}", rynx.screen());
+    rynx.quit();
+    assert!(rynx.wait_exit() && rynx.left_terminal_as_found(), "the terminal wasn't put back as it was");
+}
