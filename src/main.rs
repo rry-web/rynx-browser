@@ -99,6 +99,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     };
     let download_dir = settings.download_dir.clone().unwrap_or_else(App::default_download_dir);
     rynx::dns::allow_local_names(&settings.local_names);
+    rynx::reticulum::set_bridge(&settings.reticulum_bridge);
 
     // The I2P router, if the settings ask for it: started now, so the sandbox doesn't confine it
     let (router_state, router) = rynx::i2pd::start_if_wanted(&settings, rynx::i2pd::data_dir());

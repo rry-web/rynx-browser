@@ -59,6 +59,11 @@ jobs:
       # ROUTER-04: the distribution's i2pd started, reporting progress and stopped by rynx
       - name: The real i2pd
         run: cargo test --locked --test i2pd -- --ignored the_real_i2pd_starts_reports_and_stops
+      - name: The Reticulum bridge, with real Reticulum
+        run: |
+          python3 -m venv /tmp/rns
+          /tmp/rns/bin/pip install --quiet rns
+          /tmp/rns/bin/python -I bridges/reticulum/test_bridge.py
       # SEC-11 on Linux: the cookie key kept in the Secret Service (an unlocked test keyring)
       - name: The Secret Service keychain
         run: |

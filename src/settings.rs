@@ -41,6 +41,12 @@ const DOCUMENTED: &[Documented] = &[
         examples: &["http://127.0.0.1:4444"],
     },
     Documented {
+        key: "reticulum_bridge",
+        about: "Where rynx's Reticulum bridge listens, for nomadnet:// addresses (NomadNet pages); on this\n\
+                computer. See bridges/reticulum in rynx's source.",
+        examples: &["http://127.0.0.1:4243"],
+    },
+    Documented {
         key: "cookie_encryption",
         about: "Saved cookies (for the sites you stay signed in to, C) are encrypted with a key kept in the\n\
                 system keychain, asked for only once a site has been allowed cookies. On macOS the keychain may\n\
@@ -210,6 +216,8 @@ pub struct Settings {
     /// Search URL with {query} where the search words go
     pub search_url: String,
     pub i2p_proxy: String,
+    /// rynx's Reticulum bridge, for nomadnet:// addresses
+    pub reticulum_bridge: String,
     pub download_dir: Option<PathBuf>,
     /// Save visited pages to disk
     pub save_history: bool,
@@ -248,6 +256,7 @@ impl Default for Settings {
             home_page: None,
             search_url: crate::constants::DEFAULT_SEARCH_URL.to_string(),
             i2p_proxy: crate::constants::I2P_PROXY_URL.to_string(),
+            reticulum_bridge: crate::reticulum::DEFAULT_BRIDGE.to_string(),
             download_dir: None,
             save_history: false,
             user_agent: crate::constants::USER_AGENT.to_string(),
@@ -318,6 +327,10 @@ impl Settings {
                 "i2p_proxy" if is_web_url(value) && value.starts_with("http://") => {
                     settings.i2p_proxy = value.to_string()
                 }
+                // On this computer only: the bridge carries every NomadNet page
+                "reticulum_bridge" if value.starts_with("http://") && crate::network::is_loopback_url(value) => {
+                    settings.reticulum_bridge = value.trim_end_matches('/').to_string()
+                }
                 "download_dir" if !value.is_empty() => settings.download_dir = Some(PathBuf::from(value)),
                 "i2p_router" if matches!(value, "start" | "off") => settings.start_i2p_router = value == "start",
                 "i2p_router_keep" if matches!(value, "on" | "off") => settings.keep_i2p_router = value == "on",
@@ -374,10 +387,10 @@ impl Settings {
                 {
                     settings.user_agent = value.to_string()
                 }
-                "home_page" | "search_url" | "i2p_proxy" | "download_dir" | "history" | "user_agent" | "anubis"
-                | "cache" | "cache_i2p" | "cache_size" | "images" | "image_display" | "image_protocol" | "updates"
-                | "update_channel" | "i2p_router" | "i2p_router_keep" | "i2p_router_sam" | "i2pd_path"
-                | "local_names" | "cookie_encryption" => {
+                "home_page" | "search_url" | "i2p_proxy" | "reticulum_bridge" | "download_dir" | "history"
+                | "user_agent" | "anubis" | "cache" | "cache_i2p" | "cache_size" | "images" | "image_display"
+                | "image_protocol" | "updates" | "update_channel" | "i2p_router" | "i2p_router_keep"
+                | "i2p_router_sam" | "i2pd_path" | "local_names" | "cookie_encryption" => {
                     problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
                 }
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),
@@ -409,6 +422,7 @@ impl Settings {
             "network" => changed(self.network.name().into(), default.network.name().into()),
             "search_url" => changed(self.search_url.clone(), default.search_url),
             "i2p_proxy" => changed(self.i2p_proxy.clone(), default.i2p_proxy),
+            "reticulum_bridge" => changed(self.reticulum_bridge.clone(), default.reticulum_bridge),
             "download_dir" => self.download_dir.as_ref().map(|d| d.to_string_lossy().into_owned()),
             "user_agent" => changed(self.user_agent.clone(), default.user_agent),
             "anubis" => (!self.solve_anubis).then(|| "off".to_string()),

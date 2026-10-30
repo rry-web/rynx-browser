@@ -55,18 +55,24 @@ struct Fetched {
 /// http:// for .i2p sites), anything else is searched for, and clearweb http:// is upgraded
 pub(super) fn address_for(input: &str, settings: &Settings, i2p_mode: bool) -> String {
     let input = input.trim();
-    let address =
-        if input.starts_with("http://") || input.starts_with("https://") || crate::network::is_small_web(input) {
-            input.to_string()
-        } else if !input.contains(' ') && crate::network::is_loopback_url(&format!("http://{}", input)) {
-            // This computer's services (localhost:8000, the I2P router's console at 127.0.0.1:7070)
-            // speak plain HTTP
-            format!("http://{}", input)
-        } else if input.contains('.') && !input.contains(' ') {
-            if input.ends_with(".i2p") { format!("http://{}", input) } else { format!("https://{}", input) }
-        } else {
-            settings.search_address(input)
-        };
+    let address = if input.starts_with("http://")
+        || input.starts_with("https://")
+        || crate::network::is_small_web(input)
+        || crate::reticulum::is_nomadnet(input)
+    {
+        input.to_string()
+    } else if let Some(nomadnet) = crate::reticulum::from_nomadnet_form(input) {
+        // As NomadNet writes them: "<node>:/page/index.mu"
+        nomadnet
+    } else if !input.contains(' ') && crate::network::is_loopback_url(&format!("http://{}", input)) {
+        // This computer's services (localhost:8000, the I2P router's console at 127.0.0.1:7070)
+        // speak plain HTTP
+        format!("http://{}", input)
+    } else if input.contains('.') && !input.contains(' ') {
+        if input.ends_with(".i2p") { format!("http://{}", input) } else { format!("https://{}", input) }
+    } else {
+        settings.search_address(input)
+    };
     // Plain http:// stays only for this computer's own addresses and .i2p sites
     crate::network::enforce_https(&address, i2p_mode)
 }
@@ -111,6 +117,8 @@ pub(super) async fn fetch(request: PageRequest, shared: Shared) {
             unchanged: false,
             server_error: false,
         })
+    } else if crate::reticulum::is_nomadnet(&request.url) {
+        fetch_nomadnet(&request, shared.network.get_client(false)).await
     } else {
         let revalidate = cached.as_deref().filter(|e| e.can_revalidate());
         fetch_web(&request, shared.network.get_client(request.i2p_mode), tx, revalidate).await
@@ -310,6 +318,36 @@ async fn fetch_web(
     }
 }
 
+/// A NomadNet page, fetched by the Reticulum bridge on this computer and shown under its
+/// nomadnet:// address, so its links lead on through the bridge. A node that can't be reached is
+/// an error page from the bridge (a 5xx), which a copy saved earlier takes the place of.
+async fn fetch_nomadnet(request: &PageRequest, client: &reqwest::Client) -> Result<Fetched, String> {
+    let bridged = crate::reticulum::bridge_url(&request.url)
+        .ok_or("Not a NomadNet address: nomadnet:// is followed by the node's 32 hexadecimal digits")?;
+    let response = crate::network::send_with_headers(client, &bridged, false, None, reqwest::header::HeaderMap::new())
+        .await
+        .map_err(|e| {
+            format!(
+                "The Reticulum bridge isn't answering at {} ({}): start rynx_reticulum_bridge.py, in the reticulum-bridge folder of rynx's download (or bridges/reticulum in its source)",
+                crate::reticulum::bridge(),
+                e
+            )
+        })?;
+    let status = response.status();
+    let content_type =
+        response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).map(str::to_string);
+    // A file from the node: offered as a download
+    if let ContentClass::Binary(mime) = classify_content_type(content_type.as_deref()) {
+        let (title, body) = crate::network::binary_notice_page(&request.url, &mime, response.content_length());
+        let page = Page { title, body, url: request.url.clone(), kind: PageKind::Html };
+        return Ok(Fetched { page, note: None, cache: None, unchanged: false, server_error: false });
+    }
+    let body = crate::network::read_text_limited(response, MAX_PAGE_SIZE_BYTES).await?;
+    let page = page_from_body(request.url.clone(), Some("text/micron"), &ContentClass::Text, body);
+    let cache = status.is_success().then(CacheInfo::default);
+    Ok(Fetched { page, note: None, cache, unchanged: false, server_error: status.is_server_error() })
+}
+
 /// What a response's body is shown as: an MCP server's notice, a feed's posts, a Micron page
 /// (NomadNet's), HTML, or text
 fn page_from_body(url: String, content_type: Option<&str>, class: &ContentClass, body: String) -> Page {
@@ -345,6 +383,16 @@ mod tests {
         assert_eq!(address_for("localhost:8000", &settings, false), "http://localhost:8000");
         assert_eq!(address_for("127.0.0.1:7070", &settings, true), "http://127.0.0.1:7070");
         assert_eq!(address_for("localhost", &settings, false), "http://localhost");
+        let node = "72914442a3689add83a09a767963f57c";
+        assert_eq!(
+            address_for(&format!("nomadnet://{node}/page/a.mu"), &settings, false),
+            format!("nomadnet://{node}/page/a.mu")
+        );
+        assert_eq!(
+            address_for(&format!("{node}:/page/a.mu"), &settings, false),
+            format!("nomadnet://{node}/page/a.mu")
+        );
+        assert_eq!(address_for(node, &settings, false), format!("nomadnet://{node}/"));
         assert_eq!(address_for("site.i2p", &settings, false), "http://site.i2p");
         assert_eq!(address_for("gemini://capsule.example/", &settings, false), "gemini://capsule.example/");
         assert_eq!(address_for("rust tui", &settings, false), settings.search_address("rust tui"));

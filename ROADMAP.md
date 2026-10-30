@@ -56,10 +56,12 @@ off-grid links suit rynx (and the glasses idea below).
    rynx's renderer and its own markup (`data-rynx-indent`, `-align`, `-fg`/`-bg`, `-rule`). Not yet:
    images and partials are links, fields show but can't be sent, collapsible sections show open,
    page colours (`#!bg`, `#!fg`) are ignored. Other nodes' links become `nomadnet://<node>/path`.
-2. **Pages through a local bridge**: a small companion program using Reticulum's reference
-   software (`rnsd`, Python) fetches NomadNet pages and hands them to rynx on this computer, which
-   rynx can reach in any mode. Works over every Reticulum link at once; costs a Python dependency.
-   Fields would be sent with the link that names them.
+2. **Pages through a local bridge** (done, `bridges/reticulum/`): a small Python program using
+   Reticulum's reference software fetches NomadNet pages for `nomadnet://<node>/<path>` addresses
+   (or NomadNet's own `<node>:/path`), with the X-Rynx header it requires; files come as
+   downloads. MIT-licensed, beside Reticulum's own licence. Next: send a page's fields with the
+   link that names them (as `field_<name>` request data, which the bridge already passes on), and
+   images (`/media`) and partials.
 3. **Native Reticulum**: speak it from rynx in Rust. Candidates: Leviculum (said to be
    functionally complete, tested against the Python version), reticulum-rs, nomadnet-rs. Check
    their maturity first; a Reticulum identity kept on disk needs care with the sandbox.

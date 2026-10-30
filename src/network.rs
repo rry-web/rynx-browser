@@ -134,7 +134,7 @@ pub fn fragment_of(url: &str) -> Option<String> {
 /// Such links used to be treated as typed text, leaking them to unrelated hosts or search.
 pub fn unsupported_link_scheme(url: &str) -> Option<String> {
     let scheme = Url::parse(url).ok()?.scheme().to_string();
-    (!matches!(scheme.as_str(), "http" | "https" | "gemini" | "gopher")).then_some(scheme)
+    (!matches!(scheme.as_str(), "http" | "https" | "gemini" | "gopher" | crate::reticulum::SCHEME)).then_some(scheme)
 }
 
 /// Whether `url` uses one of the small-web protocols (Gemini or Gopher) rather than the web
@@ -474,6 +474,10 @@ pub async fn send_with_headers(
         // resolver which eepsite is being visited
         if !i2p_mode && is_i2p_host(&current) {
             return Err("Enable I2P mode (press p) to visit .i2p sites".to_string());
+        }
+        // The Reticulum bridge answers only rynx
+        if crate::reticulum::is_bridge(&current) {
+            headers.insert(crate::reticulum::BRIDGE_HEADER, reqwest::header::HeaderValue::from_static("1"));
         }
         let request = match &form_body {
             Some(body) => client

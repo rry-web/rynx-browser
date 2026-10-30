@@ -129,6 +129,7 @@ impl App {
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let initial_tab = BrowserTab::new(INITIAL_TAB_ID, HELP_PAGE.to_string());
         let network_manager = Arc::new(NetworkManager::with_settings(&settings.i2p_proxy, &settings.user_agent)?);
+        crate::reticulum::set_bridge(&settings.reticulum_bridge);
         let download_dir = settings.download_dir.clone().unwrap_or_else(Self::default_download_dir);
         Ok(Self {
             tabs: vec![initial_tab],
@@ -620,6 +621,13 @@ impl App {
     }
 
     pub fn submit_request(&mut self) {
+        // Reticulum isn't I2P: locked to I2P, rynx doesn't open NomadNet addresses
+        let address = self.tabs[self.active_tab_index].url_input.clone();
+        if crate::reticulum::is_nomadnet(&address) && self.settings.network == crate::settings::NetworkMode::I2p {
+            self.current_tab().status_message =
+                String::from("Blocked: NomadNet pages travel over Reticulum, not I2P, and settings lock rynx to I2P");
+            return;
+        }
         let i2p_mode = self.i2p_mode;
         let solve_anubis = self.settings.solve_anubis;
         let url = fetch::address_for(&self.tabs[self.active_tab_index].url_input, &self.settings, i2p_mode);

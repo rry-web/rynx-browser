@@ -186,8 +186,13 @@ impl App {
         let use_i2p = self.i2p_mode;
         let nm = Arc::clone(&self.network_manager);
         tokio::spawn(async move {
+            // A file on a NomadNet node comes through the Reticulum bridge
+            let (url, use_i2p) = match crate::reticulum::bridge_url(&prompt.url) {
+                Some(bridged) => (bridged, false),
+                None => (prompt.url.clone(), use_i2p),
+            };
             let client = nm.get_download_client(use_i2p);
-            let message = match download(client, &prompt.url, &prompt.target_path, use_i2p, &tx, tab_id).await {
+            let message = match download(client, &url, &prompt.target_path, use_i2p, &tx, tab_id).await {
                 Ok(path) => NetworkResponse::DownloadFinished(tab_id, path),
                 Err(e) => NetworkResponse::DownloadError(tab_id, e),
             };

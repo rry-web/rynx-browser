@@ -18,6 +18,11 @@ const TEXT_FIELDS: &[(&str, &str, &str)] = &[
     ),
     ("i2p_proxy", "I2P proxy", "The I2P router's HTTP proxy, used in I2P mode."),
     (
+        "reticulum_bridge",
+        "Reticulum bridge",
+        "Where rynx's Reticulum bridge listens, for NomadNet pages (nomadnet:// addresses), on this computer.",
+    ),
+    (
         "local_names",
         "Names on your own network",
         "Public-looking names allowed to point at local addresses (a company network's), comma-separated. \
@@ -84,6 +89,7 @@ impl App {
                 "home_page" => s.home_page.clone().unwrap_or_default(),
                 "user_agent" => s.user_agent.clone(),
                 "i2p_proxy" => s.i2p_proxy.clone(),
+                "reticulum_bridge" => s.reticulum_bridge.clone(),
                 "local_names" => s.local_names.join(", "),
                 _ => s.download_dir.as_ref().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default(),
             };
@@ -345,6 +351,7 @@ impl App {
         }
         self.cache.configure(new.disk_cache, new.disk_cache_i2p, new.cache_size_mb);
         crate::dns::allow_local_names(&new.local_names);
+        crate::reticulum::set_bridge(&new.reticulum_bridge);
         self.images.use_protocol(new.image_protocol);
         match new.network {
             NetworkMode::I2p => self.i2p_mode = true,

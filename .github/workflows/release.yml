@@ -107,6 +107,9 @@ jobs:
           name="rynx-$version-${{ matrix.target }}"
           mkdir "$name"
           cp README.md LICENSE.txt CHANGELOG.md "$name/"
+          # The Reticulum bridge, for NomadNet pages: a Python program beside rynx
+          mkdir -p "$name/reticulum-bridge"
+          cp bridges/reticulum/rynx_reticulum_bridge.py bridges/reticulum/README.md "$name/reticulum-bridge/"
           # The archive for people, and the bare program for rynx's updater
           if [[ "${{ matrix.target }}" == *windows* ]]; then
             cp "target/${{ matrix.target }}/release/rynx.exe" "$name/"

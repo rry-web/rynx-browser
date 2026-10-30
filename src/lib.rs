@@ -22,6 +22,7 @@ pub mod models;
 pub mod names;
 pub mod network;
 pub mod renderer;
+pub mod reticulum;
 pub mod sandbox;
 pub mod settings;
 pub mod snapshots;
