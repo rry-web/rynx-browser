@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.3]
 
 ### Changed
 - The settings page makes the I2P lock clearer: the network choice has a label ("Clearweb or I2P")

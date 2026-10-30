@@ -159,7 +159,7 @@ system's settings bypasses the local-network check for names.
 ```sh
 scripts/check.sh --quick          # formatting, lints and tests
 scripts/check.sh                  # everything CI checks
-scripts/release.sh 0.3.2   # a release, start to finish
+scripts/release.sh 0.3.3   # a release, start to finish
 ```
 
 CI tests every push on Linux, macOS and Windows, including terminal tests that run the real

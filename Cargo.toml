@@ -1,6 +1,6 @@
 [package]
 name = "rynx"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 # The image decoders need 1.90 (quantette); checked in CI
 rust-version = "1.90"
