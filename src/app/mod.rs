@@ -362,6 +362,19 @@ impl App {
             .page_url
             .as_deref()
             .is_some_and(|page| !crate::network::is_local_network_url(page));
+        // In I2P mode this computer's addresses are reached directly, around I2P, so only typed
+        // addresses, bookmarks and history open them: an I2P site's link could aim at the router's
+        // console
+        let from_site = self.tabs[self.active_tab_index]
+            .page_url
+            .as_deref()
+            .is_some_and(|page| !crate::network::is_loopback_url(page));
+        if self.i2p_mode && crate::network::is_loopback_url(url) && from_site {
+            self.current_tab().status_message = String::from(
+                "Blocked: in I2P mode, a site can't link to this computer. Type the address if you trust it.",
+            );
+            return true;
+        }
         if crate::network::is_small_web(url) && crate::network::is_local_network_url(url) && from_public_page {
             self.current_tab().status_message = String::from(
                 "Blocked: a public page can't link to Gopher or Gemini on your local network. Type the address if you trust it.",

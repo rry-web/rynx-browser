@@ -283,3 +283,38 @@ fn i2p_02_https_goes_through_the_proxy() {
     );
     rynx.quit();
 }
+
+/// I2P-06: in I2P mode, addresses on this computer (like the router's console) are reached
+/// directly when typed, since the proxy can't reach them; an I2P site's link to one is refused
+#[test]
+fn i2p_06_this_computer_is_reached_directly_but_not_from_links() {
+    let console = Site::new(&[("/", "<title>Console</title><h1>Router console</h1>")]);
+    let console_url = console.url("/");
+    let link_page = format!("<title>Eepsite</title><h1>An I2P site</h1><p><a href=\"{console_url}\">console</a>");
+    let proxy = Proxy::start(Arc::new(move |seen: &Seen| {
+        if seen.line.starts_with("GET http://site.i2p/ ") {
+            Answer::page(&link_page)
+        } else {
+            Answer::status(500, "<h1>Proxy error: Host not found</h1>")
+        }
+    }));
+    let (_home, mut rynx) = in_i2p_mode("i2p-local", &proxy, "");
+
+    rynx.open("http://site.i2p/");
+    rynx.wait_for("An I2P site");
+    // The page's first link is selected when it opens
+    rynx.keys("\r");
+    rynx.wait_for("a site can't link to this computer");
+    rynx.keys("F");
+    rynx.wait_for("a site can't link to this computer");
+    assert_eq!(console.requests("/"), 0, "a site's link reached this computer");
+
+    // Typed, without http://, it opens, straight from this computer rather than through I2P
+    let typed = console_url.trim_start_matches("http://").trim_end_matches('/').to_string();
+    rynx.open(&typed);
+    rynx.wait_for("Router console");
+    assert_eq!(console.requests("/"), 1);
+    assert_eq!(proxy.requests_for(&console_url), 0, "the console went to the I2P proxy");
+    assert!(rynx.rows()[3].contains("I2P mode"), "{}", rynx.screen());
+    rynx.quit();
+}

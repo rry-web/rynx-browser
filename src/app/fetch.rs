@@ -56,6 +56,10 @@ pub(super) fn address_for(input: &str, settings: &Settings, i2p_mode: bool) -> S
     let address =
         if input.starts_with("http://") || input.starts_with("https://") || crate::network::is_small_web(input) {
             input.to_string()
+        } else if !input.contains(' ') && crate::network::is_loopback_url(&format!("http://{}", input)) {
+            // This computer's services (localhost:8000, the I2P router's console at 127.0.0.1:7070)
+            // speak plain HTTP
+            format!("http://{}", input)
         } else if input.contains('.') && !input.contains(' ') {
             if input.ends_with(".i2p") { format!("http://{}", input) } else { format!("https://{}", input) }
         } else {
@@ -320,6 +324,9 @@ mod tests {
         assert_eq!(address_for("example.com", &settings, false), "https://example.com");
         assert_eq!(address_for("  http://example.com/a ", &settings, false), "https://example.com/a");
         assert_eq!(address_for("http://localhost:8000/", &settings, false), "http://localhost:8000/");
+        assert_eq!(address_for("localhost:8000", &settings, false), "http://localhost:8000");
+        assert_eq!(address_for("127.0.0.1:7070", &settings, true), "http://127.0.0.1:7070");
+        assert_eq!(address_for("localhost", &settings, false), "http://localhost");
         assert_eq!(address_for("site.i2p", &settings, false), "http://site.i2p");
         assert_eq!(address_for("gemini://capsule.example/", &settings, false), "gemini://capsule.example/");
         assert_eq!(address_for("rust tui", &settings, false), settings.search_address("rust tui"));

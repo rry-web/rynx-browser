@@ -8,6 +8,14 @@
   says that starting a router doesn't keep rynx in I2P. Turning I2P mode on with `p` mentions the
   lock.
 
+### Fixed
+- In I2P mode, addresses on your own computer, such as the I2P router's console at
+  `127.0.0.1:7070`, couldn't be opened: they went to the I2P proxy, which can't reach them. They
+  now go directly when typed or opened from bookmarks or history; links to them from sites are
+  refused, so an I2P site can't steer you into the router's console. Typing `localhost:8000` or
+  `127.0.0.1:7070` without `http://` opens them over HTTP, as local services expect (before,
+  `localhost:8000` was searched for).
+
 ## [0.3.2]
 
 ### Changed

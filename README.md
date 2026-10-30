@@ -111,7 +111,8 @@ JavaScript; when one shows an Anubis check anyway, rynx does its proof of work i
 - **No JavaScript, no tracking:** no scripts, storage or `Referer`; no cookies except Anubis's
   passes and those of sites you choose to stay signed in to, sent only to them. History and the
   disk cache are off unless you turn them on. In I2P mode rynx sends a generic identity, and every
-  request goes through the I2P router.
+  request goes through the I2P router, except addresses on your own computer (like the router's
+  console at 127.0.0.1:7070), which you type, and which I2P sites can't link to.
 - **HTTPS everywhere,** with certificates checked by your operating system (revocation too on
   macOS and Windows) and TLS 1.2 or newer.
 - **A sandbox** on Linux (Landlock) and macOS (Seatbelt): rynx can write only to its own folders

@@ -278,6 +278,7 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | I2P-02 | HTTPS through I2P | i2p::i2p_02_https_goes_through_the_proxy |
 | I2P-03 | Jump services | i2p::i2p_03_jump_services |
 | I2P-04 | Toggling back | i2p::i2p_01_04_browsing_through_the_proxy_and_back |
+| I2P-06 | This computer in I2P mode: typed addresses direct, sites' links refused | i2p::i2p_06_this_computer_is_reached_directly_but_not_from_links |
 | ROUTER-01 | Starting and stopping with rynx | main::the_router_starts_with_rynx_and_stops_when_it_quits |
 | ROUTER-02 | Kept running | main::a_router_kept_running_outlives_rynx |
 | ROUTER-03 | Another router | main::a_router_already_running_is_left_alone |

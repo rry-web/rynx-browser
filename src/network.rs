@@ -237,8 +237,12 @@ impl NetworkManager {
 
         if use_proxy {
             // Every request, https:// as well as http:// (Proxy::http would send https:// straight
-            // to the clearweb, around I2P): https:// goes to the router as CONNECT, for its outproxy
-            let proxy = reqwest::Proxy::all(proxy_url)?;
+            // to the clearweb, around I2P): https:// goes to the router as CONNECT, for its outproxy.
+            // Except addresses on this computer, like the router's own console, which the proxy can't
+            // reach and which never leave the machine; links from sites can't lead to them
+            // (App::reject_unsupported_link)
+            let proxy_url = Url::parse(proxy_url)?;
+            let proxy = reqwest::Proxy::custom(move |url| (!is_loopback_host(url)).then(|| proxy_url.clone()));
             builder = builder.proxy(proxy);
         }
 
@@ -347,7 +351,6 @@ impl NetworkManager {
     }
 }
 
-/// Loopback hosts, which are reachable over plain HTTP for local development
 /// The URL's host, with IP addresses recognised for every scheme. For schemes other than the
 /// web's (gopher://, gemini://), the url crate keeps hosts like 127.0.0.1, or its disguises like
 /// 2130706433, as plain names.
@@ -358,6 +361,13 @@ fn host_of(url: &Url) -> Option<Host<String>> {
     }
 }
 
+/// Whether `url` is on this computer: localhost or a loopback address
+pub fn is_loopback_url(url: &str) -> bool {
+    Url::parse(url).is_ok_and(|u| is_loopback_host(&u))
+}
+
+/// Loopback hosts, which are reachable over plain HTTP for local development, and directly in I2P
+/// mode
 fn is_loopback_host(url: &Url) -> bool {
     match host_of(url) {
         Some(Host::Domain(d)) => d.eq_ignore_ascii_case("localhost") || d.to_ascii_lowercase().ends_with(".localhost"),
