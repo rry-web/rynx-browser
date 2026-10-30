@@ -246,7 +246,11 @@ async fn fetch_web(
         let status = response.status();
         let content_type =
             response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).map(str::to_string);
-        let class = classify_content_type(content_type.as_deref());
+        let mut class = classify_content_type(content_type.as_deref());
+        // Few web servers know .mu: a Micron page is text whatever type it's sent as
+        if crate::micron::is_micron(&url, content_type.as_deref()) {
+            class = ContentClass::Text;
+        }
 
         // Images, PDFs and the like aren't read into memory as a page; offer a download
         if let ContentClass::Binary(mime) = &class {
@@ -306,7 +310,8 @@ async fn fetch_web(
     }
 }
 
-/// What a response's body is shown as: an MCP server's notice, a feed's posts, HTML, or text
+/// What a response's body is shown as: an MCP server's notice, a feed's posts, a Micron page
+/// (NomadNet's), HTML, or text
 fn page_from_body(url: String, content_type: Option<&str>, class: &ContentClass, body: String) -> Page {
     if crate::mcp::is_endpoint_answer(content_type, &body) {
         let body = crate::mcp::endpoint_page_html(&url);
@@ -314,6 +319,11 @@ fn page_from_body(url: String, content_type: Option<&str>, class: &ContentClass,
     }
     if crate::feeds::is_feed(content_type, &body) {
         let (title, body) = crate::feeds::feed_to_html(&body);
+        return Page { title, body, url, kind: PageKind::Html };
+    }
+    if crate::micron::is_micron(&url, content_type) {
+        let (heading, body) = crate::micron::micron_to_html(&body);
+        let title = heading.unwrap_or_else(|| crate::network::title_from_url(&url));
         return Page { title, body, url, kind: PageKind::Html };
     }
     // The page isn't parsed here; an HTML page's <title> replaces this name once it's laid out

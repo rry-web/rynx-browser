@@ -46,6 +46,26 @@ working one. Bugs found in testing come before all of it.
   Archive's copy (`A`). Anubis is different: its proof of work is passed natively, as designed.
 - **Running JavaScript.**
 
+## Reticulum and NomadNet
+
+Reticulum is an encrypted mesh network that runs over LoRa radio, packet radio, serial links,
+ordinary networks and I2P; its pages are NomadNet's, written in Micron. Text pages on slow,
+off-grid links suit rynx (and the glasses idea below).
+
+1. **Micron rendering** (done, `src/micron.rs`): `.mu` pages drawn as NomadNet draws them, through
+   rynx's renderer and its own markup (`data-rynx-indent`, `-align`, `-fg`/`-bg`, `-rule`). Not yet:
+   images and partials are links, fields show but can't be sent, collapsible sections show open,
+   page colours (`#!bg`, `#!fg`) are ignored. Other nodes' links become `nomadnet://<node>/path`.
+2. **Pages through a local bridge**: a small companion program using Reticulum's reference
+   software (`rnsd`, Python) fetches NomadNet pages and hands them to rynx on this computer, which
+   rynx can reach in any mode. Works over every Reticulum link at once; costs a Python dependency.
+   Fields would be sent with the link that names them.
+3. **Native Reticulum**: speak it from rynx in Rust. Candidates: Leviculum (said to be
+   functionally complete, tested against the Python version), reticulum-rs, nomadnet-rs. Check
+   their maturity first; a Reticulum identity kept on disk needs care with the sandbox.
+
+Messaging (LXMF: Sideband, NomadNet) stays with the programs made for it.
+
 ## Idea: rynx on monochrome AR glasses
 
 A low-power single-board computer running headless Linux and rynx, shown on a monochrome glasses

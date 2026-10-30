@@ -35,6 +35,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "micron"
+path = "fuzz_targets/micron.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "gopher"
 path = "fuzz_targets/gopher.rs"
 test = false

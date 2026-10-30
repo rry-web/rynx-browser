@@ -17,6 +17,7 @@ pub mod history;
 pub mod i2pd;
 pub mod keys;
 pub mod mcp;
+pub mod micron;
 pub mod models;
 pub mod names;
 pub mod network;

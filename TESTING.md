@@ -268,6 +268,7 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | SMALL-05 | Not in I2P mode | small_web::small_05_not_in_i2p_mode |
 | SMALL-06 | Feeds | small_web::small_06_feeds |
 | SMALL-07 | Bookmarks and history | small_web::small_01_07_gemini_pages |
+| SMALL-08 | Micron (NomadNet) pages: lines, sections, colours, alignment, links, tables, fields | `micron` (all), fuzz target `micron` |
 | UPD-01 | Updating a release build | main::an_update_is_found_downloaded_and_installed_at_the_next_start |
 | UPD-02 | Cargo installs | settings::upd_02_cargo_installs |
 | UPD-03 | I2P | settings::upd_03_no_checks_locked_to_i2p |

@@ -180,11 +180,44 @@ const BULLETS: &[&str] = &["•", "◦", "▪"];
 /// level, and ~10,000 nested <div>s (60KB of HTML) used to overflow the stack and crash.
 const MAX_NESTING: usize = 256;
 
+/// The deepest data-rynx-indent drawn, so a page can't push its text off the screen
+const MAX_RYNX_INDENT: usize = 40;
+
 /// Drawn at the start of every line inside a block: list indentation, quote bars
 #[derive(Clone, Copy)]
 enum LinePrefix {
     Indent(usize),
     QuoteBar,
+}
+
+/// Where a line sits when it's narrower than the page
+#[derive(Clone, Copy, PartialEq)]
+enum Align {
+    Center,
+    Right,
+}
+
+/// A colour from rynx's own markup (Micron's): three hex digits ("79d", 12-bit) or six ("7799dd").
+/// Drawn from the 256-colour palette, as NomadNet does in 256-colour terminals, so it shows the
+/// same in terminals without true colour.
+fn palette_color(hex: &str) -> Option<Color> {
+    let digits: Vec<u8> = hex.chars().map(|c| c.to_digit(16).map(|d| d as u8)).collect::<Option<_>>()?;
+    let [r, g, b] = match digits.as_slice() {
+        [r, g, b] => [r * 17, g * 17, b * 17],
+        [r1, r2, g1, g2, b1, b2] => [r1 * 16 + r2, g1 * 16 + g2, b1 * 16 + b2],
+        _ => return None,
+    };
+    // Greys use the palette's finer grey ramp; colours its 6×6×6 cube
+    if r == g && g == b {
+        return Some(match r {
+            0..=4 => Color::Indexed(16),
+            251..=255 => Color::Indexed(231),
+            // The ramp's greys are 8, 18, ... 238: the nearest one
+            level => Color::Indexed(232 + (((level as u16).saturating_sub(8) + 5) / 10).min(23) as u8),
+        });
+    }
+    let level = |v: u8| ((v as u16 * 5 + 127) / 255) as u8;
+    Some(Color::Indexed(16 + 36 * level(r) + 6 * level(g) + level(b)))
 }
 
 #[derive(Clone, Copy)]
@@ -322,6 +355,8 @@ pub struct DomRenderer {
     last_image: Option<(String, usize)>,
     /// Lines of preformatted text, which may legitimately repeat
     preformatted_lines: std::collections::HashSet<usize>,
+    /// Lines centred or right-aligned (data-rynx-align, for Micron pages), innermost last
+    align_stack: Vec<Align>,
     /// The page's images, and the blocks reserved for loaded ones
     pub images: Vec<PageImage>,
     pub image_blocks: Vec<ImageBlock>,
@@ -370,6 +405,7 @@ impl DomRenderer {
             words_drawn: 0,
             last_image: None,
             preformatted_lines: std::collections::HashSet::new(),
+            align_stack: Vec::new(),
             images: Vec::new(),
             image_blocks: Vec::new(),
             image_sizes: Arc::default(),
@@ -424,6 +460,19 @@ impl DomRenderer {
         if self.line_has_text {
             if self.preserve_whitespace {
                 self.preformatted_lines.insert(self.lines.len());
+            }
+            let align = self.align_stack.last().copied();
+            if let Some(align) = align.filter(|_| self.current_line_width < self.max_width) {
+                // Pad after the line's prefix (its indent), and move the line's links with it
+                let room = self.max_width - self.current_line_width;
+                let pad = if align == Align::Center { room / 2 } else { room };
+                let at = self.current_line.len().min(self.prefix_spans().len());
+                self.current_line.insert(at, Span::raw(" ".repeat(pad)));
+                let line_index = self.lines.len();
+                for link in self.links.iter_mut().filter(|l| l.line_index == line_index) {
+                    link.x_start += pad;
+                    link.x_end += pad;
+                }
             }
             self.lines.push(Line::from(std::mem::take(&mut self.current_line)));
             self.last_line_blank = false;
@@ -733,6 +782,16 @@ impl DomRenderer {
         match tag {
             "br" => return self.line_break(),
             "hr" => {
+                // A Micron divider: its own character, and no space around it
+                if let Some(glyph) = elem.attr("data-rynx-rule").and_then(|g| g.chars().next()) {
+                    self.flush_line();
+                    self.apply_prefix();
+                    let width = self.max_width.saturating_sub(self.current_line_width);
+                    let glyph = if glyph.is_control() || char_width(glyph) != 1 { '─' } else { glyph };
+                    self.emit_text(&glyph.to_string().repeat(width));
+                    self.line_has_text = true;
+                    return self.flush_line();
+                }
                 self.add_vertical_space();
                 self.apply_prefix();
                 let rule = "─".repeat(self.max_width.saturating_sub(self.current_line_width));
@@ -805,8 +864,10 @@ impl DomRenderer {
         let saved_lists = self.list_stack.len();
         let saved_form = self.current_form;
         let saved_control = self.active_control;
+        let saved_align = self.align_stack.len();
 
         self.open_element(element);
+        self.open_rynx_markup(elem);
 
         // Record link targets after any block spacing, so jumps land on the content
         let anchor = elem.attr("id").or_else(|| if tag == "a" { elem.attr("name") } else { None });
@@ -846,9 +907,41 @@ impl DomRenderer {
         self.preserve_whitespace = saved_preserve;
         self.current_form = saved_form;
         self.active_control = saved_control;
+        self.align_stack.truncate(saved_align);
 
         if after == AfterElement::BlockSpace {
             self.add_vertical_space();
+        }
+    }
+
+    /// rynx's own markup, for pages it makes from other formats (Micron): data-rynx-indent (columns),
+    /// data-rynx-align (center or right), and data-rynx-fg / data-rynx-bg (Micron colours). Named
+    /// for rynx, so websites' own attributes change nothing.
+    fn open_rynx_markup(&mut self, elem: &scraper::node::Element) {
+        if let Some(columns) = elem.attr("data-rynx-indent").and_then(|n| n.parse::<usize>().ok()) {
+            self.flush_line();
+            self.prefix_stack.push(LinePrefix::Indent(columns.min(MAX_RYNX_INDENT)));
+        }
+        if let Some(align) = elem.attr("data-rynx-align") {
+            self.flush_line();
+            match align {
+                "center" => self.align_stack.push(Align::Center),
+                "right" => self.align_stack.push(Align::Right),
+                _ => {}
+            }
+        }
+        let fg = elem.attr("data-rynx-fg").and_then(palette_color);
+        let bg = elem.attr("data-rynx-bg").and_then(palette_color);
+        if fg.is_some() || bg.is_some() {
+            self.add_style(|mut s| {
+                if let Some(fg) = fg {
+                    s = s.fg(fg);
+                }
+                if let Some(bg) = bg {
+                    s = s.bg(bg);
+                }
+                s
+            });
         }
     }
 

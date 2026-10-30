@@ -45,6 +45,7 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
 
 **Beyond the web**
 - [Gemini](https://geminiprotocol.net) and Gopher sites, with Gemini certificates trusted on first use
+- NomadNet pages (Micron, `.mu`), as NomadNet draws them; reaching them over Reticulum comes next
 - RSS and Atom feeds shown as pages; pages offering a feed say so
 - Site tools: sites can offer interactive features as [MCP](https://modelcontextprotocol.io)
   tools, shown as forms; nothing is sent until you've seen it and confirmed
@@ -146,6 +147,8 @@ The longer list, with notes and ideas, is in [ROADMAP.md](ROADMAP.md).
 - **Finer cookie control** (per cookie, and third-party rules), and history times in your time zone
 - **A Windows sandbox**, and **code-signed** macOS and Windows builds
 - **Packages:** Homebrew, the AUR and others
+- **Reticulum:** NomadNet pages from Reticulum nodes, first through a small local bridge, later
+  directly
 - **A built-in I2P router** (the Rust router emissary, once it matures), so I2P needs nothing
   installed; and the started router's progress with older i2pd versions, whose console can be
   slow to answer while starting
