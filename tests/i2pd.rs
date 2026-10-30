@@ -20,7 +20,6 @@ fn fake_i2pd(dir: &Path, script: &str) -> PathBuf {
     program
 }
 
-#[cfg(unix)]
 /// Settings asking for the router (or not), with the proxy and i2pd given
 fn router_settings(start: bool, keep: bool, proxy: &str, program: Option<&Path>) -> Settings {
     Settings {
@@ -32,6 +31,7 @@ fn router_settings(start: bool, keep: bool, proxy: &str, program: Option<&Path>)
     }
 }
 
+#[cfg(unix)]
 fn alive(pid: u32) -> bool {
     std::process::Command::new("kill")
         .args(["-0", &pid.to_string()])
