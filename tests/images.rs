@@ -55,12 +55,76 @@ fn loaded_images_get_space_in_the_page() {
     assert_eq!(lines[block.line_index], " ".repeat(20));
     assert_eq!(lines[block.line_index + 5], "[A chart]", "the caption follows the image: {lines:?}");
     assert!(lines.iter().position(|l| l == "After").unwrap() > block.line_index + 5);
+}
 
-    // In a table cell, an image stays a placeholder
-    let page =
-        render("<table><tr><td><img src='/a.png' alt='In a cell'></td><td>x</td></tr></table>", &[("/a.png", (20, 5))]);
-    assert!(page.image_blocks.is_empty());
-    assert!(texts(&page).iter().any(|l| l.contains("[In a cell]")));
+/// A form laid out as a table, as imageboards' are: the captcha drawn in its cell, beside its
+/// label, with room for it in the row
+#[test]
+fn images_are_drawn_in_table_cells() {
+    let html = "<form><table>\
+                <tr><th>Name</th><td><input name=name></td></tr>\
+                <tr><th>CAPTCHA</th><td><input name=captcha size=6> (enter the text below)<br>\
+                <img src='inc/captcha.php' width=175 height=55 alt=CAPTCHA></td></tr>\
+                <tr><th>Password</th><td><input name=password type=password size=8></td></tr>\
+                </table></form>";
+    let page = render(html, &[("inc/captcha.php", (22, 4))]);
+    let lines = texts(&page);
+    assert_eq!(page.image_blocks.len(), 1, "{lines:?}");
+    let block = page.image_blocks[0];
+    assert_eq!((block.columns, block.rows), (22, 4));
+    // In the second column, under the field, with its caption below it
+    let field = lines.iter().position(|l| l.contains("(enter the text below)")).unwrap();
+    assert_eq!(block.line_index, field + 1, "{lines:?}");
+    let label_column = lines[field].find('│').unwrap();
+    assert!(block.x > label_column, "{block:?} {lines:?}");
+    for line in &lines[block.line_index..block.line_index + 4] {
+        let under: String = line.chars().skip(block.x).take(22).collect();
+        assert!(under.trim().is_empty(), "something drawn under the image: {line:?}");
+    }
+    assert!(lines[block.line_index + 4].contains("[CAPTCHA]"), "{lines:?}");
+    // The selectable caption is still the image's
+    assert!(page.links.iter().any(|l| l.image == Some(0) && l.line_index == block.line_index + 4));
+    let password = lines.iter().position(|l| l.contains("Password")).unwrap();
+    assert!(password > block.line_index + 4);
+}
+
+/// An image alone in a cell keeps its rows (they look blank until it's drawn), and one wider
+/// than its column is drawn smaller, keeping its shape
+#[test]
+fn images_in_cells_keep_their_rows_and_shape() {
+    let page = render(
+        "<table><tr><td><img src='/a.png' alt=Pic></td><td>beside</td></tr><tr><td>under</td><td>x</td></tr></table>",
+        &[("/a.png", (10, 3))],
+    );
+    let lines = texts(&page);
+    let block = page.image_blocks[0];
+    assert_eq!((block.columns, block.rows, block.x), (10, 3, 0));
+    assert!(lines[block.line_index].contains("beside"), "{lines:?}");
+    assert!(lines[block.line_index + 3].starts_with("[Pic]"), "{lines:?}");
+    assert!(lines.iter().position(|l| l.starts_with("under")).unwrap() > block.line_index + 3);
+
+    // Three columns of 60-column images share 82 columns: each drawn narrower, with fewer rows
+    let row = "<table><tr><td><img src='/w.png' alt=One></td><td><img src='/w.png' alt=Two></td>\
+               <td><img src='/w.png' alt=Three></td></tr></table>";
+    let page = render(row, &[("/w.png", (60, 12))]);
+    assert_eq!(page.image_blocks.len(), 3);
+    for block in &page.image_blocks {
+        assert!(block.columns < 60 && block.columns >= 20, "{block:?}");
+        assert_eq!(block.rows, (12 * block.columns).div_ceil(60), "{block:?}");
+    }
+}
+
+#[test]
+fn images_are_drawn_in_newspaper_columns() {
+    let html = "<div data-rynx-columns=30><section><p>First</p><img src='/a.png' alt=Pic></section>\
+                <section><p>Second</p></section></div>";
+    let page = render(html, &[("/a.png", (12, 3))]);
+    let lines = texts(&page);
+    assert_eq!(page.image_blocks.len(), 1, "{lines:?}");
+    let block = page.image_blocks[0];
+    assert!(lines[block.line_index + 3].contains("[Pic]"), "{lines:?}");
+    let caption_x = lines[block.line_index + 3].find("[Pic]").unwrap();
+    assert_eq!(block.x, caption_x);
 }
 
 #[test]

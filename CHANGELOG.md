@@ -7,6 +7,9 @@
   it was Enter, and the text after it ran as commands (a "t" opened a tab, a "q" quit). rynx now
   turns on bracketed paste, so a paste arrives as one piece: on one line in the address bar or
   find, into the form field being typed in, and on a page not at all.
+- Images in tables (forms laid out as tables, like imageboards' captchas, infoboxes, galleries)
+  stayed placeholders even once loaded. They're drawn in their cells now, and their columns make
+  room for them; an image wider than its column is drawn smaller, keeping its shape.
 
 ### Added
 - NomadNet pages on the Reticulum network: `nomadnet://<node>/<path>` addresses (or NomadNet's own

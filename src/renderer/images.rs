@@ -87,7 +87,10 @@ impl DomRenderer {
             self.flush_line();
             let prefix = self.prefix_spans();
             let prefix_width: usize = prefix.iter().map(|s| s.width()).sum();
-            let columns = columns.min(self.max_width.saturating_sub(prefix_width) as u16).max(1);
+            // Narrower than it would be (in a table cell, say): fewer rows, keeping its shape
+            let narrowed = columns.min(self.max_width.saturating_sub(prefix_width) as u16).max(1);
+            let rows = (rows as u32 * narrowed as u32).div_ceil(columns as u32).max(1) as u16;
+            let columns = narrowed;
             let line_index = self.lines.len();
             for _ in 0..rows {
                 let mut line = prefix.clone();
@@ -104,29 +107,23 @@ impl DomRenderer {
         self.style_stack.pop();
         self.active_image = None;
         self.last_image = Some((label, self.words_drawn));
-        if let (Some(index), Some((columns, rows))) = (index, size)
-            && self.inline_depth == 0
-            && rows > 0
-        {
+        // The image's block, if one was reserved for it above
+        let block = index.and_then(|i| self.image_blocks.last().filter(|b| b.image == i).copied());
+        if let Some(block) = block {
             // The caption under a drawn image is a line of its own; if it fit on one, more
             // images can go beside this one
-            let first_line = self.lines.len() - rows as usize;
             self.flush_line();
-            if self.lines.len() == first_line + rows as usize + 1 {
-                let block = self.image_blocks.iter().rev().find(|b| b.image == index).copied();
-                if let Some(block) = block {
-                    let caption_line = block.line_index + block.rows as usize;
-                    let caption_end: usize =
-                        self.lines[caption_line].spans.iter().map(|s| text_width(&s.content)).sum();
-                    self.image_row = Some(ImageRow {
-                        first_line: block.line_index,
-                        rows: block.rows,
-                        caption_line,
-                        next_x: (block.x + columns as usize).max(caption_end) + IMAGE_GAP,
-                        prefix_width: block.x,
-                        words: self.words_drawn,
-                    });
-                }
+            let caption_line = block.line_index + block.rows as usize;
+            if self.lines.len() == caption_line + 1 {
+                let caption_end: usize = self.lines[caption_line].spans.iter().map(|s| text_width(&s.content)).sum();
+                self.image_row = Some(ImageRow {
+                    first_line: block.line_index,
+                    rows: block.rows,
+                    caption_line,
+                    next_x: (block.x + block.columns as usize).max(caption_end) + IMAGE_GAP,
+                    prefix_width: block.x,
+                    words: self.words_drawn,
+                });
             }
         }
     }

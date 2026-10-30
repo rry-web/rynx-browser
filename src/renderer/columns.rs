@@ -67,7 +67,8 @@ impl DomRenderer {
         let mut stacked: Vec<RenderedCell> = Vec::new();
         for (column, &start) in starts.iter().enumerate() {
             let end = starts.get(column + 1).copied().unwrap_or(rendered.len());
-            let mut stack = RenderedCell { column, lines: Vec::new(), links: Vec::new(), anchors: Vec::new() };
+            let mut stack =
+                RenderedCell { column, lines: Vec::new(), links: Vec::new(), anchors: Vec::new(), images: Vec::new() };
             for block in &rendered[start..end] {
                 if !stack.lines.is_empty() {
                     stack.lines.push(Line::default());
@@ -78,6 +79,7 @@ impl DomRenderer {
                     .links
                     .extend(block.links.iter().map(|l| LinkRegion { line_index: top + l.line_index, ..l.clone() }));
                 stack.anchors.extend(block.anchors.iter().map(|(name, line)| (name.clone(), top + line)));
+                stack.images.extend(block.images.iter().map(|b| ImageBlock { line_index: top + b.line_index, ..*b }));
             }
             stacked.push(stack);
         }
@@ -121,6 +123,13 @@ impl DomRenderer {
             }
             for (name, line) in &column.anchors {
                 self.anchors.entry(name.clone()).or_insert(first_row + line);
+            }
+            for block in &column.images {
+                self.image_blocks.push(ImageBlock {
+                    line_index: first_row + block.line_index,
+                    x: x + block.x,
+                    ..*block
+                });
             }
         }
         self.add_vertical_space();

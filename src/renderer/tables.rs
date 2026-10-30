@@ -1,6 +1,7 @@
 //! Tables: aligned columns when they fit, `Header: value` rows when they don't.
 
 use super::*;
+use std::collections::HashSet;
 
 const COLUMN_SEPARATOR: &str = " │ ";
 
@@ -28,6 +29,8 @@ pub(super) struct RenderedCell {
     pub(super) lines: Vec<Line<'static>>,
     pub(super) links: Vec<LinkRegion>,
     pub(super) anchors: Vec<(String, usize)>,
+    /// Loaded images drawn in it, by its own lines and columns
+    pub(super) images: Vec<ImageBlock>,
 }
 
 /// The words a cell would show, each with the indentation it would be drawn at, for measuring
@@ -121,14 +124,27 @@ fn control_width(elem: &scraper::node::Element) -> Option<usize> {
     }
 }
 
-/// (natural, minimum) width of a cell: all its words on one line, and its widest word (capped)
-fn measure_cell(cell: ElementRef) -> (usize, usize) {
+/// Columns the widest loaded image in a cell is drawn in
+fn image_columns(cell: ElementRef, sizes: &HashMap<String, (u16, u16)>) -> usize {
+    cell.descendants()
+        .filter_map(|node| node.value().as_element())
+        .filter(|elem| elem.name() == "img" && !is_hidden(elem))
+        .filter_map(|elem| super::images::image_source(elem).and_then(|src| sizes.get(&src)))
+        .map(|&(columns, _)| columns as usize)
+        .max()
+        .unwrap_or(0)
+}
+
+/// (natural, minimum) width of a cell: all its words on one line, and its widest word (capped),
+/// or its widest loaded image (which can be drawn smaller, down to the cap)
+fn measure_cell(cell: ElementRef, sizes: &HashMap<String, (u16, u16)>) -> (usize, usize) {
     let words = cell_words(cell);
     let natural = words.iter().map(|(w, _)| text_width(w)).sum::<usize>()
         + words.len().saturating_sub(1)
         + words.iter().map(|(_, indent)| *indent).max().unwrap_or(0);
     let minimum = words.iter().map(|(w, indent)| text_width(w).min(MAX_MIN_COLUMN_WIDTH) + indent).max().unwrap_or(0);
-    (natural, minimum)
+    let image = image_columns(cell, sizes);
+    (natural.max(image), minimum.max(image.min(MAX_MIN_COLUMN_WIDTH)))
 }
 
 /// The rows of a table, excluding rows of tables nested inside its cells
@@ -251,7 +267,7 @@ impl DomRenderer {
         for row in &rows {
             let mut column = 0;
             for cell in &row.cells {
-                let (wanted, least) = measure_cell(cell.element);
+                let (wanted, least) = measure_cell(cell.element, &self.image_sizes);
                 if cell.colspan == 1 {
                     natural[column] = natural[column].max(wanted.min(available));
                     minimum[column] = minimum[column].max(least);
@@ -322,6 +338,9 @@ impl DomRenderer {
                             self.emit(&span.content, span.style, None);
                         }
                         let line_index = self.lines.len();
+                        for block in cell.images.iter().filter(|b| b.line_index == k) {
+                            self.image_blocks.push(ImageBlock { line_index, x: x + block.x, ..*block });
+                        }
                         for link in cell.links.iter().filter(|l| l.line_index == k) {
                             self.links.push(LinkRegion {
                                 url: link.url.clone(),
@@ -396,6 +415,7 @@ impl DomRenderer {
         renderer.form_ids = std::mem::take(&mut self.form_ids);
         // The page's image list, so image numbers stay the page's own
         renderer.images = std::mem::take(&mut self.images);
+        renderer.image_sizes = Arc::clone(&self.image_sizes);
         renderer.current_form = self.current_form;
         renderer.depth = self.depth + 1;
         let mut style = self.current_style();
@@ -414,10 +434,15 @@ impl DomRenderer {
         self.form_ids = std::mem::take(&mut renderer.form_ids);
         self.images = std::mem::take(&mut renderer.images);
 
-        // Blank lines at the edges of a cell (from <p> margins) would only pad the row
-        let is_blank = |line: &Line| line.spans.iter().all(|s| s.content.trim().is_empty());
-        let leading = renderer.lines.iter().take_while(|l| is_blank(l)).count();
-        let trailing = renderer.lines.iter().rev().take_while(|l| is_blank(l)).count();
+        // Blank lines at the edges of a cell (from <p> margins) would only pad the row; an image's
+        // lines look blank until it's drawn on them
+        let image_lines: HashSet<usize> =
+            renderer.image_blocks.iter().flat_map(|b| b.line_index..b.line_index + b.rows as usize).collect();
+        let is_blank = |(i, line): &(usize, &Line)| {
+            !image_lines.contains(i) && line.spans.iter().all(|s| s.content.trim().is_empty())
+        };
+        let leading = renderer.lines.iter().enumerate().take_while(is_blank).count();
+        let trailing = renderer.lines.iter().enumerate().rev().take_while(is_blank).count();
         let keep = renderer.lines.len().saturating_sub(leading + trailing);
         let lines: Vec<Line<'static>> = renderer.lines.into_iter().skip(leading).take(keep).collect();
         let links = renderer
@@ -431,7 +456,13 @@ impl DomRenderer {
             .into_iter()
             .map(|(name, line)| (name, line.saturating_sub(leading).min(keep.saturating_sub(1))))
             .collect();
-        RenderedCell { column, lines, links, anchors }
+        let images = renderer
+            .image_blocks
+            .into_iter()
+            .filter(|b| b.line_index >= leading && b.line_index + b.rows as usize <= leading + keep)
+            .map(|b| ImageBlock { line_index: b.line_index - leading, ..b })
+            .collect();
+        RenderedCell { column, lines, links, anchors, images }
     }
 
     /// When the columns can't fit, show each row as lines, labelled with the header row if any

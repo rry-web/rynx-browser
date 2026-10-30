@@ -126,6 +126,10 @@ Items marked **(priority)** haven't been checked by a person yet.
 - [x] **IMG-02 macOS Terminal.** The same in macOS Terminal.
       *Expected:* rynx starts normally (it doesn't ask this terminal about images), and pictures
       appear as rough coloured blocks.
+- [ ] **IMG-04 Images in tables.** With images loading, open a page whose images sit in a table
+      (a Wikipedia article's infobox, or an imageboard's form with a captcha).
+      *Expected:* each image is drawn in its cell, beside the cell's label, with nothing written
+      over it and the rows below moved down to make room; `i` on its caption views it.
 
 ### Reader mode
 - [ ] **READ-01 News article.** Open an article on a news site (BBC News, Ars Technica) and press

@@ -231,6 +231,7 @@ Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), th
 | IMG-01 | Real images | Yes | Pass | 2026-10-30 | Kitty, macOS. Wanted: images at their real size, or larger. |
 | IMG-02 | macOS Terminal |  | Pass | 2026-10-30 | Coloured blocks, blurry as expected without a graphics protocol. |
 | IMG-03 | Loading settings |  | Automated |  |  |
+| IMG-04 | Images in tables | Yes |  |  |  |
 
 ## Cache and snapshots
 
