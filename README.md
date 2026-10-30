@@ -39,21 +39,25 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
 - Forms: text fields, checkboxes, choices and buttons, sent with GET or POST
 - Tabs, Back and Forward to where you were, jumps within a page, find (`/`), copy mode (`v`)
 - Images when you want them (`I`): drawn with Kitty, iTerm2 or Sixel graphics, or coloured blocks,
-  in the page or full screen (`i`); optionally loading by themselves
+  in the page (tables and galleries too) or full screen (`i`); optionally loading by themselves
 - The Internet Archive's copy of a page that's gone or blocked (`A`)
 - Bookmarks (`b`, `B`) and history (`s`), kept on disk only if you turn it on
 
 **Beyond the web**
 - [Gemini](https://geminiprotocol.net) and Gopher sites, with Gemini certificates trusted on first use
 - NomadNet pages on the [Reticulum](https://reticulum.network) mesh (`nomadnet://`), drawn as
-  NomadNet draws them, through a small bridge program ([bridges/reticulum](bridges/reticulum))
+  NomadNet draws them, through a small bridge program: `reticulum-bridge` in the downloads, or
+  [bridges/reticulum](bridges/reticulum), which says how to set it up. Micron (`.mu`) pages from
+  ordinary web servers are drawn the same way
 - RSS and Atom feeds shown as pages; pages offering a feed say so
 - Site tools: sites can offer interactive features as [MCP](https://modelcontextprotocol.io)
   tools, shown as forms; nothing is sent until you've seen it and confirmed
 - I2P: `.i2p` sites through a local router, which rynx can start for you (i2pd); a setting locks
-  rynx to I2P so a stray key can't leave it. `about:i2p` shows how to get torrents and mail through
-  the router's own programs, and magnet links are copied for a torrent client. The router rynx
-  starts can let torrent clients and other I2P programs on your computer use it (SAM, opt-in)
+  rynx to I2P so a stray key can't leave it. Names the router doesn't know are looked up with jump
+  services (reg.i2p, notbob, stats.i2p), and a site's address-helper links (`?i2paddresshelper=`)
+  work as the router expects. `about:i2p` shows how to get torrents and mail through the router's
+  own programs, and magnet links are copied for a torrent client. The router rynx starts can let
+  torrent clients and other I2P programs on your computer use it (SAM, opt-in)
 
 **Slow connections and staying in control**
 - A page cache: Back is instant, unchanged pages aren't downloaded again, unreachable sites show
@@ -95,7 +99,9 @@ them (`reload = F5` adds a key, `reload = F5 only` replaces them, `reload = none
 | `S`, `U`, `?`, `q` | Settings, updates, all keys, quit |
 
 While typing in a field: `Enter` sends the form, `Esc` stops typing, `Ctrl+u` clears, `Ctrl+v`
-pastes. In the address bar: `Esc` cancels, `Ctrl+y` / `Ctrl+v` copy and paste.
+pastes. In the address bar: `Esc` cancels, `Ctrl+y` / `Ctrl+v` copy and paste. Your terminal's own
+paste (`Cmd+V`, `Ctrl+Shift+V`) works too: pasted text goes into the address bar, find or the field
+being typed in, never run as keys.
 
 ## Settings
 
@@ -104,19 +110,20 @@ pastes. In the address bar: `Esc` cancels, `Ctrl+y` / `Ctrl+v` copy and paste.
 `%APPDATA%\rynx-browser\config` on Windows), which the first run writes with every option
 explained and commented out: the home page, the search engine (Marginalia by default, or
 DuckDuckGo's HTML version, or any address), locking to the clearweb or I2P, the I2P proxy and
-starting i2pd, history, the disk cache, images, updates, the browser's identity, and names on
-your own network.
+starting i2pd (and SAM, for torrent clients), the Reticulum bridge's address, history, the disk
+cache, images, updates, the browser's identity, and names on your own network.
 
 rynx introduces itself honestly as `rynx/<version>`, which bot walls usually let through without
 JavaScript; when one shows an Anubis check anyway, rynx does its proof of work itself.
 
 ## Security and privacy
 
-- **No JavaScript, no tracking:** no scripts, storage or `Referer`; no cookies except Anubis's
-  passes and those of sites you choose to stay signed in to, sent only to them. History and the
-  disk cache are off unless you turn them on. In I2P mode rynx sends a generic identity, and every
-  request goes through the I2P router, except addresses on your own computer (like the router's
-  console at 127.0.0.1:7070), which you type, and which I2P sites can't link to.
+- **No JavaScript, no tracking:** no scripts, storage or `Referer` (except a site's own address
+  on an I2P address-helper link followed from that site, which the router asks for); no cookies
+  except Anubis's passes and those of sites you choose to stay signed in to, sent only to them.
+  History and the disk cache are off unless you turn them on. In I2P mode rynx sends a generic
+  identity, and every request goes through the I2P router, except addresses on your own computer
+  (like the router's console at 127.0.0.1:7070), which you type, and which I2P sites can't link to.
 - **HTTPS everywhere,** with certificates checked by your operating system (revocation too on
   macOS and Windows) and TLS 1.2 or newer.
 - **A sandbox** on Linux (Landlock) and macOS (Seatbelt): rynx can write only to its own folders
@@ -143,7 +150,7 @@ The longer list, with notes and ideas, is in [ROADMAP.md](ROADMAP.md).
 - **Sign-in for site tools** (OAuth), and servers asking questions while a tool runs
 - **Encryption at rest** for history, the cache and snapshots (cookies are encrypted already)
 - **Session restore** (opt-in): reopen your tabs
-- **SVG images**, and drawing images only partly on screen
+- **SVG images**, drawing images only partly on screen, and images at their real size or larger
 - **Downloads from Gemini and Gopher**, and Gemini client certificates
 - **Finer cookie control** (per cookie, and third-party rules), and history times in your time zone
 - **A Windows sandbox**, and **code-signed** macOS and Windows builds
@@ -162,7 +169,7 @@ system's settings bypasses the local-network check for names.
 ```sh
 scripts/check.sh --quick          # formatting, lints and tests
 scripts/check.sh                  # everything CI checks
-scripts/release.sh 0.3.4   # a release, start to finish
+scripts/release.sh 0.3.4         # a release, start to finish
 ```
 
 CI tests every push on Linux, macOS and Windows, including terminal tests that run the real
