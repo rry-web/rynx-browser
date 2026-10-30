@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- I2P pages often failed with "connection closed before message completed", until reloaded.
+  rynx reused its connection to the router's proxy for the next request, and the router closes
+  one when the I2P stream behind it ends, often just as that request goes out. Each I2P request
+  now has a connection of its own (the router is on your computer, so this costs nothing).
+
 ## [0.3.4]
 
 ### Fixed

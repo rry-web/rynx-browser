@@ -244,6 +244,11 @@ impl NetworkManager {
             let proxy_url = Url::parse(proxy_url)?;
             let proxy = reqwest::Proxy::custom(move |url| (!is_loopback_host(url)).then(|| proxy_url.clone()));
             builder = builder.proxy(proxy);
+            // A new connection to the router for each request: the router closes one when the I2P
+            // stream behind it ends, often just as the next request goes out on it ("connection
+            // closed before message completed"). The router is on this computer, so connecting
+            // costs nothing; its tunnels are what's slow, and it keeps those.
+            builder = builder.pool_max_idle_per_host(0);
         }
 
         // Names are looked up by rynx, refusing public names that point at the local network

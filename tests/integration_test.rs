@@ -1764,3 +1764,46 @@ async fn the_i2p_page_explains_torrents_and_mail_and_its_links_work_in_i2p_mode(
     assert!(!app.current_tab().status_message.contains("Blocked"), "{}", app.current_tab().status_message);
     assert_eq!(app.current_tab().url_input, console);
 }
+
+/// A router's HTTP proxy, as i2pd's behaves: it answers a connection's first request (keep-alive
+/// and all) and closes the connection on the next, as when the I2P stream behind it has ended
+async fn closing_proxy() -> std::net::SocketAddr {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else { return };
+            tokio::spawn(async move {
+                let mut buffer = vec![0; 8192];
+                if socket.read(&mut buffer).await.unwrap_or(0) == 0 {
+                    return;
+                }
+                let body = "<html><body><p>From the eepsite</p></body></html>";
+                let reply = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: keep-alive\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = socket.write_all(reply.as_bytes()).await;
+                // The next request on this connection: closed unanswered
+                let _ = socket.read(&mut buffer).await;
+            });
+        }
+    });
+    address
+}
+
+#[tokio::test]
+async fn i2p_requests_dont_reuse_connections_the_router_closes() {
+    let proxy = closing_proxy().await;
+    let manager = rynx::network::NetworkManager::with_i2p_proxy(&format!("http://{}", proxy)).unwrap();
+    let client = manager.get_client(true);
+    for page in ["first", "second", "third"] {
+        let url = format!("http://example.i2p/{}", page);
+        let response = rynx::network::get_following_redirects(client, &url, true)
+            .await
+            .unwrap_or_else(|e| panic!("the {page} page failed: {e}"));
+        assert!(response.text().await.unwrap().contains("From the eepsite"));
+    }
+}
