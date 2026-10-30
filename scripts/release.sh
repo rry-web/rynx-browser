@@ -48,9 +48,9 @@ echo "Pushed; waiting for CI..."
 sleep 15
 run=$(gh run list --branch main --workflow ci.yml --commit "$(git rev-parse HEAD)" --limit 1 --json databaseId -q '.[0].databaseId')
 [ -n "$run" ] || fail "couldn't find the CI run; tag by hand once it passes: git tag -a v$new -m 'rynx $new' && git push origin v$new"
-gh run watch "$run" --exit-status >/dev/null || fail "CI failed (gh run view $run); fix it, then tag by hand"
+gh run watch "$run" --interval 60 --exit-status >/dev/null || fail "CI failed (gh run view $run); fix it, then tag by hand"
 
 git tag -a "v$new" -m "rynx $new"
 git push --quiet origin "v$new"
 echo "Tagged v$new: the release workflow is building it."
-echo "Follow it with:  gh run watch \$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
+echo "Follow it with:  gh run watch --interval 60 \$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
