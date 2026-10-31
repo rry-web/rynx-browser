@@ -29,6 +29,7 @@ use tokio::io::AsyncWriteExt; // Required for streaming to file
 mod cookies_page;
 mod downloads;
 mod fetch;
+mod hints;
 mod images;
 mod pages;
 mod router;
@@ -38,6 +39,7 @@ mod tab;
 mod tools;
 mod update_page;
 
+pub use hints::{HintResult, Hints};
 pub use images::draws_images;
 pub use settings_page::SETTINGS_PAGE;
 pub use tab::BrowserTab;

@@ -115,10 +115,8 @@ async fn set_11_safari_identity_passes_anubis() {
             .await
             .expect("the page didn't arrive")
             .unwrap();
-        let done = matches!(
-            response,
-            rynx::network::NetworkResponse::Success(..) | rynx::network::NetworkResponse::Error(..)
-        );
+        let done =
+            matches!(response, rynx::network::NetworkResponse::Success(..) | rynx::network::NetworkResponse::Error(..));
         rynx::event_handler::handle_network_event(&mut app, response, 120).unwrap();
         if done {
             break;

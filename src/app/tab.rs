@@ -62,6 +62,8 @@ pub struct BrowserTab {
     pub record_visit_after_render: bool,
     /// A jump within the page selected the first link after it: Tab goes there, not past it
     pub tab_from_jump: bool,
+    /// The links on screen labelled with numbers (f), while one is being chosen
+    pub hints: Option<Hints>,
     /// #fragment to jump to once the page has been laid out
     jump_after_render: Option<String>,
     /// Scroll and cursor position to return to when the page being loaded arrives (going back,
@@ -195,6 +197,7 @@ impl BrowserTab {
     /// Mark the shown content as changed (e.g. toggling source view)
     pub fn content_changed(&mut self) {
         self.tab_from_jump = false;
+        self.hints = None;
         self.content_version += 1;
         self.rendered_content.clear();
         self.link_regions.clear();
@@ -308,6 +311,8 @@ impl BrowserTab {
 
     /// Keep the selected link and cursor inside the current content after a re-render
     fn clamp_positions(&mut self) {
+        // Laid out again (a resize): the labels would point at the wrong links
+        self.hints = None;
         if self.selected_link_index >= self.link_regions.len() {
             self.selected_link_index = 0;
         }
@@ -367,6 +372,7 @@ impl BrowserTab {
             render_pending_width: None,
             record_visit_after_render: false,
             tab_from_jump: false,
+            hints: None,
             jump_after_render: None,
             pending_restore: None,
             restore_after_render: None,

@@ -89,6 +89,7 @@ them (`reload = F5` adds a key, `reload = F5 only` replaces them, `reload = none
 | :--- | :--- |
 | `e` or `o`, `O` | Type an address or search words (`O`: in a new tab) |
 | `Tab` / `Shift+Tab`, `Enter`, click | Select links and fields; open or use the selected one |
+| `f`, `;` | Number the links and fields on screen; type a number to open one (`;`: in a new tab) |
 | `Backspace` / `Right` (or `H` / `L`), `r` | Back / forward, reload |
 | `h` `j` `k` `l`, arrows, wheel, `PageUp` / `PageDown`, `Ctrl+u` / `Ctrl+d`, `g` / `G` | Move and scroll |
 | `t`, `x` (or `w`), `X` | New tab, close tab, reopen the tab closed last |

@@ -657,3 +657,31 @@ fn pasted_text_is_text_not_keys() {
     rynx.quit();
     assert!(rynx.wait_exit() && rynx.left_terminal_as_found(), "the terminal wasn't put back as it was");
 }
+
+/// NAV-11: f numbers the links on screen, drawn reversed so they read without colour, and a
+/// number opens one; ; opens it in a new tab
+#[test]
+fn nav_11_link_hints() {
+    let site = two_pages();
+    let (_home, mut rynx) = started("hints");
+    rynx.open(&site.url("/a"));
+    rynx.wait_for("Alpha page");
+    rynx.keys("f");
+    rynx.wait_for("Follow which link");
+    // Each number covers the start of its link
+    rynx.wait_for("1o to beta");
+    rynx.wait_for("2amma");
+    let (row, col) = rynx.find("2amma").unwrap();
+    assert!(rynx.reversed_cells().contains(&(row, col)), "{}", rynx.screen());
+    rynx.keys("2");
+    rynx.wait_for("Gamma page");
+
+    rynx.keys("H");
+    rynx.wait_for("Alpha page");
+    rynx.keys(";");
+    rynx.wait_for("Open which link in a new tab");
+    rynx.keys("1");
+    rynx.wait_for("Beta page");
+    assert!(rynx.text().contains("Alpha"), "the first tab is still there:\n{}", rynx.screen());
+    rynx.quit();
+}

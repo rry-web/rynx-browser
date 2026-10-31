@@ -1,4 +1,4 @@
-use crate::app::App;
+use crate::app::{App, HintResult};
 use crate::constants::*;
 use crate::constants::{MOUSE_SCROLL_LINES, UI_HEIGHT_OFFSET, UI_ROW_OFFSET};
 use crate::models::{DownloadStatus, InputMode};
@@ -87,6 +87,11 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent, terminal_width: u16, termi
         return Ok(false);
     }
 
+    // Link hints take every key until a link is chosen: digits choose, anything else cancels
+    if app.current_tab().hints.is_some() {
+        return handle_hint_key(app, key, terminal_width, terminal_height);
+    }
+
     let active_mode = app.current_tab().input_mode;
 
     match active_mode {
@@ -100,6 +105,34 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent, terminal_width: u16, termi
         InputMode::Search => handle_search_mode(app, key),
         InputMode::FormEdit => handle_form_edit_mode(app, key, terminal_width, terminal_height),
     }
+}
+
+/// A key typed while the links on screen are numbered
+fn handle_hint_key(app: &mut App, key: KeyEvent, terminal_width: u16, terminal_height: u16) -> Result<bool> {
+    let Some(hints) = app.current_tab().hints.as_mut() else { return Ok(false) };
+    let result = match key.code {
+        KeyCode::Char(c) if c.is_ascii_digit() => hints.digit(c),
+        KeyCode::Enter => hints.chosen(),
+        KeyCode::Backspace if !hints.typed.is_empty() => {
+            hints.typed.pop();
+            HintResult::Waiting
+        }
+        _ => HintResult::Cancelled,
+    };
+    match result {
+        HintResult::Waiting => {}
+        HintResult::Cancelled => app.cancel_hints(if key.code == KeyCode::Esc { "Ready" } else { "No such link" }),
+        HintResult::Chosen(region) => {
+            let new_tab = app.current_tab().hints.take().is_some_and(|h| h.new_tab);
+            let tab = app.current_tab();
+            tab.selected_link_index = region;
+            tab.status_message = String::from("Ready");
+            // As if selected and Enter (or F) pressed
+            let open = KeyEvent::from(if new_tab { KeyCode::Char('F') } else { KeyCode::Enter });
+            return handle_normal_mode(app, open, terminal_width, terminal_height);
+        }
+    }
+    Ok(false)
 }
 
 /// Text pasted into the terminal (bracketed paste), as one piece: into the address bar, find or
@@ -407,6 +440,8 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
                 }
             }
         }
+        KeyCode::Char('f') => app.show_hints(viewport_height(terminal_height), false),
+        KeyCode::Char(';') => app.show_hints(viewport_height(terminal_height), true),
         KeyCode::Char('p') => app.toggle_i2p_mode(),
         KeyCode::Char('S') => app.follow_link(crate::app::SETTINGS_PAGE.to_string()),
         KeyCode::Char('A') => app.open_archived_copy(),

@@ -38,6 +38,12 @@ const ACTIONS: &[Action] = &[
     Action { name: "cursor_down", about: "Move the cursor down", defaults: &["j"] },
     Action { name: "next_link", about: "Select the next link or field", defaults: &["Tab"] },
     Action { name: "previous_link", about: "Select the previous link or field", defaults: &["Shift+Tab"] },
+    Action { name: "hints", about: "Number the links and fields on screen, to open one", defaults: &["f"] },
+    Action {
+        name: "hints_in_new_tab",
+        about: "Number the links on screen, to open one in a new tab",
+        defaults: &[";"],
+    },
     Action { name: "open", about: "Open the link, or use the field", defaults: &["Enter"] },
     Action { name: "back", about: "Back", defaults: &["Backspace", "Left", "H"] },
     Action { name: "forward", about: "Forward", defaults: &["Right", "L"] },

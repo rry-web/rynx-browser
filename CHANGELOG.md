@@ -3,12 +3,22 @@
 ## [Unreleased]
 
 ### Added
+- Link hints: `f` numbers every link and field on screen, and typing a number opens it (with
+  twelve links, `7` opens at once and `1` waits for a second digit; Enter takes it as it is).
+  `;` does the same for links, opening them in a new tab. The numbers are drawn in reverse
+  video, so they read without colour. Both keys can be changed in `keys.conf` (`hints`,
+  `hints_in_new_tab`).
 - `scripts/i2p_sites.py` (in the source, Python, nothing to install) finds I2P sites worth a look:
   `update` gathers the address books of reg.i2p, notbob.i2p and stats.i2p through your router,
   `check` visits sites' front pages a few at a time (text only, no redirects followed) to see
   which answer and what they're called, and `search WORDS` and `new` list them with addresses to
   open in rynx. Sites are reached by their `.b32.i2p` addresses, so the router's address book
   isn't changed.
+
+### Fixed
+- The terminal tests could crash on static musl builds (which failed the 0.3.6 release build, so
+  0.3.6 was never published): the library running rynx in a pseudo-terminal looked up the shell
+  with `getpwuid`, which isn't thread-safe, from tests starting at once.
 
 ## [0.3.6]
 

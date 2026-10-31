@@ -9,10 +9,8 @@ working one. Bugs found in testing come before all of it.
 1. **The system-proxy gap.** A proxy set in the system's settings bypasses the check that refuses
    public names resolving to local addresses (see `src/dns.rs`). It's the one known hole in the
    network protections, and small.
-2. **Link hints.** `f` (unbound now) labels every visible link with a short code; typing it
-   follows the link. `F` already opens the selected link in a new tab, so hints in a new tab need
-   another key or a modifier. This finishes the Vim-style keys, and it's essential for voice control (below). Multi-key
-   sequences (`gg`, `gt`) would come with the same input handling.
+2. **Multi-key sequences** (`gg`, `gt`), now that link hints are done (`f`, and `;` for a new
+   tab; numbered, so they can be said as well as typed).
 3. **Homebrew tap.** A formula pointing at the release builds; then the AUR and others.
 4. **Session restore (opt-in).** Reopen the last session's tabs at start.
 
@@ -102,7 +100,7 @@ the base. A board with a built-in NPU is the easier step up if the CPU isn't eno
 
 What rynx would need, in order:
 
-1. **Link hints** (above): "follow 12" instead of "next link" twenty times.
+1. **Link hints** (done): "follow 12" instead of "next link" twenty times.
 2. **A monochrome mode:** no colour, meaning carried by bold, underline and reverse; and honour
    the `NO_COLOR` convention.
 3. **A control socket** taking action names (`next_tab`, `open_in_new_tab`... the names in

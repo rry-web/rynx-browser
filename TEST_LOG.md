@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Rows marked Automated are covered by the tests TESTING.md names; the rest need a person.
 
-Total checks: 162; 20 still need a person (see TESTING.md's "Still by hand"), the rest are automated.
+Total checks: 163; 20 still need a person (see TESTING.md's "Still by hand"), the rest are automated.
 
 
 ## Automated checks
@@ -72,6 +72,7 @@ Total checks: 162; 20 still need a person (see TESTING.md's "Still by hand"), th
 | NAV-08 | Redirects within a local server |  | Automated |  |  |
 | NAV-09 | HTTP-only sites are not downgraded |  | Automated |  |  |
 | NAV-10 | Meta refreshes and script redirects |  | Automated |  |  |
+| NAV-11 | Link hints |  | Automated |  |  |
 
 ## Forms
 

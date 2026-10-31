@@ -452,6 +452,32 @@ fn overlay_form_controls(lines: &mut [Line], tab: &crate::app::BrowserTab, start
     }
 }
 
+/// Each link's number (f) over the start of the link, in reverse video so it reads without
+/// colour; links the typing no longer matches lose theirs
+fn overlay_hints(lines: &mut [Line], hints: &crate::app::Hints, regions: &[LinkRegion], start_index: usize) {
+    let style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
+    for (label, index) in hints.labels() {
+        let Some(region) = regions.get(index) else { continue };
+        let Some(line) = region.line_index.checked_sub(start_index).and_then(|i| lines.get_mut(i)) else {
+            continue;
+        };
+        // A line ending before the label would: padded, so the label still shows
+        let width: usize = line.spans.iter().map(|s| s.width()).sum();
+        let (from, to) = (region.x_start, region.x_start + label.len());
+        if width < to {
+            line.spans.extend(std::iter::repeat_n(Span::raw(" "), to - width));
+        }
+        replace_columns(line, from, to, &label);
+        let mut column = 0;
+        for span in line.spans.iter_mut() {
+            if column >= from && column < to {
+                span.style = style;
+            }
+            column += span.width();
+        }
+    }
+}
+
 /// Replace the characters in columns `from..to` of a line split into characters with `text`,
 /// keeping the style of the first replaced character
 fn replace_columns(line: &mut Line, from: usize, to: usize, text: &str) {
@@ -610,6 +636,10 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
             start_index,
             end_index,
         );
+    }
+
+    if let Some(hints) = &active_tab.hints {
+        overlay_hints(&mut viewport_content, hints, &active_tab.link_regions, start_index);
     }
 
     let content = Paragraph::new(viewport_content).scroll((0, 0)).block(
