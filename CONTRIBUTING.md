@@ -92,7 +92,7 @@ signature, and a message signed with the backup key, in `tests/data/`).
 | `fuzz.yml` | nightly | coverage-guided fuzzing of every target, keeping their corpora |
 | `live.yml` | weekly | the tests that need the internet, including real sites laid out as rynx does |
 | `mutants.yml` | monthly | mutation testing of the security-critical modules (reports only) |
-| `release.yml` | a `v*` tag | checks, builds, signing, the GitHub release, crates.io |
+| `release.yml` | a `v*` tag | checks, builds, signing, the GitHub release |
 
 Dependabot proposes dependency and action updates weekly. Actions are pinned to commit hashes;
 update them deliberately, checking what changed.

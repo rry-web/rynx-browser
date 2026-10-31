@@ -293,7 +293,7 @@ fn upd_02_cargo_installs() {
     let mut rynx = Rynx::start_with(&program, &home, &[], &env);
     rynx.wait_for("rynx 99.0.0 is available");
     rynx.keys("U");
-    rynx.wait_for("cargo install rynx --version 99.0.0");
+    rynx.wait_for("--tag v99.0.0 rynx");
     assert!(!rynx.text().contains("Download it"), "a download button for a Cargo install");
     rynx.quit();
 }

@@ -250,7 +250,7 @@ async fn cargo_installs_are_told_the_command_and_i2p_never_checks() {
     press_button(&mut app, "check");
     next_update_message(&mut app).await;
     let page = text(&mut app);
-    assert!(page.contains("cargo install rynx --version 99.0.0-beta.1"), "{page}");
+    assert!(page.contains("--tag v99.0.0-beta.1 rynx"), "{page}");
     assert!(!app.current_tab().controls.iter().any(|c| c.name == "install"));
 
     let (locked, _) = rynx::settings::Settings::parse("network = i2p");

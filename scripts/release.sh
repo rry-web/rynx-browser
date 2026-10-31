@@ -4,7 +4,7 @@
 # On an up-to-date main with the changes listed under "## [Unreleased]" in CHANGELOG.md, this sets
 # the version (Cargo.toml, both Cargo.locks, README, CHANGELOG), runs every check, commits and pushes,
 # waits for CI to pass, then tags. The tag starts the release workflow, which builds, signs and
-# publishes the GitHub release and the crate. Needs the GitHub CLI (gh), signed in.
+# publishes the GitHub release (not crates.io). Needs the GitHub CLI (gh), signed in.
 set -eu
 cd "$(dirname "$0")/.."
 

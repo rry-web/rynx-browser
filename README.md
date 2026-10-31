@@ -10,16 +10,17 @@ A private, hardened terminal web browser written in Rust, loosely inspired by **
 
 ## Installation
 
-With [Rust](https://rustup.rs) 1.90 or newer:
-
-```sh
-cargo install rynx
-```
-
-Or download your system's build from the [releases page](https://github.com/rry-web/rynx-browser/releases)
+Download your system's build from the [releases page](https://github.com/rry-web/rynx-browser/releases)
 (Linux x86_64 and ARM64, macOS Apple Silicon and Intel, Windows), extract it, and run `rynx` in a
 terminal. The builds aren't code-signed yet, so macOS and Windows warn the first time; the release
 notes say how to proceed and how to verify a download. Once installed, rynx updates itself (`U`).
+
+Or with [Rust](https://rustup.rs) 1.90 or newer, from the repository (new versions are released
+on GitHub only; the crate on crates.io is an old one):
+
+```sh
+cargo install --locked --git https://github.com/rry-web/rynx-browser rynx
+```
 
 From source: clone this repository and run `cargo run --release`. Options: `--version`, `--help`,
 and `--no-sandbox` (for troubleshooting).

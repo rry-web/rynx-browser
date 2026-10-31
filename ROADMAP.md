@@ -130,8 +130,9 @@ the voice controller on a Raspberry Pi, and checking every page and box at 80×3
   same in `fuzz/`) frees the old builds.
 - **Releasing** needs the person's go-ahead each time, and is run by them
   (`scripts/release.sh X.Y.Z`): it bumps the version, runs every check, pushes, waits for CI and
-  tags; the tag's workflow builds, signs and publishes to GitHub and crates.io. A tag can't be
-  moved once pushed, so a failed release moves on to the next version.
+  tags; the tag's workflow builds, signs and publishes to GitHub (not crates.io, since 0.3.7: rynx
+  changes too often). A tag can't be moved once pushed, so a failed release moves on to the next
+  version.
 - **Commits:** check `git status` before committing everything; an editor's swap file
   (`.TESTING.md.swp`) once slipped in. `*.swp` is ignored now.
 - **Testing:** TESTING.md maps every check to its test and lists the few still done by hand.

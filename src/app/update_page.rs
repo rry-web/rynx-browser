@@ -106,8 +106,10 @@ impl App {
                          value=\"Download it, and install it when rynx next starts\"></form>\
                          <p>It's installed only if it carries the release key's signature.</p>"
                         .to_string(),
+                    // From the release's tag: new versions are on GitHub, not crates.io
                     Installed::Cargo => format!(
-                        "<p>This copy was installed with Cargo; update it with:</p><pre>cargo install rynx --version {}</pre>",
+                        "<p>This copy was installed with Cargo; update it with:</p>\
+                         <pre>cargo install --locked --git https://github.com/rry-web/rynx-browser --tag v{} rynx</pre>",
                         release.version
                     ),
                     Installed::Homebrew => "<p>This copy was installed with Homebrew; update it with:</p><pre>brew upgrade rynx</pre>"

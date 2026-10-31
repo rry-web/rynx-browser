@@ -48,6 +48,9 @@
   isn't changed.
 
 ### Changed
+- Releases are published on GitHub only, no longer on crates.io, while rynx changes this often.
+  `cargo install --locked --git https://github.com/rry-web/rynx-browser rynx` installs from the
+  repository, and the updates page tells Cargo installs that command.
 - A proxy set in the system's settings (or `HTTPS_PROXY` and the like) is no longer used on the
   clearweb unless the new `system_proxy` setting (also on the settings page) turns it on. A proxy
   looks names up itself, so through it a public name could still reach your local network, past
