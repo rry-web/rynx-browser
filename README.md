@@ -61,7 +61,9 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
   services (reg.i2p, notbob, stats.i2p), and a site's address-helper links (`?i2paddresshelper=`)
   work as the router expects. `about:i2p` shows how to get torrents and mail through the router's
   own programs, and magnet links are copied for a torrent client. The router rynx starts can let
-  torrent clients and other I2P programs on your computer use it (SAM, opt-in)
+  torrent clients and other I2P programs on your computer use it (SAM, opt-in). In the source,
+  `scripts/i2p_sites.py` finds sites worth a look: it gathers the registries' address books,
+  sees which sites answer, and searches their names, titles and descriptions
 
 **Slow connections and staying in control**
 - A page cache: Back is instant, unchanged pages aren't downloaded again, unreachable sites show
@@ -180,6 +182,7 @@ system's settings bypasses the local-network check for names.
 scripts/check.sh --quick          # formatting, lints and tests
 scripts/check.sh                  # everything CI checks
 scripts/release.sh 0.3.6         # a release, start to finish
+scripts/i2p_sites.py update       # I2P sites from the registries: then check, search WORDS, new
 ```
 
 CI tests every push on Linux, macOS and Windows, including terminal tests that run the real

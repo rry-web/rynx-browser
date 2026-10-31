@@ -100,14 +100,34 @@ async fn nav_09_http_only_sites_arent_downgraded() {
     }
 }
 
-/// SET-11: git.kernel.org lets rynx's honest identity through, without an Anubis check
+/// SET-11 (and SET-12, for real): with Safari's identity git.kernel.org shows its Anubis check,
+/// and rynx passes it by itself, as when browsing
 #[tokio::test]
 #[ignore]
-async fn set_11_honest_identity_passes() {
-    let (_, lines) = page("https://git.kernel.org/", 120, false).await;
-    let text = joined(&lines);
-    assert!(!text.contains("Making sure you're not a bot"), "an Anubis check");
-    assert!(text.contains("linux"), "no repository list");
+async fn set_11_safari_identity_passes_anubis() {
+    let (tx, rx) = tokio::sync::mpsc::channel(10);
+    let mut app = rynx::app::App::new(tx, rx).unwrap();
+    app.clipboard = None;
+    app.render_in_background = false;
+    app.follow_link("https://git.kernel.org/".to_string());
+    loop {
+        let response = tokio::time::timeout(std::time::Duration::from_secs(90), app.rx.recv())
+            .await
+            .expect("the page didn't arrive")
+            .unwrap();
+        let done = matches!(
+            response,
+            rynx::network::NetworkResponse::Success(..) | rynx::network::NetworkResponse::Error(..)
+        );
+        rynx::event_handler::handle_network_event(&mut app, response, 120).unwrap();
+        if done {
+            break;
+        }
+    }
+    let text: Vec<String> = app.current_tab().rendered_content.iter().map(|l| l.to_string()).collect();
+    let text = joined(&text);
+    assert!(!text.contains("Making sure you're not a bot"), "the Anubis check wasn't passed: {text}");
+    assert!(text.contains("linux"), "no repository list: {text}");
 }
 
 /// SET-16: the Internet Archive answers for an address

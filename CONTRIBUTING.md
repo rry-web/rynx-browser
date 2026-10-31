@@ -23,6 +23,7 @@ FUZZ_ITERATIONS=100000 cargo test --release --test fuzz_render
 cargo +nightly fuzz run render -- -max_total_time=60    # coverage-guided fuzzing: fuzz/README.md
 cargo run --example render_file -- page.html 100        # see how rynx lays out a saved page
 cargo llvm-cov --open        # test coverage, in the browser (needs cargo-llvm-cov and llvm-tools-preview)
+python3 scripts/test_i2p_sites.py   # the I2P site finder's tests (no network needed)
 ```
 
 If another Rust (Homebrew's, say) comes first on PATH, run rustup's tools by path, as
@@ -55,7 +56,7 @@ Maintainers release with one command, on an up-to-date `main` whose changes are 
 `## [Unreleased]`:
 
 ```sh
-scripts/release.sh 0.2.0-beta.7
+scripts/release.sh 0.3.6
 ```
 
 It sets the version, runs the checks, pushes, waits for CI, and tags; the release workflow then

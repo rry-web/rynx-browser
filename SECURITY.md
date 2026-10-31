@@ -29,4 +29,5 @@ Anything that breaks one of the promises in the README's
 
 ## Supported versions
 
-Only the latest release is supported; rynx is in beta, and fixes aren't backported.
+Only the latest release is supported: fixes aren't backported, and the updater offers each new
+release to existing copies.

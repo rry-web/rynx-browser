@@ -141,6 +141,17 @@ Items marked **(priority)** haven't been checked by a person yet.
       next image, `n`/`p` step between images, `+`/`-` zoom (`h`/`l` move across), `0` fits the
       width, and the foot says which image of how many, at what zoom.
 
+### Encrypted DNS
+- [ ] **NET-02 (priority) Encrypted DNS on your networks.** With the default settings, browse a
+      few sites at home and on another network you use (work, a café's Wi-Fi), then open
+      `https://crypto.cloudflare.com/cdn-cgi/trace`.
+      *Expected:* pages load as before; the trace page says `sni=encrypted`. Choosing System for
+      DNS in settings (`S`), it says `sni=plaintext`. On a network that blocks encrypted DNS, or
+      whose Wi-Fi sign-in page needs its own, the error names the provider and says to choose
+      System. Note any network where that happens.
+      *Automated already:* each provider, the local-network refusal and ECH (`encrypted_dns`,
+      live, weekly); real networks need a person.
+
 ### Reader mode
 - [ ] **READ-01 News article.** Open an article on a news site (BBC News, Ars Technica) and press
       `R`.
@@ -229,7 +240,7 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | SET-04 | Bad settings | settings::set_04_bad_settings |
 | SET-05 | Bookmarks | settings::set_05_bookmarks |
 | SET-06 | Bookmarks under the Linux sandbox | CI's Linux job runs the terminal suite inside Landlock (settings::set_05_bookmarks) |
-| SET-11 | User-Agent | tests/live_sites::set_11_honest_identity_passes |
+| SET-11 | User-Agent: Safari's, with its headers; Anubis passed natively | settings::the_user_agent_is_sent; tests/live_sites::set_11_safari_identity_passes_anubis |
 | SET-13 | Copy mode | settings::set_13_copy_mode |
 | SET-14 | Settings page | settings::set_14_settings_page |
 | SET-15 | I2P lock | settings::set_15_network_lock |
@@ -295,13 +306,13 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | KEY-01 | Changed keys in a real terminal | settings::key_01_changed_keys |
 | KEY-02 | Mistakes in keys.conf | main::a_mistake_in_keys_conf_is_named |
 | IMG-03 | Loading settings | pages::img_03_own_images_load_by_themselves |
-| NAV-01 | Meta refreshes followed (noscript too), Back skipping them, loops stopped, countdowns and script redirects as links | `redirects` (all) |
+| NAV-10 | Meta refreshes followed (noscript too), Back skipping them, loops stopped, countdowns and script redirects as links | `redirects` (all) |
 | NET-01 | Encrypted DNS through each provider, local names still refused, ECH hiding the site's name | encrypted_dns (live, weekly); ech (HPKE, RFC 9180 vector); settings::dns_setting_is_checked |
 | CACHE-01 | Back is instant | browsing::cache_01_back_is_instant |
 | CACHE-02 | I2P site gone | i2p::cache_02_i2p_site_gone |
-| CACHE-04 | No tracking through cache validators (ETag, Last-Modified) for sites without cookies | cache::sites_not_allowed_cookies_never_get_their_etags_back |
 | CACHE-03 | Disk cache | pages::cache_03_disk_cache |
 | CACHE-04 | Snapshots | pages::cache_04_snapshots |
+| CACHE-05 | No tracking through cache validators (ETag, Last-Modified) for sites without cookies | cache::sites_not_allowed_cookies_never_get_their_etags_back |
 | READ-02 | Wikipedia | tests/live_sites::render_02_read_02_wikipedia |
 | READ-03 | Stays on | browsing::read_03_reader_mode_stays_on |
 | MCP-01 | Listing tools | tools::mcp_01_listing_tools |

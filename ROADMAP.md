@@ -40,6 +40,13 @@ working one. Bugs found in testing come before all of it.
   questions while a tool runs.
 - **Code-signed builds** for macOS (Apple Developer account, about $99 a year, plus
   notarization) and Windows (a certificate, or Azure Trusted Signing). A cost decision.
+- **A Tor mode**, beside I2P mode: through a running Tor's SOCKS port, or arti (Tor in Rust)
+  built in, with the same lock setting; Tor Browser's identity rather than Safari's. The only
+  thing that hides your address from your network and sites on the clearweb.
+- **A "new identity" key:** forget, at once, the session's cookies, Anubis passes and cached
+  pages, before switching to something unrelated.
+- **Reproducible builds**, so anyone can check a release was built from the published source
+  (worth more while the builds aren't code-signed).
 - **"Needs JavaScript" pages, next step:** when a page is only a JavaScript notice, show the
   article the page carries as data (`application/ld+json`, Next.js's `__NEXT_DATA__`, its
   description), in reader mode or in place of the notice. (Meta refreshes and simple script

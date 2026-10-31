@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Rows marked Automated are covered by the tests TESTING.md names; the rest need a person.
 
-Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), the rest are automated.
+Total checks: 162; 20 still need a person (see TESTING.md's "Still by hand"), the rest are automated.
 
 
 ## Automated checks
@@ -71,6 +71,7 @@ Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), th
 | NAV-07 | Fragment link in a new tab |  | Automated |  |  |
 | NAV-08 | Redirects within a local server |  | Automated |  |  |
 | NAV-09 | HTTP-only sites are not downgraded |  | Automated |  |  |
+| NAV-10 | Meta refreshes and script redirects |  | Automated |  |  |
 
 ## Forms
 
@@ -158,6 +159,7 @@ Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), th
 |----|-------|:--------:|--------|------|-------|
 | CLIP-01 | Copy and paste still work |  | Fail | 2026-10-30 | Pasting text with line breaks into the address bar ran its lines as Enter and keys (a "t" opened a tab, so Back did nothing). Fixed after 0.3.3 (bracketed paste, CLIP-03); paste otherwise worked. |
 | CLIP-02 | No clipboard available (Linux) | Yes | Automated |  |  |
+| CLIP-03 | Pasted text arrives as text, not keys |  | Automated |  |  |
 
 ## Security
 
@@ -208,6 +210,8 @@ Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), th
 | SMALL-05 | Not in I2P mode |  | Automated |  |  |
 | SMALL-06 | Feeds |  | Automated |  |  |
 | SMALL-07 | Bookmarks and history |  | Automated |  |  |
+| SMALL-08 | Micron (NomadNet) pages |  | Automated |  |  |
+| SMALL-09 | NomadNet through the Reticulum bridge |  | Automated |  |  |
 
 ## Updates
 
@@ -232,6 +236,8 @@ Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), th
 | IMG-02 | macOS Terminal |  | Pass | 2026-10-30 | Coloured blocks, blurry as expected without a graphics protocol. |
 | IMG-03 | Loading settings |  | Automated |  |  |
 | IMG-04 | Images in tables | Yes |  |  |  |
+| IMG-05 | Sizes and galleries |  |  |  |  |
+| IMG-06 | Reading in the viewer |  |  |  |  |
 
 ## Cache and snapshots
 
@@ -241,6 +247,14 @@ Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), th
 | CACHE-02 | I2P site gone | Yes | Automated |  |  |
 | CACHE-03 | Disk cache |  | Automated |  |  |
 | CACHE-04 | Snapshots |  | Automated |  |  |
+| CACHE-05 | No tracking through cache validators |  | Automated |  |  |
+
+## Encrypted DNS
+
+| ID | Check | Priority | Result | Date | Notes |
+|----|-------|:--------:|--------|------|-------|
+| NET-01 | Encrypted DNS and ECH |  | Automated |  |  |
+| NET-02 | Encrypted DNS on your networks | Yes |  |  |  |
 
 ## Reader mode
 
@@ -268,6 +282,8 @@ Total checks: 149; 17 still need a person (see TESTING.md's "Still by hand"), th
 | I2P-02 | HTTPS through I2P | Yes | Automated |  |  |
 | I2P-03 | Jump services | Yes | Automated |  |  |
 | I2P-04 | Toggling back | Yes | Automated |  |  |
+| I2P-06 | This computer in I2P mode |  | Automated |  |  |
+| I2P-08 | Address helper links |  | Automated |  |  |
 
 ## I2P router (needs i2pd installed, and no other router running)
 
