@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.6]
 
 ### Added
 - Encrypted DNS: the `dns` setting (also on the settings page) looks names up over DNS over
@@ -18,15 +18,6 @@
   (Cloudflare's sites do, for one). A site refusing its key is reached as before. rustls does the
   TLS; its HPKE encryption comes from the pure-Rust `hpke` crate, checked against RFC 9180's
   test vectors, so the builds still need no C crypto library.
-
-### Fixed
-- The page cache could track you like a cookie. To ask whether a cached page had changed, rynx
-  sent the site back the `ETag` (or `Last-Modified` date) it gave with the page, and a site can
-  make that unique to each visitor and recognise them by it, across restarts with the disk cache
-  on, even when it isn't allowed cookies. Now only sites you let keep cookies (`C`) are asked;
-  others' pages are downloaded again once stale, and their validators are never kept.
-
-### Added
 - Pages that say "you need JavaScript to continue" often carry their own way on for browsers
   without it, which rynx now takes:
   - A meta refresh (`<meta http-equiv="refresh">`, often inside `<noscript>`) of up to 5 seconds
@@ -58,6 +49,13 @@
   `n`/`p` go to the page's next or previous image, with the next one loaded ahead. Space at the
   bottom of an image goes on to the next.
 - Images up to 32 MB load (8 MB before); long comic strips decode, and are kept sharper.
+
+### Fixed
+- The page cache could track you like a cookie. To ask whether a cached page had changed, rynx
+  sent the site back the `ETag` (or `Last-Modified` date) it gave with the page, and a site can
+  make that unique to each visitor and recognise them by it, across restarts with the disk cache
+  on, even when it isn't allowed cookies. Now only sites you let keep cookies (`C`) are asked;
+  others' pages are downloaded again once stale, and their validators are never kept.
 
 ## [0.3.5]
 
