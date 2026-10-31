@@ -40,7 +40,6 @@ jobs:
 
   build:
     name: Build ${{ matrix.target }}
-    needs: checks
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -51,14 +50,9 @@ jobs:
       matrix:
         include:
           # Linux builds use an older Ubuntu so they run on older glibc versions too
-          - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, test: true }
-          - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm, test: true }
           # Statically linked: runs on any x86_64 Linux, including musl distributions
           - { target: x86_64-unknown-linux-musl, os: ubuntu-22.04, test: true }
-          - { target: aarch64-apple-darwin, os: macos-latest, test: true }
           # Cross-compiled on Apple Silicon, so its tests can't run natively
-          - { target: x86_64-apple-darwin, os: macos-latest, test: false }
-          - { target: x86_64-pc-windows-msvc, os: windows-latest, test: true }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -81,9 +75,23 @@ jobs:
             exit 1
           fi
 
-      - name: Test
-        if: matrix.test
-        run: cargo test --locked --target ${{ matrix.target }}
+      - name: Diagnose the terminal tests' crash
+        run: |
+          sudo apt-get install -y gdb
+          T=${{ matrix.target }}
+          cargo test --locked --target $T --test terminal --no-run
+          bin=$(ls target/$T/debug/deps/terminal-* | grep -v '\.d$')
+          lscpu | grep -E "Model name|Flags" | cut -c1-400
+          echo "::group::One at a time"
+          "$bin" --test-threads=1 2>&1 | tail -40 || true
+          echo "::endgroup::"
+          for run in 1 2; do
+            echo "== gdb, in parallel, run $run"
+            gdb -batch -ex "set pagination off" -ex "handle SIGPIPE nostop noprint" -ex run \
+              -ex bt -ex "info registers rip rsp" -ex "x/6i \$pc" -ex "info threads" -ex "thread apply all bt 25" \
+              --args "$bin" 2>&1 | grep -v "^\[New Thread\|^\[Thread .* exited\|^\[Detaching\|^\[Inferior" | tail -400
+          done
+          exit 1
       - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
         with:
           tool: cargo-auditable,cargo-audit
