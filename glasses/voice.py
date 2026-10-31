@@ -27,6 +27,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import zipfile
 from pathlib import Path
@@ -106,11 +107,18 @@ PHRASES = {
     "switch network": "i2p",
     "show keys": "help",
     "quit browser": "quit",
-    # Handled here rather than by rynx
+    # Handled here rather than by rynx: free words come next (or straight after, in one breath)
     "search": "@dictate open",
+    "search for": "@dictate open",
     "go to": "@dictate open",
+    "look up": "@dictate open",
     "find": "@dictate find",
     "type": "@dictate type",
+    "fill": "@dictate fill",
+    "fill in": "@dictate fill",
+    "search here": "@dictate fill",
+    "again": "@again",
+    "try again": "@again",
     "read": "@read",
     "read page": "@read",
     "read this": "@read",
@@ -280,14 +288,49 @@ class Speaker:
         self.process = None
 
 
+# rynx's modes that type text: there, what's said is typed
+TYPING_MODES = {"Editing", "Search", "FormEdit"}
+
+PROMPTS = {"open": "Where to?", "find": "Find what?", "fill": "Type what?", "type": "Type what?"}
+
+
+def dictation_in(text):
+    """Free words said straight after search, go to, find, type or fill, in one breath: where
+    they go and the words, or None"""
+    words = text.split()
+    for n in (2, 1):
+        lead = " ".join(words[:n]).lower()
+        meaning = PHRASES.get(lead, "")
+        if meaning.startswith("@dictate ") and len(words) > n:
+            return meaning.split()[1], " ".join(words[n:])
+    return None
+
+
 class Controller:
-    """Turns what was heard into commands, keeping track of whether free words are expected next"""
+    """Turns what was heard into commands, keeping track of whether free words are expected next,
+    and of words just typed, which wait for send, again or cancel"""
 
     def __init__(self, rynx, speaker, log):
         self.rynx = rynx
         self.speaker = speaker
         self.log = log
-        self.dictating = None  # the command the next free words go to: "open", "find" or "type"
+        self.dictating = None  # where the next free words go: "open", "find", "fill" or "type"
+        self.typed = None  # what was just typed, until send, again or cancel
+
+    def utterance(self, command_text, free_text):
+        """One thing said, as both recognisers heard it (push-to-talk and hold-to-talk): the
+        fixed commands', and the free words', for "search pancake recipes" in one breath"""
+        if self.dictating:
+            return self.heard(free_text or command_text)
+        found = dictation_in(free_text) if self.typed is None else None
+        if found and understand(command_text) not in ("@dictate " + found[0], None):
+            found = None
+        if found:
+            target, words = found
+            if not self.start_dictation(target, command_text or target, quiet=True):
+                return True
+            return self.heard(words)
+        return self.heard(command_text if command_text.replace("[unk]", "").strip() else free_text)
 
     def heard(self, text):
         """Something was heard. Returns False once rynx has quit."""
@@ -295,11 +338,20 @@ class Controller:
         if not text or text == "[unk]":
             return True
         if self.dictating:
-            command, self.dictating = self.dictating, None
-            words = address_words(text) if command == "open" else text
-            self.log(f"{command}: {words}")
-            self.rynx.send(f"heard {command} {words}")
-            return self.run(f"{command} {words}")
+            return self.dictated(text)
+        # Words typed wait for send, again or cancel; another command goes on as usual, and
+        # anything else is ignored (it isn't typed)
+        if self.typed is not None:
+            if understand(text) is None and not split_commands(text):
+                self.rynx.send(f'heard {text}: say send, again, or cancel for "{self.typed}"')
+                return True
+            typed, self.typed = self.typed, None
+            if understand(text) == "@again":
+                self.rynx.send(f"erase {len(typed)}")
+                self.dictating = "type"
+                self.rynx.send("heard again: say it now")
+                self.speaker.say("Say it again")
+                return True
         # Several commands without a pause between them: each in turn
         parts = split_commands(text) if understand(text) is None else None
         if parts and len(parts) > 1:
@@ -313,17 +365,14 @@ class Controller:
         if meaning and meaning.startswith("follow") and number(text.replace("[unk]", "").split()) is not None:
             mode = self.rynx.send("status").get("mode")
             meaning = {"Hints": meaning, "Menu": meaning.replace("follow", "choose")}.get(mode)
-        if meaning is None:
+        if meaning is None or meaning == "@again":
             self.log(f"not a command: {text}")
             self.rynx.send(f"heard {text} (not a command; say help)")
             return True
         self.log(f"{text} -> {meaning}")
         self.rynx.send(f"heard {text}")
         if meaning.startswith("@dictate "):
-            self.dictating = meaning.split()[1]
-            prompt = {"open": "Where to?", "find": "Find what?", "type": "Type what?"}[self.dictating]
-            self.rynx.send(f"heard {text}: {prompt} (say it now)")
-            self.speaker.say(prompt)
+            self.start_dictation(meaning.split()[1], text)
             return True
         if meaning == "@stop":
             self.speaker.stop()
@@ -337,9 +386,47 @@ class Controller:
             self.speaker.say(f"{answer.get('title') or 'No title'}. {answer.get('message', '')}")
             return True
         if meaning == "@help":
-            self.speaker.say("Say links, then a number. Or menu, down, up, back, search, go to, find, read, next tab.")
+            self.speaker.say("Say links, then a number. Or menu, down, up, back, search, go to, fill, find, read, next tab.")
             return True
         return self.run(meaning)
+
+    def start_dictation(self, target, said, quiet=False):
+        """Get ready for free words: the address bar, find, or the page's text field opened (type
+        goes to whatever is being typed in). False if there's nowhere to type."""
+        if target == "type":
+            if self.rynx.send("status").get("mode") not in TYPING_MODES:
+                return self.cannot("Not typing into a field: say fill, or links and the field's number")
+        else:
+            answer = self.rynx.send(f"begin {target}")
+            if not answer.get("ok"):
+                return self.cannot(answer.get("message", "That didn't work"))
+        self.dictating = target
+        if not quiet:
+            self.rynx.send(f"heard {said}: {PROMPTS[target]} (say it now)")
+            self.speaker.say(PROMPTS[target])
+        return True
+
+    def cannot(self, message):
+        self.log(f"  {message}")
+        self.rynx.send(f"heard {message}")
+        self.speaker.say(message)
+        return False
+
+    def dictated(self, text):
+        """Free words, typed where they go; then send, again or cancel"""
+        target, self.dictating = self.dictating, None
+        if understand(text) == "key Esc":
+            self.log(f"{target}: cancelled")
+            return self.run("key Esc")
+        words = address_words(text) if target == "open" else text
+        self.log(f"{target}: {words}")
+        answer = self.rynx.send(f"type {words}")
+        if not answer.get("ok"):
+            self.cannot(answer.get("message", "That couldn't be typed"))
+            return True
+        self.typed = words
+        self.rynx.send(f'heard "{words}": say send, again, or cancel')
+        return True
 
     def run(self, command):
         answer = self.rynx.send(command)
@@ -387,34 +474,128 @@ def recognisers(model_path):
     return commands, free
 
 
-class PushToTalk:
-    """Listening only once rynx says to (the talk key, Space, or the menu's Talk), until a command
-    is heard, and the words after "search" and the like; then off until the key again. Nothing
-    is recognised meanwhile, so nothing said in passing becomes a command."""
+class HoldKey:
+    """A key held down to talk, read from the keyboard itself rather than through rynx's terminal,
+    which says when keys are pressed but never when they're let go. Only that key is looked at:
+    nothing else typed is kept or written anywhere."""
 
-    # Seconds of listening without hearing a command before giving up
+    # Friendly names, as pynput (macOS, X11) and evdev (Linux) call them
+    NAMES = {
+        "right_option": ("alt_r", "KEY_RIGHTALT"),
+        "right_alt": ("alt_r", "KEY_RIGHTALT"),
+        "right_ctrl": ("ctrl_r", "KEY_RIGHTCTRL"),
+        "right_shift": ("shift_r", "KEY_RIGHTSHIFT"),
+        "right_cmd": ("cmd_r", "KEY_RIGHTMETA"),
+    }
+
+    def __init__(self, name, log):
+        self.name = name
+        self.down = False
+        pynput_name, evdev_name = self.NAMES.get(name, (name, name.upper()))
+        if sys.platform != "darwin" and self.evdev(evdev_name, log):
+            return
+        self.pynput(pynput_name, log)
+
+    def held(self):
+        return self.down
+
+    def pynput(self, name, log):
+        from pynput import keyboard
+
+        key = getattr(keyboard.Key, name, None) or keyboard.KeyCode.from_char(name)
+
+        def press(pressed):
+            if pressed == key:
+                self.down = True
+
+        def release(released):
+            if released == key:
+                self.down = False
+
+        self.listener = keyboard.Listener(on_press=press, on_release=release)
+        self.listener.start()
+        self.listener.wait()
+        if not getattr(self.listener, "IS_TRUSTED", True):
+            raise PermissionError(
+                "macOS hasn't allowed the terminal app to see the key: System Settings, Privacy & "
+                "Security, Accessibility and Input Monitoring; then restart the terminal"
+            )
+
+    def evdev(self, name, log):
+        """Straight from the input devices (a console, Wayland, buttons on the glasses as keys);
+        needs read access to /dev/input (the input group). False if it can't be used."""
+        try:
+            import evdev
+        except ImportError:
+            return False
+        code = evdev.ecodes.ecodes.get(name)
+        devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+        devices = [d for d in devices if code in d.capabilities().get(evdev.ecodes.EV_KEY, [])]
+        if code is None or not devices:
+            log(f"no input device with {name} can be read (is this user in the input group?)")
+            return False
+
+        def watch():
+            import select
+
+            while True:
+                ready, _, _ = select.select(devices, [], [])
+                for device in ready:
+                    for event in device.read():
+                        if event.type == evdev.ecodes.EV_KEY and event.code == code:
+                            self.down = event.value != 0
+
+        threading.Thread(target=watch, daemon=True).start()
+        return True
+
+
+class PushToTalk:
+    """Listening only when asked: while the hold key is held (hold-to-talk), or after rynx's talk
+    key (Space, Ctrl+Space or F2, or the menu's Talk) until a command is heard, with the words
+    after "search" and the like, and "send", "again" or "cancel" after them. Nothing is recognised
+    meanwhile, so nothing said in passing becomes a command."""
+
+    # Seconds of listening after the talk key without hearing anything before giving up
     LIMIT = 8
 
-    def __init__(self, rynx, clock=time.time):
+    def __init__(self, rynx, key=None, clock=time.time):
         self.rynx = rynx
+        self.key = key
         self.clock = clock
         self.on = False
+        self.holding = False
         self.since = 0
+        self.typing = False  # in a field when listening started: what's said is typed
 
     def listening(self):
-        """Whether to listen now (asked of rynx for each piece of audio, four times a second)"""
-        on = bool(self.rynx.send("status").get("listening"))
+        """off, started, on, or released (the hold key let go), asked for each piece of audio"""
+        status = self.rynx.send("status")
+        on = bool(status.get("listening"))
+        held = self.key is not None and self.key.held()
+        if held and not self.holding:
+            self.holding = True
+            if not on:
+                self.rynx.send("talk on")  # TALK on rynx's top row
+            on = True
+        elif self.holding and not held:
+            self.holding = self.on = False
+            return "released"
         if on and not self.on:
-            self.since = self.clock()
+            self.on, self.since = True, self.clock()
+            self.typing = status.get("mode") in TYPING_MODES
+            return "started"
         self.on = on
-        if on and self.clock() - self.since > self.LIMIT:
+        if on and not self.holding and self.clock() - self.since > self.LIMIT:
             self.done("nothing heard (press Space to talk)")
-            return False
-        return on
+            return "off"
+        return "on" if on else "off"
 
     def heard(self, controller):
-        """A command was heard: off, unless its words come next"""
-        if controller.dictating:
+        """Something was heard: listening goes on while the key is held, or while words or send,
+        again or cancel are to come; otherwise it stops"""
+        if self.holding:
+            return
+        if controller.dictating or controller.typed is not None:
             self.since = self.clock()
         else:
             self.done()
@@ -426,29 +607,58 @@ class PushToTalk:
         self.on = False
 
 
-def recognise(chunks, controller, model_path, push_to_talk=False):
-    """Feed audio chunks (16 kHz mono 16-bit) to the recogniser, the grammar one or, after
-    "search" and the like, the free one. With push_to_talk, only while rynx asks."""
+def recognise(chunks, controller, model_path, talk=None):
+    """Feed audio chunks (16 kHz mono 16-bit) to the recognisers. Listening all the time, the
+    grammar one, or after "search" and the like the free one. With push-to-talk or hold-to-talk
+    (talk), only while asked, and both at once, so a command's words can follow it in one breath."""
     commands, free = recognisers(model_path)
-    talk = PushToTalk(controller.rynx) if push_to_talk else None
+    pending = []  # what the fixed recogniser heard of a phrase the free one hasn't finished
+
+    def result(recogniser, finished):
+        return json.loads(recogniser.Result() if finished else recogniser.FinalResult()).get("text", "")
+
     for chunk in chunks:
-        if talk and not talk.listening():
-            # Nothing half heard is kept for when listening starts
+        if talk is None:
+            recogniser = free if controller.dictating else commands
+            if recogniser.AcceptWaveform(chunk):
+                if not controller.heard(result(recogniser, True)):
+                    return
+            continue
+        state = talk.listening()
+        if state == "off":
+            # Nothing half heard is kept for when listening starts (words awaited after "go to"
+            # still are: they may come with the next press)
             commands.Reset()
             free.Reset()
-            controller.dictating = None
+            pending = []
             continue
-        recogniser = free if controller.dictating else commands
-        if recogniser.AcceptWaveform(chunk):
-            text = json.loads(recogniser.Result()).get("text", "")
-            if not controller.heard(text):
+        if state == "started" and talk.typing and not controller.dictating and controller.typed is None:
+            controller.dictating = "type"
+        if state == "released":
+            said = controller.utterance(" ".join(pending + [result(commands, False)]), result(free, False))
+            pending = []
+            talk.done()
+            if not said:
                 return
-            if talk and text.strip() and text.strip() != "[unk]":
+            continue
+        # The free recogniser says where a phrase ends: the fixed one, held to its phrases, ends
+        # sooner and guesses at the rest ("search chocolate cake" was "search", then "eight")
+        if commands.AcceptWaveform(chunk):
+            pending.append(result(commands, True))
+        if free.AcceptWaveform(chunk):
+            heard = " ".join(pending + [result(commands, False)]), result(free, True)
+            pending = []
+            if not controller.utterance(*heard):
+                return
+            if any(t.replace("[unk]", "").strip() for t in heard):
                 talk.heard(controller)
-    for recogniser in (commands, free):
-        text = json.loads(recogniser.FinalResult()).get("text", "")
-        if text and not controller.heard(text):
-            return
+    if talk is None:
+        for recogniser in (commands, free):
+            text = result(recogniser, False)
+            if text and not controller.heard(text):
+                return
+    else:
+        controller.utterance(" ".join(pending + [result(commands, False)]), result(free, False))
 
 
 def microphone():
@@ -489,6 +699,12 @@ def main():
     parser.add_argument(
         "--push-to-talk", action="store_true", help="listen only after the talk key (Space in rynx), for one command"
     )
+    parser.add_argument(
+        "--hold-key",
+        default="right_option" if sys.platform == "darwin" else "right_alt",
+        help="with --push-to-talk, a key held to talk, read from the keyboard (right_option, right_ctrl, "
+        "f13, KEY_... on Linux); none for only rynx's talk key",
+    )
     parser.add_argument("--log", type=Path, help="write what's heard here instead of to the terminal")
     args = parser.parse_args()
 
@@ -515,13 +731,25 @@ def main():
         return
     model = ensure_model(args.model, args.download)
     chunks = wav_file(args.wav) if args.wav else microphone()
+    talk = None
     if args.push_to_talk:
-        rynx.send("heard voice control ready: press Space, then say a command (\"menu\", \"links\")")
+        key = None
+        if args.hold_key != "none" and not args.wav:
+            try:
+                key = HoldKey(args.hold_key, log)
+            except Exception as e:
+                log(f"hold-to-talk isn't available: {e}")
+                rynx.send(f"heard hold-to-talk isn't available ({e}); Space works")
+        talk = PushToTalk(rynx, key)
+        held = args.hold_key.replace("_", " ")
+        how = f"hold {held} while you speak, or press Space" if key else "press Space"
+        rynx.send(f"heard voice control ready: {how}, then say a command (\"menu\", \"links\")")
+        log(f"listening when asked ({how})")
     else:
         rynx.send("heard voice control ready: say \"links\", then a number")
-    log("listening" + (" after the talk key" if args.push_to_talk else ""))
+        log("listening")
     try:
-        recognise(chunks, controller, model, args.push_to_talk)
+        recognise(chunks, controller, model, talk)
     except KeyboardInterrupt:
         pass
     except Exception as e:

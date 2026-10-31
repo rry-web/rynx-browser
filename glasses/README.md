@@ -21,15 +21,34 @@ against its known SHA-256). Then rynx starts in glasses mode in that terminal, a
 controller runs in the background. macOS asks once whether the terminal app may use the
 microphone.
 
-Voice is **push-to-talk**: press **Space** (or choose Talk in the menu), say one command, and
-listening stops once it's heard (or after 8 seconds of nothing). The top row shows **TALK**
-while it's listening. Nothing said in passing becomes a command, the microphone doesn't hear
-rynx reading aloud, and on a small computer the recogniser only works when asked.
-`scripts/rynx-glasses --always-listening` listens all the time instead.
+Voice is listened to only when you ask, two ways:
 
-Press Space and say **"links"**: every link on screen gets a number. Press Space and say
-**"three"** (or "follow three"). Or say **"menu"** and choose from what it lists. What was heard
-shows in rynx's status line; the voice controller's log is `~/.cache/rynx/voice.log`.
+- **Hold to talk:** hold **Right Option** (Right Alt on Linux) while you speak, and let go. The
+  voice controller reads that key from the keyboard itself, since a terminal says when keys are
+  pressed but never when they're let go; it looks at that one key and keeps nothing else typed.
+  macOS asks once to let the terminal app see keys (Accessibility and Input Monitoring, in
+  Privacy & Security; restart the terminal after). On Linux it needs read access to
+  `/dev/input` (the `input` group), which is also how buttons on the glasses would arrive.
+  `--hold-key right_ctrl` (or `right_shift`, `f13`, `KEY_...` on Linux) picks another key.
+- **Press to talk:** press **Space** (in a field, where Space types, **Ctrl+Space** or **F2**; or
+  choose Talk in the menu). Listening stops after one command, or after 8 seconds of nothing.
+
+The top row shows **TALK** while it's listening. Nothing said in passing becomes a command, the
+microphone doesn't hear rynx reading aloud, and on a small computer the recogniser only works when
+asked. `scripts/rynx-glasses --always-listening` listens all the time instead.
+
+Hold the key and say **"links"**: every link on screen gets a number. Say **"three"** (or
+"follow three"). Or say **"menu"** and choose from what it lists. What was heard shows in rynx's
+status line; the voice controller's log is `~/.cache/rynx/voice.log`.
+
+### Typing by voice
+
+Say **"search pancake recipes"** in one breath (or "search", then the words): the words are typed
+into the address bar, and rynx waits. Say **"send"** to search, **"again"** to say them again, or
+**"cancel"**. Likewise **"go to wikipedia dot org"**, **"find potato"** on the page, and
+**"fill flour and sugar"**, which types into the page's search box (the first text field on
+screen, else on the page), with no need to number the links and choose it. In a field you've
+chosen, whatever you say is typed. Nothing is sent until you say "send".
 
 ## The menu
 
@@ -59,10 +78,12 @@ and in a second terminal `python3 glasses/voice.py --text` takes what you'd say,
 | open *N* in new tab, links in new tab | The same, in a new tab |
 | down, up, page down, page up, top, bottom | Scroll |
 | back, forward, reload | History |
-| go to *(pause)* wikipedia dot org | Open an address ("dot" and "slash" are typed) |
-| search *(pause)* terminal browsers | Search for the words |
-| find *(pause)* potato | Find on the page |
-| type *(pause)* words, submit | Type into the field chosen with "links" and its number; send the form |
+| go to wikipedia dot org | Type an address ("dot" and "slash" are typed) |
+| search terminal browsers | Type a search |
+| fill *words*, search here *words* | Type into the page's text field |
+| find potato | Find on the page |
+| type *words* | Type into the field being typed in |
+| send, again, cancel | After words are typed: send them, say them again, or stop |
 | next, previous, select (or next link...) | Step through links (or the menu), open the selected one |
 | new tab, close tab, next tab, previous tab, reopen tab | Tabs |
 | read, stop | Read the page aloud from the top of the screen; stop reading |
@@ -145,6 +166,8 @@ macOS, `~/.config/rynx-browser` on Linux), in a folder only you can open, or whe
 | `heard words` | Show "Heard: words" in the status line |
 | `choose 3` | Item 3 of the open menu |
 | `talk on`, `talk off` | Push-to-talk on (as Space does), or off quietly (once a command is heard); `status` says `listening` |
+| `begin open`, `begin find`, `begin fill` | Start typing an address or search, words to find, or into the page's text field (emptied); then `type`, and `key Enter` or `key Esc` |
+| `erase 5` | Take back the last 5 characters typed |
 
 ```sh
 echo "open wikipedia.org" | nc -U ~/Library/Application\ Support/rynx-browser/control/rynx.sock

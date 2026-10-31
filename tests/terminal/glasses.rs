@@ -284,3 +284,63 @@ fn glass_05_the_menu_and_push_to_talk() {
     assert!(rynx.wait_exit());
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
+
+/// Talking wherever you are, and typing by voice (GLASS-07): the talk key over numbered links
+/// keeps them; in a field Space types and Ctrl+Space talks; begin fill, type, erase, send
+#[test]
+fn glass_07_talking_and_typing_by_voice() {
+    let site = Site::new(&[
+        (
+            "/form",
+            "<title>Form</title><h1>Search here</h1><p>Words before the form, for reader mode to keep.</p><form action=\"/results\"><input name=q value=\"old words\"></form>",
+        ),
+        ("/results", "<title>Results</title><h1>Results page</h1><p>The results of the search, for reader mode.</p>"),
+    ]);
+    let home = Home::new("glasses-talk");
+    home.settings("");
+    let path = socket_path("talk");
+    let program = Path::new(env!("CARGO_BIN_EXE_rynx"));
+    let mut rynx =
+        Rynx::start_with(program, &home, &["--glasses"], &[("RYNX_CONTROL_SOCKET", path.display().to_string())]);
+    rynx.wait_for("Glasses mode");
+    let mut control = Control::connect(&path);
+    control.send(&format!("open {}", site.url("/form")));
+    rynx.wait_for("Search here");
+
+    // Over numbered links, the talk key talks and the numbers stay
+    rynx.keys("f");
+    rynx.wait_for("Follow which link");
+    rynx.keys(" ");
+    rynx.wait_for("Listening");
+    let status = control.send("status");
+    assert_eq!((status["mode"].as_str(), status["listening"].as_bool()), (Some("Hints"), Some(true)), "{status}");
+    rynx.keys(" ");
+    rynx.wait_for("Stopped listening");
+    rynx.keys("\x1b");
+
+    // The page's field, emptied, typed into and partly taken back, by the voice controller
+    let begun = control.send("begin fill");
+    assert_eq!(begun["ok"], true, "{begun}");
+    assert_eq!(control.send("status")["mode"], "FormEdit");
+    assert!(!rynx.screen().contains("old words"), "{}", rynx.screen());
+    // In a field Space types; Ctrl+Space talks
+    rynx.keys(" ");
+    rynx.keys("\x00");
+    rynx.wait_for("Listening");
+    control.send("talk off");
+    control.send("type potatoes and leeks");
+    assert_eq!(control.send("erase 10")["ok"], true);
+    rynx.wait_gone("and leeks");
+    assert!(rynx.screen().contains("[ potatoes"), "{}", rynx.screen());
+    control.send("key Enter");
+    rynx.wait_for("Results page");
+    let query = site.received("/results")[0].url.query().unwrap_or_default().to_string();
+    assert_eq!(query, "q=+potatoes", "the space typed first, then the words, less the last ten");
+
+    // Nowhere to type, or nothing being typed
+    assert_eq!(control.send("begin fill")["ok"], false);
+    assert_eq!(control.send("erase 2")["ok"], false);
+    control.send("quit");
+    assert!(rynx.wait_exit());
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}

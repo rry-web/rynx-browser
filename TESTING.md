@@ -37,9 +37,10 @@ Items marked **(priority)** haven't been checked by a person yet.
 ### Glasses mode
 - [ ] **GLASS-03 (priority) Browsing by voice.** `cargo build --release`, then
       `scripts/rynx-glasses` (or a release's glasses package, `./rynx-glasses`); allow the
-      microphone. Press Space before each: say "links", then a number, "down", "back", "menu"
-      then a number, "go to" then an address, "search" then words, "read", "stop". Then talk
-      without pressing Space.
+      microphone (and on macOS, seeing keys). Hold Right Option for each: say "links", then a
+      number, "down", "back", "menu" then a number, "go to wikipedia dot org" then "send",
+      "search pancake recipes" then "again" and "send", on a page with a search box "fill" and
+      words then "send", "read", "stop". Then the same with Space, and talk without either.
       *Expected:* each happens, with "Heard: ..." in the status line and TALK on the top row
       while listening; misheard words show as "not a command" and do nothing; nothing said
       without Space is acted on.
@@ -326,6 +327,7 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | GLASS-04 | Glasses mode's layout: glasses.conf written and read, sizes in characters or pixels, problems said; a small screen in a larger window (its edge, wrapping, no title row, no margin, the status row, clicks outside ignored) | glasses_layout.rs; glasses::glass_04_a_layout_file_for_a_small_screen |
 | GLASS-05 | The menu: for a link, by number and by stepping, Page... and back, closed; through the socket (`menu`, `choose`, stepping actions); push-to-talk (Space, TALK, `listening`, `talk off`); voice: numbers choose from the menu, push-to-talk hears one command | glasses::glass_05_the_menu_and_push_to_talk; glasses/test_voice.py |
 | GLASS-06 | The glasses package: made as releases make it, with its files; its launcher finds its own rynx and voice controller | ci.yml (linux-system, "The glasses package") |
+| GLASS-07 | Talking anywhere and typing by voice: the talk key over numbered links (kept), Space typing and Ctrl+Space talking in a field; `begin fill`, `type`, `erase`, sent; voice: words in one breath, send/again/cancel, hold-to-talk, a field's words typed, a spoken search | glasses::glass_07_talking_and_typing_by_voice; glasses/test_voice.py |
 | CACHE-01 | Back is instant | browsing::cache_01_back_is_instant |
 | CACHE-02 | I2P site gone | i2p::cache_02_i2p_site_gone |
 | CACHE-03 | Disk cache | pages::cache_03_disk_cache |

@@ -29,9 +29,14 @@
   or the page, with "Page..." and "Tabs..." a step away. Chosen by number, typed or said, or by
   stepping to it with the keys that step through links (Tab, Shift+Tab, Enter, Backspace), so a
   few buttons reach everything.
-- Push-to-talk for voice control, now the default: Space (or the menu's Talk) and the voice
-  controller listens for one command, showing TALK meanwhile, rather than all the time
-  (`scripts/rynx-glasses --always-listening` for that).
+- Voice control listens only when asked, rather than all the time (`--always-listening` for
+  that): hold Right Option (Right Alt on Linux), read from the keyboard by the voice controller,
+  or press Space (Ctrl+Space or F2 in a field, or the menu's Talk) for one command. TALK shows
+  meanwhile. The talk keys work over numbered links, the menu and fields alike.
+- Typing by voice in one breath ("search pancake recipes", "go to example dot com", "fill flour
+  and sugar" into the page's text field), then "send", "again" or "cancel": nothing is sent
+  until you say so. In a field you've chosen, whatever's said is typed. The control socket gains
+  `begin open|find|fill` and `erase N`.
 - Releases have a glasses package for macOS and Linux, `rynx-glasses-<version>-<platform>.tar.gz`:
   rynx, its voice controller and the layouts, started in glasses mode by `./rynx-glasses`, with a
   README for people trying it out.

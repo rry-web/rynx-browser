@@ -31,21 +31,25 @@ The first start takes a minute or two:
    run (it isn't code-signed). Answer `y`.
 2. It sets up the voice controller's Python packages in `~/.cache/rynx/glasses-venv`.
 3. It downloads the speech model (40 MB, checked against its known checksum).
-4. rynx starts. macOS asks once whether the terminal may use the microphone: allow it.
+4. rynx starts. macOS asks once whether the terminal may use the microphone, and the first time
+   you hold Right Option, whether it may see keys (Accessibility and Input Monitoring): allow
+   both, then quit and reopen the terminal.
 
 ## Using it
 
-Voice is **push-to-talk**: press **Space**, say one command, and listening stops once it's heard.
-The top row shows **TALK** while it's listening.
+Hold **Right Option** (Right Alt on Linux) while you speak, then let go. Or press **Space** (in a
+text field **Ctrl+Space**), say one command, and listening stops once it's heard. The top row
+shows **TALK** while it's listening.
 
-| Say (after Space) | Does |
+| Say | Does |
 | :--- | :--- |
 | menu | A numbered list of what you can do here |
 | *a number*, choose *N* | That item of the menu |
 | links | Number the links on screen |
 | *a number*, follow *N* | Open that link |
-| go to *(pause)* wikipedia dot org | Open an address |
-| search *(pause)* pancake recipes | Search the web |
+| search pancake recipes | Type a search, then say **send** (or **again**, or **cancel**) |
+| go to wikipedia dot org | Type an address, then **send** |
+| fill flour and sugar | Type into the page's search box, then **send** |
 | down, up, back, forward | Scroll, and history |
 | next, previous, select | Step through links, and open the one selected |
 | read, stop | Read the page aloud, and stop |
@@ -57,7 +61,7 @@ The keyboard does everything too. The few keys that reach everything:
 | :--- | :--- |
 | `m` | The menu: then a number, or Tab/arrows to step and Enter to choose; Backspace goes back a level, Esc closes |
 | `f` | Number the links, then type a number |
-| `Space` | Talk (one voice command) |
+| Right Option (held), `Space`, `Ctrl+Space` | Talk |
 | Up, Down, `PageUp`, `PageDown` | Scroll |
 | `Backspace` | Back |
 | `e` | Type an address or search |
@@ -75,7 +79,8 @@ it and restart to try your own.
 ### Without a microphone
 
 `./rynx-glasses --text`, then in a second terminal `python3 voice.py --text`, and type what you'd
-say. `./rynx-glasses --always-listening` listens all the time instead of after Space.
+say. `./rynx-glasses --always-listening` listens all the time instead, and `--hold-key right_ctrl`
+picks another key to hold.
 
 ## Telling us how it went
 

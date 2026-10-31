@@ -20,6 +20,10 @@
 //! - `read`: the page's text from the top of the screen down, for reading aloud
 //! - `heard words`: show in the status line what a voice controller heard
 //! - `choose 3`: item 3 of the menu (m)
+//! - `begin open`, `begin find`, `begin fill`: start typing an address or search, words to find,
+//!   or into the page's text field (the first on screen, else on the page), which is emptied;
+//!   `type` then types, `key Enter` sends, `key Esc` cancels
+//! - `erase 5`: the last 5 characters typed taken back
 //! - `talk on`, `talk off`: push-to-talk, as the talk key (Space) turns it on; `status` says
 //!   `listening`
 
@@ -224,6 +228,49 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
             }
             Ok((json!({ "ok": true, "listening": app.listening, "message": app.current_tab().status_message }), false))
         }
+        "begin" => {
+            back_to_browsing(app, width, height).map_err(failed)?;
+            match rest {
+                "open" | "find" => {
+                    let action = if rest == "open" { "edit_address" } else { "find" };
+                    let key = crate::keys::action_key(action).expect("an action");
+                    handle_action(app, key, width, height).map_err(failed)?;
+                    if rest == "open" {
+                        app.current_tab().url_input.clear();
+                    }
+                }
+                "fill" => {
+                    let rows = height.saturating_sub(crate::ui::chrome_rows()) as usize;
+                    let region = text_field(app, rows).ok_or("No text field on this page to type into")?;
+                    let tab = app.current_tab();
+                    tab.selected_link_index = region;
+                    let line = tab.link_regions[region].line_index;
+                    if line < tab.scroll || line >= tab.scroll + rows {
+                        tab.scroll_to_line(line, rows);
+                    }
+                    let open = crate::keys::action_key("open").expect("open is an action");
+                    handle_action(app, open, width, height).map_err(failed)?;
+                    if app.current_tab().input_mode != InputMode::FormEdit {
+                        return Err("That field can't be typed into".into());
+                    }
+                    let clear = KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL);
+                    handle_key_event(app, clear, width, height).map_err(failed)?;
+                }
+                _ => return Err("begin open, begin find, or begin fill".into()),
+            }
+            done(app, false)
+        }
+        "erase" => {
+            let count = rest.parse::<usize>().map_err(|_| "erase needs a number".to_string())?;
+            let tab = app.current_tab();
+            if tab.input_mode == InputMode::Normal || tab.hints.is_some() || tab.menu.is_some() {
+                return Err("Not typing: nothing to erase".into());
+            }
+            for _ in 0..count.min(MAX_LINE) {
+                handle_key_event(app, KeyEvent::from(KeyCode::Backspace), width, height).map_err(failed)?;
+            }
+            done(app, false)
+        }
         "open" | "find" if rest.is_empty() => Err(format!("{name} needs words")),
         "open" => {
             back_to_browsing(app, width, height).map_err(failed)?;
@@ -272,6 +319,31 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
             done(app, quit)
         }
     }
+}
+
+/// The page's text field to type into: the first on screen (of `rows`), else the first on the
+/// page; never a password field
+fn text_field(app: &mut App, rows: usize) -> Option<usize> {
+    let tab = app.current_tab();
+    let fields: Vec<usize> = tab
+        .link_regions
+        .iter()
+        .enumerate()
+        .filter(|(_, region)| {
+            region.control.and_then(|c| tab.controls.get(c)).is_some_and(|c| {
+                matches!(
+                    c.kind,
+                    crate::forms::ControlKind::Text { password: false } | crate::forms::ControlKind::TextArea
+                )
+            })
+        })
+        .map(|(i, _)| i)
+        .collect();
+    let on_screen = |&&i: &&usize| {
+        let line = tab.link_regions[i].line_index;
+        line >= tab.scroll && line < tab.scroll + rows
+    };
+    fields.iter().find(on_screen).or(fields.first()).copied()
 }
 
 /// Actions the open menu takes as its own (stepping, choosing, back), rather than closing first

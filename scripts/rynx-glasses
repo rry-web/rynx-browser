@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# rynx in glasses mode, driven by voice: press Space, say "menu" or "links", then a number.
+# rynx in glasses mode, driven by voice: hold Right Option (Right Alt on Linux) and say "menu",
+# "links", a number, or "search pancake recipes".
 #
-#   rynx-glasses                     voice control, with rynx in this terminal: press Space
-#                                    (or choose Talk in the menu, m) and say one command
-#   rynx-glasses --always-listening  listen all the time instead, without pressing Space
+#   rynx-glasses                     voice control, with rynx in this terminal: hold the key
+#                                    while you speak, or press Space (Ctrl+Space or F2 in a
+#                                    field, or the menu's Talk) for one command
+#   rynx-glasses --hold-key NAME     another key to hold (right_ctrl, right_shift, f13...; none)
+#   rynx-glasses --always-listening  listen all the time instead
 #   rynx-glasses --text              no microphone: type what you'd say into a second terminal
 #                                    (python3 voice.py --text)
 #   rynx-glasses --layout 640x200    a layout from layouts/ (or a file) instead of glasses.conf
@@ -13,12 +16,15 @@
 # glasses package of a release (rynx-glasses beside rynx, voice.py and layouts/). RYNX names
 # another rynx.
 #
-# The first run sets up voice.py's Python packages (vosk, sounddevice) in
+# The first run sets up voice.py's Python packages (vosk, sounddevice, and pynput on macOS or
+# evdev on Linux to see the held key) in
 # ~/.cache/rynx/glasses-venv and downloads the speech model (40 MB, checked). Speech is
 # recognised on this computer; nothing is sent anywhere. What was heard shows in rynx's status
 # line, and the voice controller's log is ~/.cache/rynx/voice.log. On macOS, the terminal app
-# needs permission to use the microphone (System Settings, Privacy & Security, Microphone);
-# macOS asks the first time.
+# needs permission to use the microphone, and to see the held key (Accessibility and Input
+# Monitoring), in System Settings, Privacy & Security; macOS asks the first time. The key is read
+# from the keyboard itself, since a terminal never says when a key is let go; voice.py looks at
+# that one key only and keeps nothing else typed.
 set -euo pipefail
 
 dir=$(cd "$(dirname "$0")" && pwd)
@@ -38,11 +44,16 @@ mkdir -p "$cache"
 
 text=false
 push_to_talk=--push-to-talk
+hold_key=()
 args=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --text) text=true ;;
         --always-listening) push_to_talk= ;;
+        --hold-key)
+            shift
+            hold_key=(--hold-key "${1:?--hold-key needs a key name, or none}")
+            ;;
         --layout)
             shift
             layout=${1:-}
@@ -101,17 +112,25 @@ if ! command -v python3 >/dev/null; then
     exit 1
 fi
 venv=$cache/glasses-venv
+# The held key is read with pynput on macOS, and evdev on Linux (which builds it, so it's tried
+# but not needed: without it, Space is the talk key)
+if [ "$(uname)" = Darwin ]; then key_package=pynput==1.8.1 key_module=pynput; else key_package=evdev==1.9.2 key_module=evdev; fi
 if [ ! -x "$venv/bin/python" ] || ! "$venv/bin/python" -c "import vosk, sounddevice" 2>/dev/null; then
     echo "Setting up voice control (once): Python packages vosk and sounddevice in $venv" >&2
     python3 -m venv "$venv"
     "$venv/bin/pip" install --quiet --disable-pip-version-check "vosk==0.3.44" "sounddevice==0.5.6"
+fi
+if [ -n "$push_to_talk" ] && ! "$venv/bin/python" -c "import $key_module" 2>/dev/null; then
+    echo "Setting up hold-to-talk (once): $key_package" >&2
+    "$venv/bin/pip" install --quiet --disable-pip-version-check "$key_package" ||
+        echo "(hold-to-talk won't be available; Space still is)" >&2
 fi
 # The speech model, fetched now (once) so its progress shows before rynx takes the screen
 "$venv/bin/python" "$voice_py" --download --check-model
 
 log=$cache/voice.log
 # Its errors go to the log too: rynx has the terminal
-"$venv/bin/python" "$voice_py" --log "$log" ${push_to_talk:+"$push_to_talk"} </dev/null 2>>"$log" &
+"$venv/bin/python" "$voice_py" --log "$log" ${push_to_talk:+"$push_to_talk"} ${hold_key[@]+"${hold_key[@]}"} </dev/null 2>>"$log" &
 voice=$!
 trap 'kill "$voice" 2>/dev/null || true' EXIT
 "$rynx" --glasses "$@"

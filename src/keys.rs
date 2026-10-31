@@ -46,7 +46,11 @@ const ACTIONS: &[Action] = &[
     },
     Action { name: "open", about: "Open the link, or use the field", defaults: &["Enter"] },
     Action { name: "menu", about: "A menu of what can be done here, to choose from by number", defaults: &["m"] },
-    Action { name: "talk", about: "Push-to-talk: the voice controller listens for a command", defaults: &["Space"] },
+    Action {
+        name: "talk",
+        about: "Push-to-talk: the voice controller listens (Ctrl+Space and F2 in fields too)",
+        defaults: &["Space", "Ctrl+Space", "F2"],
+    },
     Action { name: "back", about: "Back", defaults: &["Backspace", "Left", "H"] },
     Action { name: "forward", about: "Forward", defaults: &["Right", "L"] },
     Action { name: "reload", about: "Reload", defaults: &["r"] },

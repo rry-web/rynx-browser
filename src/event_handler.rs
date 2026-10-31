@@ -124,6 +124,14 @@ fn handle_key(
         return Ok(false);
     }
 
+    // Push-to-talk works whatever's on screen: over numbered links, the menu, or in a field
+    // (where Space types a space, so it's Ctrl+Space or F2 there)
+    if app.talk_enabled && is_talk_key(app, key, translate) {
+        let listening = app.listening;
+        app.set_listening(!listening);
+        return Ok(false);
+    }
+
     // Link hints take every key until a link is chosen: digits choose, anything else cancels
     if app.current_tab().hints.is_some() {
         return handle_hint_key(app, key, terminal_width, terminal_height);
@@ -147,6 +155,20 @@ fn handle_key(
         InputMode::Search => handle_search_mode(app, key),
         InputMode::FormEdit => handle_form_edit_mode(app, key, terminal_width, terminal_height),
     }
+}
+
+/// Whether a key is bound to talk (keys.conf), and isn't a Space that types where text is typed
+fn is_talk_key(app: &App, key: KeyEvent, translate: bool) -> bool {
+    let bound = if translate { app.keymap.translate(key) } else { Some(key) };
+    let talk = crate::keys::action_key("talk");
+    if bound.map(|k| (k.code, k.modifiers)) != talk.map(|k| (k.code, k.modifiers)) {
+        return false;
+    }
+    let typing = matches!(
+        app.tabs[app.active_tab_index].input_mode,
+        InputMode::Editing | InputMode::Search | InputMode::FormEdit
+    );
+    !(typing && key.code == KeyCode::Char(' ') && !key.modifiers.contains(KeyModifiers::CONTROL))
 }
 
 /// A key typed while the links on screen are numbered
