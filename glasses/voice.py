@@ -8,6 +8,9 @@ control socket (rynx --glasses, or --control-socket), as action names, so keys.c
 matter.
 
     python3 glasses/voice.py             listen to the microphone
+    python3 glasses/voice.py --push-to-talk
+                                         only after the talk key (Space in rynx, or the menu's
+                                         Talk), for one command
     python3 glasses/voice.py --text      type what you'd say instead (no microphone or Vosk needed)
     python3 glasses/voice.py --wav F     recognise a recording (16 kHz mono WAV), for testing
 
@@ -63,6 +66,14 @@ PHRASES = {
     "follow N in new tab": "follow_in_new_tab N",
     "next link": "next_link",
     "previous link": "previous_link",
+    "next": "next_link",
+    "previous": "previous_link",
+    "menu": "menu",
+    "show menu": "menu",
+    "options": "menu",
+    "choose N": "choose N",
+    "option N": "choose N",
+    "item N": "choose N",
     "select": "open",
     "click": "open",
     "open it": "open",
@@ -297,11 +308,11 @@ class Controller:
         meaning = understand(text)
         if self.speaker.speaking() and meaning != "@stop":
             return True
-        # A number on its own follows a link only while the links are numbered (after "links"):
-        # otherwise a stray "to", heard as two, would follow one
+        # A number on its own follows a link while the links are numbered (after "links"), or
+        # chooses from the menu while it's open; otherwise a stray "to", heard as two, would act
         if meaning and meaning.startswith("follow") and number(text.replace("[unk]", "").split()) is not None:
-            if self.rynx.send("status").get("mode") != "Hints":
-                meaning = None
+            mode = self.rynx.send("status").get("mode")
+            meaning = {"Hints": meaning, "Menu": meaning.replace("follow", "choose")}.get(mode)
         if meaning is None:
             self.log(f"not a command: {text}")
             self.rynx.send(f"heard {text} (not a command; say help)")
@@ -326,7 +337,7 @@ class Controller:
             self.speaker.say(f"{answer.get('title') or 'No title'}. {answer.get('message', '')}")
             return True
         if meaning == "@help":
-            self.speaker.say("Say links, then a number. Or down, up, back, search, go to, find, read, new tab, next tab.")
+            self.speaker.say("Say links, then a number. Or menu, down, up, back, search, go to, find, read, next tab.")
             return True
         return self.run(meaning)
 
@@ -376,16 +387,64 @@ def recognisers(model_path):
     return commands, free
 
 
-def recognise(chunks, controller, model_path):
+class PushToTalk:
+    """Listening only once rynx says to (the talk key, Space, or the menu's Talk), until a command
+    is heard, and the words after "search" and the like; then off until the key again. Nothing
+    is recognised meanwhile, so nothing said in passing becomes a command."""
+
+    # Seconds of listening without hearing a command before giving up
+    LIMIT = 8
+
+    def __init__(self, rynx, clock=time.time):
+        self.rynx = rynx
+        self.clock = clock
+        self.on = False
+        self.since = 0
+
+    def listening(self):
+        """Whether to listen now (asked of rynx for each piece of audio, four times a second)"""
+        on = bool(self.rynx.send("status").get("listening"))
+        if on and not self.on:
+            self.since = self.clock()
+        self.on = on
+        if on and self.clock() - self.since > self.LIMIT:
+            self.done("nothing heard (press Space to talk)")
+            return False
+        return on
+
+    def heard(self, controller):
+        """A command was heard: off, unless its words come next"""
+        if controller.dictating:
+            self.since = self.clock()
+        else:
+            self.done()
+
+    def done(self, message=None):
+        self.rynx.send("talk off")
+        if message:
+            self.rynx.send(f"heard {message}")
+        self.on = False
+
+
+def recognise(chunks, controller, model_path, push_to_talk=False):
     """Feed audio chunks (16 kHz mono 16-bit) to the recogniser, the grammar one or, after
-    "search" and the like, the free one"""
+    "search" and the like, the free one. With push_to_talk, only while rynx asks."""
     commands, free = recognisers(model_path)
+    talk = PushToTalk(controller.rynx) if push_to_talk else None
     for chunk in chunks:
+        if talk and not talk.listening():
+            # Nothing half heard is kept for when listening starts
+            commands.Reset()
+            free.Reset()
+            controller.dictating = None
+            continue
         recogniser = free if controller.dictating else commands
         if recogniser.AcceptWaveform(chunk):
             text = json.loads(recogniser.Result()).get("text", "")
             if not controller.heard(text):
                 return
+            if talk and text.strip() and text.strip() != "[unk]":
+                talk.heard(controller)
     for recogniser in (commands, free):
         text = json.loads(recogniser.FinalResult()).get("text", "")
         if text and not controller.heard(text):
@@ -427,6 +486,9 @@ def main():
     parser.add_argument("--text", action="store_true", help="type phrases instead of speaking")
     parser.add_argument("--wav", type=Path, help="recognise a recording instead of the microphone")
     parser.add_argument("--no-speech", action="store_true", help="don't speak answers aloud")
+    parser.add_argument(
+        "--push-to-talk", action="store_true", help="listen only after the talk key (Space in rynx), for one command"
+    )
     parser.add_argument("--log", type=Path, help="write what's heard here instead of to the terminal")
     args = parser.parse_args()
 
@@ -453,10 +515,13 @@ def main():
         return
     model = ensure_model(args.model, args.download)
     chunks = wav_file(args.wav) if args.wav else microphone()
-    rynx.send("heard voice control ready: say \"links\", then a number")
-    log("listening")
+    if args.push_to_talk:
+        rynx.send("heard voice control ready: press Space, then say a command (\"menu\", \"links\")")
+    else:
+        rynx.send("heard voice control ready: say \"links\", then a number")
+    log("listening" + (" after the talk key" if args.push_to_talk else ""))
     try:
-        recognise(chunks, controller, model)
+        recognise(chunks, controller, model, args.push_to_talk)
     except KeyboardInterrupt:
         pass
     except Exception as e:

@@ -63,6 +63,20 @@ jobs:
         run: |
           python3 -I scripts/test_i2p_sites.py
           python3 -I glasses/test_voice.py
+      # The release's glasses package: made as release.yml makes it, and its launcher finds the
+      # package's own rynx and voice controller
+      - name: The glasses package
+        run: |
+          cargo build --locked
+          scripts/package-glasses.sh "$RUNNER_TEMP/rynx-glasses-test" target/debug/rynx
+          mkdir "$RUNNER_TEMP/unpacked"
+          tar -C "$RUNNER_TEMP/unpacked" -xzf "$RUNNER_TEMP/rynx-glasses-test.tar.gz"
+          package="$RUNNER_TEMP/unpacked/rynx-glasses-test"
+          test -f "$package/layouts/640x480.conf" && test -f "$package/README.md"
+          # Without a terminal rynx stops at once; the launcher has said where voice.py is first
+          "$package/rynx-glasses" --text </dev/null >out.txt 2>&1 || true
+          cat out.txt
+          grep -q "python3 $package/voice.py --text" out.txt
       - name: The Reticulum bridge, with real Reticulum
         run: |
           python3 -m venv /tmp/rns

@@ -272,7 +272,12 @@ fn render_compact_header(f: &mut Frame, app: &App, area: Rect) {
         spans.push(badge(short, color));
         spans.push(Span::raw(" "));
     }
-    let right = if app.i2p_mode { " I2P " } else { "" };
+    let right = match (app.listening, app.i2p_mode) {
+        (true, true) => " TALK I2P ",
+        (true, false) => " TALK ",
+        (false, true) => " I2P ",
+        (false, false) => "",
+    };
     let room = width.saturating_sub(spans.iter().map(|s| s.width()).sum::<usize>() + right.len());
     if tab.input_mode == InputMode::Normal {
         let place = if app.tabs.len() > 1 {
@@ -291,6 +296,36 @@ fn render_compact_header(f: &mut Frame, app: &App, area: Rect) {
     spans.push(Span::styled(right, Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)));
     // Underlined, so it reads as apart from the page without colour
     f.render_widget(Paragraph::new(Line::from(spans)).style(Style::default().add_modifier(Modifier::UNDERLINED)), area);
+}
+
+/// The menu (m), in the page's top left corner: a numbered item per row, the one stepped to
+/// reversed. Lists longer than the page is high scroll to keep that one in view.
+fn render_menu(f: &mut Frame, tab: &crate::app::BrowserTab, area: Rect) {
+    let Some(menu) = &tab.menu else { return };
+    let digits = menu.items.len().to_string().len();
+    let longest = menu.items.iter().map(|item| text_width(item.label)).max().unwrap_or(0);
+    let width = ((longest + digits + 3).max(text_width(&menu.title).min(40) + 2) as u16 + 2).min(area.width);
+    let height = (menu.items.len() as u16 + 2).min(area.height);
+    let rows = height.saturating_sub(2) as usize;
+    let first = (menu.selected + 1).saturating_sub(rows.max(1));
+    let lines: Vec<Line> = menu
+        .items
+        .iter()
+        .enumerate()
+        .skip(first)
+        .take(rows)
+        .map(|(i, item)| {
+            let text = fit(&format!("{:>digits$} {}", i + 1, item.label), width.saturating_sub(2) as usize);
+            let style =
+                if i == menu.selected { Style::default().add_modifier(Modifier::REVERSED) } else { Style::default() };
+            Line::from(Span::styled(format!("{:<w$}", text, w = width.saturating_sub(2) as usize), style))
+        })
+        .collect();
+    let popup = Rect { x: area.x, y: area.y, width, height };
+    f.render_widget(Clear, popup);
+    let title = fit(&menu.title, width.saturating_sub(4) as usize);
+    let block = Block::default().title(format!(" {} ", title)).borders(Borders::ALL);
+    f.render_widget(Paragraph::new(lines).block(block), popup);
 }
 
 /// The compact layout's last row: the status line, then where the selected link goes
@@ -793,6 +828,7 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
     };
     f.render_widget(Paragraph::new(viewport_content), inner);
     render_inline_images(f, app, inner, start_index, end_index);
+    render_menu(f, active_tab, inner);
     render_download_overlay(f, app, area);
     render_download_prompt(f, app);
     render_tool_prompt(f, app);

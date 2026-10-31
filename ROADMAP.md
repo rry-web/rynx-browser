@@ -103,14 +103,22 @@ What rynx would need, in order:
    controller (`glasses/voice.py`, Vosk with a fixed phrase list), started together by
    `scripts/rynx-glasses`.
 4. **Small-screen tuning:** reader mode by default; check every page and box at 80×30 and less.
+5. **Few buttons** (done): a menu (`m`) of what can be done here, worked by number or by
+   next/previous/choose/back, and push-to-talk (Space), so a remote or buttons on the glasses
+   (set up as keys) and voice share one way of working.
+
+Later, for the hardware: buttons on the glasses as a Linux keyboard (gpio-keys), a touch strip
+whose swipes are next and previous, and a voice recogniser that builds on musl (Vosk's Python
+packages are glibc only) for Alpine on a Raspberry Pi Zero 2 W class board.
 
 Outside rynx: typing addresses and searches needs free dictation, which is harder than fixed
 commands (bookmarks and history make it rarer); headless Linux still needs a terminal on the
 display (the framebuffer console, or a small terminal emulator drawing straight to it); and the
 computer and battery likely ride in a pocket, wired or wireless to the glasses.
 
-First step (ready): the prototype on a laptop, `scripts/rynx-glasses` (glasses/README.md). Using it
-for a while shows whether browsing by voice feels good, and what's missing, before buying hardware.
+First step (ready): the prototype on a laptop, `scripts/rynx-glasses` (glasses/README.md), or a
+release's glasses package for others to try. Using it for a while shows whether browsing by voice
+feels good, and what's missing, before buying hardware.
 The compact layout is done (glasses mode: a title row and a status row), drawn in a screen of the
 display's size set in `glasses.conf`, so layouts for other displays can be tried on a laptop. Then:
 the voice controller on a Raspberry Pi, and checking every page and box at 80×30 and less.

@@ -125,6 +125,12 @@ jobs:
             cp "target/${{ matrix.target }}/release/rynx" "$name"
             echo "archive=$name.tar.gz" >> "$GITHUB_OUTPUT"
             echo "program=$name" >> "$GITHUB_OUTPUT"
+            # The glasses package: rynx with its voice controller, starting in glasses mode
+            # (glasses/PACKAGE.md). Not on Windows, which has no control socket yet.
+            glasses="rynx-glasses-$version-${{ matrix.target }}"
+            scripts/package-glasses.sh "$glasses" "target/${{ matrix.target }}/release/rynx"
+            rm -r "$glasses"
+            echo "glasses=$glasses.tar.gz" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Attest build provenance
@@ -134,12 +140,24 @@ jobs:
             ${{ steps.package.outputs.archive }}
             ${{ steps.package.outputs.program }}
 
+      - name: Attest the glasses package's provenance
+        if: steps.package.outputs.glasses != ''
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.package.outputs.glasses }}
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.target }}
           path: |
             ${{ steps.package.outputs.archive }}
             ${{ steps.package.outputs.program }}
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.package.outputs.glasses != ''
+        with:
+          name: glasses-${{ matrix.target }}
+          path: ${{ steps.package.outputs.glasses }}
           if-no-files-found: error
 
   release:

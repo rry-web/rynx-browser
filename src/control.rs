@@ -19,9 +19,12 @@
 //! - `status`: the page's title and address, the status line and the mode
 //! - `read`: the page's text from the top of the screen down, for reading aloud
 //! - `heard words`: show in the status line what a voice controller heard
+//! - `choose 3`: item 3 of the menu (m)
+//! - `talk on`, `talk off`: push-to-talk, as the talk key (Space) turns it on; `status` says
+//!   `listening`
 
 use crate::app::App;
-use crate::event_handler::{follow_hint, handle_action, handle_key_event};
+use crate::event_handler::{follow_hint, handle_action, handle_key_event, run_menu_item};
 use crate::models::InputMode;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde_json::{Value, json};
@@ -154,7 +157,7 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
         }
         "status" => {
             let mode = format!("{:?}", app.current_tab().input_mode);
-            let (tabs, index) = (app.tabs.len(), app.active_tab_index);
+            let (tabs, index, listening) = (app.tabs.len(), app.active_tab_index, app.listening);
             let tab = app.current_tab();
             Ok((
                 json!({
@@ -162,7 +165,14 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
                     "message": tab.status_message,
                     "title": tab.page_title,
                     "address": tab.page_url.clone().unwrap_or_else(|| tab.url_input.clone()),
-                    "mode": if tab.hints.is_some() { "Hints".to_string() } else { mode },
+                    "mode": if tab.hints.is_some() {
+                        "Hints".to_string()
+                    } else if tab.menu.is_some() {
+                        "Menu".to_string()
+                    } else {
+                        mode
+                    },
+                    "listening": listening,
                     "tab": index + 1,
                     "tabs": tabs,
                 }),
@@ -195,6 +205,25 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
             let quit = follow_hint(app, number, name == "follow_in_new_tab", width, height).map_err(failed)??;
             done(app, quit)
         }
+        "choose" => {
+            let number = rest.parse::<usize>().map_err(|_| "choose needs a number".to_string())?;
+            let menu = app.current_tab().menu.as_ref().ok_or("No menu open: say \"menu\" first")?;
+            let item =
+                menu.choose(number).ok_or_else(|| format!("No item {} ({} in the menu)", number, menu.items.len()))?;
+            let quit = run_menu_item(app, item, width, height).map_err(failed)?;
+            done(app, quit)
+        }
+        // Off quietly, when the voice controller has heard its command: the status line keeps
+        // what the command said
+        "talk" => {
+            match rest {
+                "on" => app.set_listening(true),
+                "off" => app.listening = false,
+                "" => app.set_listening(!app.listening),
+                _ => return Err("talk on, or talk off".into()),
+            }
+            Ok((json!({ "ok": true, "listening": app.listening, "message": app.current_tab().status_message }), false))
+        }
         "open" | "find" if rest.is_empty() => Err(format!("{name} needs words")),
         "open" => {
             back_to_browsing(app, width, height).map_err(failed)?;
@@ -221,7 +250,8 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
         }
         "type" => {
             // Only into something being typed in: while browsing, each letter is a key (q quits)
-            if app.current_tab().input_mode == InputMode::Normal || app.current_tab().hints.is_some() {
+            let tab = app.current_tab();
+            if tab.input_mode == InputMode::Normal || tab.hints.is_some() || tab.menu.is_some() {
                 return Err("Not typing into a field: say \"links\" and the field's number first".into());
             }
             type_text(app, rest, width, height).map_err(failed)?;
@@ -234,18 +264,25 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
         }
         action => {
             let key = crate::keys::action_key(action).ok_or_else(|| format!("unknown command \"{action}\""))?;
-            back_to_browsing(app, width, height).map_err(failed)?;
+            // With the menu open, the actions that step through links and choose work it
+            if app.current_tab().menu.is_none() || !MENU_ACTIONS.contains(&action) {
+                back_to_browsing(app, width, height).map_err(failed)?;
+            }
             let quit = handle_action(app, key, width, height).map_err(failed)?;
             done(app, quit)
         }
     }
 }
 
-/// Leave typing, find, copy mode or the numbered links, as Esc would, so an action does what it
+/// Actions the open menu takes as its own (stepping, choosing, back), rather than closing first
+const MENU_ACTIONS: &[&str] =
+    &["next_link", "previous_link", "open", "back", "menu", "scroll_down", "scroll_up", "cursor_down", "cursor_up"];
+
+/// Leave typing, find, copy mode, the menu or the numbered links, as Esc would, so an action does what it
 /// does while browsing. Boxes asking a question (downloads, tools) stay until answered.
 fn back_to_browsing(app: &mut App, width: u16, height: u16) -> std::io::Result<()> {
     let tab = app.current_tab();
-    if tab.input_mode != InputMode::Normal || tab.hints.is_some() {
+    if tab.input_mode != InputMode::Normal || tab.hints.is_some() || tab.menu.is_some() {
         handle_key_event(app, KeyEvent::from(KeyCode::Esc), width, height)?;
     }
     Ok(())

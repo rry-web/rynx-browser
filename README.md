@@ -76,8 +76,9 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
 - Anubis bot checks passed without JavaScript, by every method it uses
 - Monochrome when `NO_COLOR` is set (or `colour = off`), with reverse video where colour was
 - Glasses mode with voice control (`rynx --glasses`, and `scripts/rynx-glasses` in the source),
-  for monochrome AR glasses or a laptop: say "links", then "follow three". Other programs can
-  drive rynx through its control socket by naming actions. See [glasses/](glasses/README.md)
+  for monochrome AR glasses or a laptop: press Space, say "links", then "three". Releases have
+  a glasses package for macOS and Linux that starts this way. Other programs can drive rynx
+  through its control socket by naming actions. See [glasses/](glasses/README.md)
 - Changeable keys (`keys.conf`), settings in the browser (`S`) or in `settings.conf`
 - Signed updates, checked daily and installed when you agree (`U`)
 
@@ -94,6 +95,7 @@ them (`reload = F5` adds a key, `reload = F5 only` replaces them, `reload = none
 | `e` or `o`, `O` | Type an address or search words (`O`: in a new tab) |
 | `Tab` / `Shift+Tab`, `Enter`, click | Select links and fields; open or use the selected one |
 | `f`, `;` | Number the links and fields on screen; type a number to open one (`;`: in a new tab) |
+| `m` | A menu of what can be done here, chosen by number or by stepping to it |
 | `Backspace` / `Right` (or `H` / `L`), `r` | Back / forward, reload |
 | `h` `j` `k` `l`, arrows, wheel, `PageUp` / `PageDown`, `Ctrl+u` / `Ctrl+d`, `g` / `G` | Move and scroll |
 | `t`, `x` (or `w`), `X` | New tab, close tab, reopen the tab closed last |

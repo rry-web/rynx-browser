@@ -13,6 +13,10 @@ files named just `rynx-<version>-<platform>` are the bare programs the updater d
 | macOS Intel | `x86_64-apple-darwin` |
 | Windows x86_64 | `x86_64-pc-windows-msvc` |
 
+**Glasses mode, to try:** the `rynx-glasses-<version>-<platform>.tar.gz` archives (macOS and
+Linux) start rynx in glasses mode with voice control: extract, then `./rynx-glasses`. Its
+README.md says what it needs (Python 3 and a microphone) and how to use it.
+
 The binaries are **not code-signed**, so the OS will warn the first time:
 
 - **macOS:** Gatekeeper blocks unsigned downloads. After checking the file, allow it with

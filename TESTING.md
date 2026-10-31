@@ -36,10 +36,13 @@ Items marked **(priority)** haven't been checked by a person yet.
 
 ### Glasses mode
 - [ ] **GLASS-03 (priority) Browsing by voice.** `cargo build --release`, then
-      `scripts/rynx-glasses`; allow the microphone. Say "links", "follow" and a number, "down",
-      "back", "go to" then an address, "search" then words, "read", "stop".
-      *Expected:* each happens, with "Heard: ..." in the status line; misheard words show as
-      "not a command" and do nothing.
+      `scripts/rynx-glasses` (or a release's glasses package, `./rynx-glasses`); allow the
+      microphone. Press Space before each: say "links", then a number, "down", "back", "menu"
+      then a number, "go to" then an address, "search" then words, "read", "stop". Then talk
+      without pressing Space.
+      *Expected:* each happens, with "Heard: ..." in the status line and TALK on the top row
+      while listening; misheard words show as "not a command" and do nothing; nothing said
+      without Space is acted on.
 
 ### Downloads
 - [ ] **DL-06 (priority) Gatekeeper checks downloads (macOS).** Download a small unsigned app
@@ -321,6 +324,8 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | GLASS-01 | Glasses mode: no colour, reader mode, the compact layout (rows, clicks); the control socket's commands, a second rynx refused, a stale socket replaced | glasses::glass_01_glasses_mode_driven_through_the_socket |
 | GLASS-02 | Voice: phrases to commands, numbers, commands said together, the bare-number guard; spoken commands recognised (macOS, with VOSK_MODEL) | glasses/test_voice.py |
 | GLASS-04 | Glasses mode's layout: glasses.conf written and read, sizes in characters or pixels, problems said; a small screen in a larger window (its edge, wrapping, no title row, no margin, the status row, clicks outside ignored) | glasses_layout.rs; glasses::glass_04_a_layout_file_for_a_small_screen |
+| GLASS-05 | The menu: for a link, by number and by stepping, Page... and back, closed; through the socket (`menu`, `choose`, stepping actions); push-to-talk (Space, TALK, `listening`, `talk off`); voice: numbers choose from the menu, push-to-talk hears one command | glasses::glass_05_the_menu_and_push_to_talk; glasses/test_voice.py |
+| GLASS-06 | The glasses package: made as releases make it, with its files; its launcher finds its own rynx and voice controller | ci.yml (linux-system, "The glasses package") |
 | CACHE-01 | Back is instant | browsing::cache_01_back_is_instant |
 | CACHE-02 | I2P site gone | i2p::cache_02_i2p_site_gone |
 | CACHE-03 | Disk cache | pages::cache_03_disk_cache |

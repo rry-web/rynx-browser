@@ -64,6 +64,8 @@ pub struct BrowserTab {
     pub tab_from_jump: bool,
     /// The links on screen labelled with numbers (f), while one is being chosen
     pub hints: Option<Hints>,
+    /// The menu (m), while it's open
+    pub menu: Option<Menu>,
     /// #fragment to jump to once the page has been laid out
     jump_after_render: Option<String>,
     /// Scroll and cursor position to return to when the page being loaded arrives (going back,
@@ -198,6 +200,7 @@ impl BrowserTab {
     pub fn content_changed(&mut self) {
         self.tab_from_jump = false;
         self.hints = None;
+        self.menu = None;
         self.content_version += 1;
         self.rendered_content.clear();
         self.link_regions.clear();
@@ -373,6 +376,7 @@ impl BrowserTab {
             record_visit_after_render: false,
             tab_from_jump: false,
             hints: None,
+            menu: None,
             jump_after_render: None,
             pending_restore: None,
             restore_after_render: None,

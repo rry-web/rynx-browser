@@ -6,6 +6,10 @@ Everything here also runs on a laptop, to try it before any hardware.
 
 ## Trying it on a Mac (or Linux)
 
+From a release: download `rynx-glasses-<version>-<platform>.tar.gz` (macOS and Linux), extract
+it, and run `./rynx-glasses` in it. Its README.md (this folder's [PACKAGE.md](PACKAGE.md)) is
+written for people trying it out. From the source:
+
 ```sh
 cargo build --release
 scripts/rynx-glasses
@@ -14,12 +18,31 @@ scripts/rynx-glasses
 The first run sets up the voice controller's Python packages (`vosk`, `sounddevice`) in
 `~/.cache/rynx/glasses-venv` and downloads Vosk's small English speech model (40 MB, checked
 against its known SHA-256). Then rynx starts in glasses mode in that terminal, and the voice
-controller listens in the background. macOS asks once whether the terminal app may use the
+controller runs in the background. macOS asks once whether the terminal app may use the
 microphone.
 
-Say **"links"**: every link on screen gets a number. Say **"follow three"** (or just
-**"three"** while they're numbered). What was heard shows in rynx's status line; the voice
-controller's log is `~/.cache/rynx/voice.log`.
+Voice is **push-to-talk**: press **Space** (or choose Talk in the menu), say one command, and
+listening stops once it's heard (or after 8 seconds of nothing). The top row shows **TALK**
+while it's listening. Nothing said in passing becomes a command, the microphone doesn't hear
+rynx reading aloud, and on a small computer the recogniser only works when asked.
+`scripts/rynx-glasses --always-listening` listens all the time instead.
+
+Press Space and say **"links"**: every link on screen gets a number. Press Space and say
+**"three"** (or "follow three"). Or say **"menu"** and choose from what it lists. What was heard
+shows in rynx's status line; the voice controller's log is `~/.cache/rynx/voice.log`.
+
+## The menu
+
+`m` (or saying "menu") opens a short numbered list of what can be done here: for the selected
+link (open it, in a new tab, the next or previous link), for a field (use it), or for the page
+(number the links, go to an address, back, forward); and under **Page...** (find, reader mode,
+reload, bookmarks, history, images, help) and **Tabs...** (new, next, previous, close, reopen,
+quit), and **Talk**. Choose by number (typed, or said), or step through it and choose: Tab or
+Down, Shift+Tab or Up, Enter; Backspace goes back to the main menu, Esc closes it.
+
+The keys bound to `next_link`, `previous_link`, `open` and `back` work the menu too, so four
+buttons (a remote, or buttons on the glasses, set up as keys in `keys.conf`) reach everything:
+next, previous, choose, back, with `m` and Space on two more.
 
 `scripts/rynx-glasses --layout 640x200` tries another display's size (see "Layouts" below).
 No microphone, or just checking the commands? `scripts/rynx-glasses --text` starts rynx alone,
@@ -29,6 +52,8 @@ and in a second terminal `python3 glasses/voice.py --text` takes what you'd say,
 
 | Say | Does |
 | :--- | :--- |
+| menu, options | The menu |
+| choose *N*, option *N*, *N* (while the menu is open) | Menu item *N* |
 | links, show links | Number the links and fields on screen |
 | follow *N*, open *N*, *N* (while numbered) | Open link *N* |
 | open *N* in new tab, links in new tab | The same, in a new tab |
@@ -38,7 +63,7 @@ and in a second terminal `python3 glasses/voice.py --text` takes what you'd say,
 | search *(pause)* terminal browsers | Search for the words |
 | find *(pause)* potato | Find on the page |
 | type *(pause)* words, submit | Type into the field chosen with "links" and its number; send the form |
-| next link, previous link, select | Step through links, open the selected one |
+| next, previous, select (or next link...) | Step through links (or the menu), open the selected one |
 | new tab, close tab, next tab, previous tab, reopen tab | Tabs |
 | read, stop | Read the page aloud from the top of the screen; stop reading |
 | where am i | Say the page's title and the status line |
@@ -48,8 +73,8 @@ and in a second terminal `python3 glasses/voice.py --text` takes what you'd say,
 | help | A short reminder, spoken |
 
 Commands said one after another without a pause ("links follow three") are taken in turn. A
-number on its own only follows a link while the links are numbered, so a stray word heard as
-"two" can't follow one. While rynx's answer is being read aloud, only "stop" is listened for,
+number on its own only follows a link while the links are numbered, or chooses from the menu
+while it's open, so a stray word heard as "two" can't do either. While rynx's answer is being read aloud, only "stop" is listened for,
 since the microphone hears the voice too.
 
 ## Glasses mode
@@ -118,6 +143,8 @@ macOS, `~/.config/rynx-browser` on Linux), in a folder only you can open, or whe
 | `status` | `title`, `address`, the status line (`message`), `mode`, `tab` and `tabs` |
 | `read` | `text`: the page from the top of the screen down, for reading aloud |
 | `heard words` | Show "Heard: words" in the status line |
+| `choose 3` | Item 3 of the open menu |
+| `talk on`, `talk off` | Push-to-talk on (as Space does), or off quietly (once a command is heard); `status` says `listening` |
 
 ```sh
 echo "open wikipedia.org" | nc -U ~/Library/Application\ Support/rynx-browser/control/rynx.sock

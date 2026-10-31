@@ -31,6 +31,7 @@ mod downloads;
 mod fetch;
 mod hints;
 mod images;
+mod menu;
 mod pages;
 mod router;
 mod settings_page;
@@ -41,6 +42,7 @@ mod update_page;
 
 pub use hints::{HintResult, Hints};
 pub use images::draws_images;
+pub use menu::{Menu, MenuAction, MenuItem, MenuKind, MenuResult};
 pub use settings_page::SETTINGS_PAGE;
 pub use tab::BrowserTab;
 
@@ -117,6 +119,10 @@ pub struct App {
     pub terminal_height: u16,
     /// New tabs in reader mode (glasses mode's reader_mode)
     pub reader_by_default: bool,
+    /// A voice controller may be listening on the control socket, so the talk key does something
+    pub talk_enabled: bool,
+    /// Push-to-talk: the voice controller is to listen for a command (the talk key, Space)
+    pub listening: bool,
 }
 
 /// The start page with the key bindings
@@ -183,6 +189,8 @@ impl App {
             terminal_width: 100,
             terminal_height: 30,
             reader_by_default: false,
+            talk_enabled: false,
+            listening: false,
         })
     }
 

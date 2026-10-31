@@ -393,6 +393,7 @@ async fn run(
     };
     #[cfg(not(unix))]
     let control: Option<tokio::sync::mpsc::Receiver<rynx::control::Request>> = control.and(None);
+    app.talk_enabled = control.is_some();
     if control.is_some() {
         let mode = match &glasses {
             Some((layout, _, file)) => format!("Glasses mode, {} ({})", layout.describe(), file),

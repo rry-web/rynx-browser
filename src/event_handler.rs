@@ -1,4 +1,4 @@
-use crate::app::{App, HintResult};
+use crate::app::{App, HintResult, MenuAction, MenuItem, MenuKind, MenuResult};
 use crate::constants::MOUSE_SCROLL_LINES;
 use crate::constants::*;
 use crate::models::{DownloadStatus, InputMode};
@@ -128,6 +128,10 @@ fn handle_key(
     if app.current_tab().hints.is_some() {
         return handle_hint_key(app, key, terminal_width, terminal_height);
     }
+    // The menu, likewise: digits choose, and the keys that step through links step through it
+    if app.current_tab().menu.is_some() {
+        return handle_menu_key(app, key, terminal_width, terminal_height, translate);
+    }
 
     let active_mode = app.current_tab().input_mode;
 
@@ -171,6 +175,68 @@ fn handle_hint_key(app: &mut App, key: KeyEvent, terminal_width: u16, terminal_h
         }
     }
     Ok(false)
+}
+
+/// A key pressed while the menu is open. Keys are taken as the actions they're bound to, so
+/// buttons bound to next_link, previous_link, open and back (keys.conf) work the menu too.
+fn handle_menu_key(
+    app: &mut App,
+    key: KeyEvent,
+    terminal_width: u16,
+    terminal_height: u16,
+    translate: bool,
+) -> Result<bool> {
+    let action = if translate { app.keymap.translate(key) } else { Some(key) };
+    let Some(menu) = app.current_tab().menu.as_mut() else { return Ok(false) };
+    let result = match (key.code, action.map(|a| a.code)) {
+        (KeyCode::Char(c), _) if c.is_ascii_digit() => menu.digit(c),
+        (KeyCode::Esc, _) | (_, Some(KeyCode::Char('q' | 'm'))) => MenuResult::Closed,
+        (_, Some(KeyCode::Tab | KeyCode::Down | KeyCode::Char('j'))) => {
+            menu.step(true);
+            MenuResult::Waiting
+        }
+        (_, Some(KeyCode::BackTab | KeyCode::Up | KeyCode::Char('k'))) => {
+            menu.step(false);
+            MenuResult::Waiting
+        }
+        (_, Some(KeyCode::Enter | KeyCode::Right | KeyCode::Char('l'))) => {
+            MenuResult::Chosen(menu.items[menu.selected])
+        }
+        // Back: from Page... or Tabs... to the main menu, and from there out
+        (_, Some(KeyCode::Backspace)) if menu.kind != MenuKind::Main => {
+            app.show_menu(MenuKind::Main, viewport_height(terminal_height));
+            MenuResult::Waiting
+        }
+        (_, Some(KeyCode::Backspace)) => MenuResult::Closed,
+        _ => MenuResult::Waiting,
+    };
+    match result {
+        MenuResult::Waiting => Ok(false),
+        MenuResult::Closed => {
+            app.close_menu();
+            Ok(false)
+        }
+        MenuResult::Chosen(item) => run_menu_item(app, item, terminal_width, terminal_height),
+    }
+}
+
+/// Do what a menu item says, the menu closed first
+pub fn run_menu_item(app: &mut App, item: MenuItem, terminal_width: u16, terminal_height: u16) -> Result<bool> {
+    app.close_menu();
+    match item.action {
+        MenuAction::Run(name) => match crate::keys::action_key(name) {
+            Some(key) => handle_key(app, key, terminal_width, terminal_height, false),
+            None => Ok(false),
+        },
+        MenuAction::Open(kind) => {
+            app.show_menu(kind, viewport_height(terminal_height));
+            Ok(false)
+        }
+        MenuAction::Talk => {
+            app.set_listening(true);
+            Ok(false)
+        }
+    }
 }
 
 /// Text pasted into the terminal (bracketed paste), as one piece: into the address bar, find or
@@ -479,6 +545,11 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
             }
         }
         KeyCode::Char('f') => app.show_hints(viewport_height(terminal_height), false),
+        KeyCode::Char('m') => app.show_menu(MenuKind::Main, viewport_height(terminal_height)),
+        KeyCode::Char(' ') => {
+            let listening = app.listening;
+            app.set_listening(!listening)
+        }
         KeyCode::Char(';') => app.show_hints(viewport_height(terminal_height), true),
         KeyCode::Char('p') => app.toggle_i2p_mode(),
         KeyCode::Char('S') => app.follow_link(crate::app::SETTINGS_PAGE.to_string()),

@@ -1,39 +1,55 @@
 #!/usr/bin/env bash
-# rynx in glasses mode, driven by voice: say "links", then "follow three".
+# rynx in glasses mode, driven by voice: press Space, say "menu" or "links", then a number.
 #
-#   scripts/rynx-glasses              voice control, with rynx in this terminal
-#   scripts/rynx-glasses --text       no microphone: type what you'd say into a second terminal
-#                                     (python3 glasses/voice.py --text)
-#   scripts/rynx-glasses --layout 640x200
-#                                     a layout from glasses/layouts/ (or a file) instead of
-#                                     glasses.conf in rynx's settings folder
+#   rynx-glasses                     voice control, with rynx in this terminal: press Space
+#                                    (or choose Talk in the menu, m) and say one command
+#   rynx-glasses --always-listening  listen all the time instead, without pressing Space
+#   rynx-glasses --text              no microphone: type what you'd say into a second terminal
+#                                    (python3 voice.py --text)
+#   rynx-glasses --layout 640x200    a layout from layouts/ (or a file) instead of glasses.conf
+#                                    in rynx's settings folder
 #
-# The first run sets up glasses/voice.py's Python packages (vosk, sounddevice) in
+# Runs from rynx's source (scripts/rynx-glasses, using cargo build --release's rynx) or from the
+# glasses package of a release (rynx-glasses beside rynx, voice.py and layouts/). RYNX names
+# another rynx.
+#
+# The first run sets up voice.py's Python packages (vosk, sounddevice) in
 # ~/.cache/rynx/glasses-venv and downloads the speech model (40 MB, checked). Speech is
 # recognised on this computer; nothing is sent anywhere. What was heard shows in rynx's status
 # line, and the voice controller's log is ~/.cache/rynx/voice.log. On macOS, the terminal app
 # needs permission to use the microphone (System Settings, Privacy & Security, Microphone);
 # macOS asks the first time.
-#
-# rynx is this source's build (cargo build --release) unless RYNX names another.
 set -euo pipefail
 
-here=$(cd "$(dirname "$0")/.." && pwd)
+dir=$(cd "$(dirname "$0")" && pwd)
+if [ -f "$dir/voice.py" ]; then
+    # A release's glasses package
+    voice_py=$dir/voice.py
+    layouts=$dir/layouts
+    candidates=("$dir/rynx")
+else
+    here=$(cd "$dir/.." && pwd)
+    voice_py=$here/glasses/voice.py
+    layouts=$here/glasses/layouts
+    candidates=("$here/target/release/rynx" "$here/target/debug/rynx" "$(command -v rynx || true)")
+fi
 cache=${XDG_CACHE_HOME:-$HOME/.cache}/rynx
 mkdir -p "$cache"
 
 text=false
+push_to_talk=--push-to-talk
 args=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --text) text=true ;;
+        --always-listening) push_to_talk= ;;
         --layout)
             shift
             layout=${1:-}
-            [ -f "$layout" ] || layout=$here/glasses/layouts/$layout.conf
+            [ -f "$layout" ] || layout=$layouts/$layout.conf
             if [ ! -f "$layout" ]; then
                 echo "No layout \"${1:-}\": name a file, or one of these:" >&2
-                ls "$here/glasses/layouts" | sed 's/\.conf$//; s/^/    /' >&2
+                ls "$layouts" | sed 's/\.conf$//; s/^/    /' >&2
                 exit 1
             fi
             args+=(--glasses-layout "$layout")
@@ -47,7 +63,19 @@ set -- ${args[@]+"${args[@]}"}
 
 rynx=${RYNX:-}
 if [ -z "$rynx" ]; then
-    for candidate in "$here/target/release/rynx" "$here/target/debug/rynx" "$(command -v rynx || true)"; do
+    for candidate in "${candidates[@]}"; do
+        # Downloaded with a browser on macOS: quarantined, and Gatekeeper stops it. Allowed only
+        # when asked, and only this package's own copy
+        if [ "$candidate" = "${dir}/rynx" ] && [ "$(uname)" = Darwin ] &&
+            xattr -p com.apple.quarantine "$candidate" >/dev/null 2>&1; then
+            echo "macOS has quarantined $candidate: it was downloaded, and isn't code-signed." >&2
+            echo "(To check it first, see \"Checking the download\" in README.md.)" >&2
+            read -r -p "Allow this copy of rynx to run? [y/N] " answer
+            case "$answer" in
+                y | Y) xattr -d com.apple.quarantine "$candidate" ;;
+                *) exit 1 ;;
+            esac
+        fi
         # Its help read in full first: grep -q stops reading at the match, and pipefail would
         # count the closed pipe against rynx
         if [ -n "$candidate" ] && [ -x "$candidate" ] && help=$("$candidate" --help 2>/dev/null) &&
@@ -63,11 +91,15 @@ if [ -z "$rynx" ]; then
 fi
 
 if $text; then
-    echo "In another terminal:  python3 $here/glasses/voice.py --text" >&2
+    echo "In another terminal:  python3 $voice_py --text" >&2
     sleep 2
     exec "$rynx" --glasses "$@"
 fi
 
+if ! command -v python3 >/dev/null; then
+    echo "Voice control needs Python 3 (macOS: xcode-select --install; Linux: your python3 package)" >&2
+    exit 1
+fi
 venv=$cache/glasses-venv
 if [ ! -x "$venv/bin/python" ] || ! "$venv/bin/python" -c "import vosk, sounddevice" 2>/dev/null; then
     echo "Setting up voice control (once): Python packages vosk and sounddevice in $venv" >&2
@@ -75,11 +107,11 @@ if [ ! -x "$venv/bin/python" ] || ! "$venv/bin/python" -c "import vosk, sounddev
     "$venv/bin/pip" install --quiet --disable-pip-version-check "vosk==0.3.44" "sounddevice==0.5.6"
 fi
 # The speech model, fetched now (once) so its progress shows before rynx takes the screen
-"$venv/bin/python" "$here/glasses/voice.py" --download --check-model
+"$venv/bin/python" "$voice_py" --download --check-model
 
 log=$cache/voice.log
 # Its errors go to the log too: rynx has the terminal
-"$venv/bin/python" "$here/glasses/voice.py" --log "$log" </dev/null 2>>"$log" &
+"$venv/bin/python" "$voice_py" --log "$log" ${push_to_talk:+"$push_to_talk"} </dev/null 2>>"$log" &
 voice=$!
 trap 'kill "$voice" 2>/dev/null || true' EXIT
 "$rynx" --glasses "$@"

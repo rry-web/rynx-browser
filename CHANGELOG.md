@@ -25,6 +25,16 @@
   fixed list of commands on your computer with Vosk (nothing is sent anywhere), so you say
   "links", then "follow three"; "go to", "search" and "find" take free words after them, and
   "read" reads the page aloud. See `glasses/README.md`.
+- A menu (`m`): a short numbered list of what can be done here, for the selected link or field
+  or the page, with "Page..." and "Tabs..." a step away. Chosen by number, typed or said, or by
+  stepping to it with the keys that step through links (Tab, Shift+Tab, Enter, Backspace), so a
+  few buttons reach everything.
+- Push-to-talk for voice control, now the default: Space (or the menu's Talk) and the voice
+  controller listens for one command, showing TALK meanwhile, rather than all the time
+  (`scripts/rynx-glasses --always-listening` for that).
+- Releases have a glasses package for macOS and Linux, `rynx-glasses-<version>-<platform>.tar.gz`:
+  rynx, its voice controller and the layouts, started in glasses mode by `./rynx-glasses`, with a
+  README for people trying it out.
 - The control socket (`--control-socket`, included in `--glasses`): programs on your computer
   drive rynx by naming actions (`scroll_down`, `back`, `hints`...) rather than pressing keys,
   plus `follow 12`, `open words`, `find words`, `type`, `status` and `read`, each answered with

@@ -202,3 +202,85 @@ fn glass_04_a_layout_file_for_a_small_screen() {
     assert!(rynx.wait_exit());
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
+
+/// The menu (m) and push-to-talk (Space) (GLASS-05): chosen by number, by stepping, through the
+/// socket; Page... and back; the talk key seen by the voice controller
+#[test]
+fn glass_05_the_menu_and_push_to_talk() {
+    let site = Site::new(&[
+        (
+            "/a",
+            "<title>Alpha</title><h1>Alpha page</h1><p>Some words about alpha, for reader mode. <a href=\"/b\">Go to beta</a> or <a href=\"/c\">gamma</a>.</p>",
+        ),
+        ("/b", "<title>Beta</title><h1>Beta page</h1><p>Beta's words, for reader mode to keep.</p>"),
+        ("/c", "<title>Gamma</title><h1>Gamma page</h1><p>Gamma's words, for reader mode to keep.</p>"),
+    ]);
+    let home = Home::new("glasses-menu");
+    home.settings("");
+    let path = socket_path("menu");
+    let program = Path::new(env!("CARGO_BIN_EXE_rynx"));
+    let mut rynx =
+        Rynx::start_with(program, &home, &["--glasses"], &[("RYNX_CONTROL_SOCKET", path.display().to_string())]);
+    rynx.wait_for("Glasses mode");
+    let mut control = Control::connect(&path);
+    control.send(&format!("open {}", site.url("/a")));
+    rynx.wait_for("Alpha page");
+
+    // The first link is selected: the menu is about it
+    rynx.keys("m");
+    rynx.wait_for("1 Open the link");
+    assert!(rynx.screen().contains("Link: http"), "{}", rynx.screen());
+    assert_eq!(control.send("status")["mode"], "Menu");
+    assert!(rynx.screen().contains("Talk (one voice command)"), "{}", rynx.screen());
+    // Stepped to the second item (open in a new tab), and chosen
+    rynx.keys("\t");
+    rynx.keys("\r");
+    rynx.wait_for("2/2 Beta");
+
+    // Page... then back to the main menu, then out
+    rynx.keys("m");
+    rynx.wait_for("Page...");
+    let page = rynx.rows().iter().position(|r| r.contains("Page...")).unwrap();
+    let number = rynx.rows()[page].trim_start_matches(|c: char| !c.is_ascii_digit()).chars().next().unwrap();
+    rynx.keys(&number.to_string());
+    rynx.wait_for("Find on the page");
+    rynx.keys("\x7f");
+    rynx.wait_gone("Find on the page");
+    rynx.wait_for("Tabs...");
+    rynx.keys("\x1b");
+    rynx.wait_gone("Tabs...");
+    assert_eq!(control.send("status")["mode"], "Normal");
+
+    // Through the socket, as voice does: the menu, its items by number, stepping with actions
+    control.send("menu");
+    assert_eq!(control.send("choose 99")["ok"], false);
+    control.send("next_link");
+    control.send("previous_link");
+    let tabs = control.send("menu");
+    assert_eq!(tabs["ok"], true, "{tabs}");
+    assert_eq!(control.send("status")["mode"], "Normal", "menu again closes it");
+    control.send("menu");
+    rynx.wait_for("Tabs...");
+    let tabs_item = rynx.rows().iter().find(|r| r.contains("Tabs...")).unwrap().trim().chars().nth(1).unwrap();
+    control.send(&format!("choose {tabs_item}"));
+    rynx.wait_for("Close the tab");
+    control.send("choose 4");
+    rynx.wait_for("Alpha page");
+    assert_eq!(control.send("status")["tabs"], 1);
+    assert_eq!(control.send("choose 1")["ok"], false, "no menu open");
+
+    // Push-to-talk: Space turns listening on, which the voice controller sees, and off
+    rynx.keys(" ");
+    rynx.wait_for("Listening");
+    assert_eq!(control.send("status")["listening"], true);
+    assert!(rynx.rows()[0].contains("TALK"), "{}", rynx.screen());
+    // The controller turns it off quietly once it has heard its command
+    control.send("heard links");
+    assert_eq!(control.send("talk off")["listening"], false);
+    rynx.wait_gone("TALK");
+    assert!(rynx.screen().contains("Heard: links"), "{}", rynx.screen());
+
+    control.send("quit");
+    assert!(rynx.wait_exit());
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
