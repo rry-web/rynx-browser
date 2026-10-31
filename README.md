@@ -115,8 +115,8 @@ being typed in, never run as keys.
 `%APPDATA%\rynx-browser\config` on Windows), which the first run writes with every option
 explained and commented out: the home page, the search engine (Marginalia by default, or
 DuckDuckGo's HTML version, or any address), locking to the clearweb or I2P, the I2P proxy and
-starting i2pd (and SAM, for torrent clients), the Reticulum bridge's address, history, the disk
-cache, images, updates, the browser's identity, and names on your own network.
+starting i2pd (and SAM, for torrent clients), encrypted DNS, the Reticulum bridge's address,
+history, the disk cache, images, updates, the browser's identity, and names on your own network.
 
 rynx introduces itself as Safari on a Mac, the identity millions of visitors send, so it doesn't
 stand out (the `user_agent` setting changes it). When a bot wall shows an Anubis check, rynx does
@@ -132,6 +132,9 @@ its proof of work itself, without JavaScript.
   (like the router's console at 127.0.0.1:7070), which you type, and which I2P sites can't link to.
 - **HTTPS everywhere,** with certificates checked by your operating system (revocation too on
   macOS and Windows) and TLS 1.2 or newer.
+- **Encrypted DNS, if you choose it** (`dns`: Quad9, Mullvad, Cloudflare or your own provider):
+  your network can't see or change which sites you look up, and sites that publish a key get
+  their name encrypted as the connection starts too (Encrypted Client Hello).
 - **A sandbox** on Linux (Landlock) and macOS (Seatbelt): rynx can write only to its own folders
   and Downloads, can't read the rest of your home folder, and can't start programs or listen for
   connections. Crash dumps are off.

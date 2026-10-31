@@ -248,6 +248,21 @@ fn user_agent_setting_is_checked() {
     }
 }
 
+#[test]
+fn dns_setting_is_checked() {
+    assert_eq!(Settings::default().dns, "system", "the system's resolver unless asked");
+    for good in ["quad9", "mullvad", "cloudflare", "https://dns.example/dns-query", "system"] {
+        let (settings, problems) = Settings::parse(&format!("dns = {good}"));
+        assert_eq!(settings.dns, good);
+        assert!(problems.is_empty(), "{problems:?}");
+    }
+    for bad in ["google", "http://dns.example/dns-query", "dns.example", "https://"] {
+        let (settings, problems) = Settings::parse(&format!("dns = {bad}"));
+        assert_eq!(settings.dns, "system", "{bad}");
+        assert_eq!(problems.len(), 1, "{bad}");
+    }
+}
+
 /// The headers of each request to a local server, which sends its page compressed, and the
 /// page as shown
 async fn requests_sent(settings: Settings, i2p: bool) -> (Vec<wiremock::http::HeaderMap>, String) {

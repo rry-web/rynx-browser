@@ -54,6 +54,15 @@ const DOCUMENTED: &[Documented] = &[
         examples: &["off"],
     },
     Documented {
+        key: "dns",
+        about: "How names are looked up: \"system\" (the default: your system's resolver, usually your\n\
+                network's, unencrypted), or encrypted DNS (DNS over HTTPS) through \"quad9\", \"mullvad\",\n\
+                \"cloudflare\" or a provider's https:// address, so your network can't see or change which\n\
+                sites you look up. With encrypted DNS, sites that publish a key also get their name\n\
+                encrypted as the connection starts (Encrypted Client Hello). Not used in I2P mode.",
+        examples: &["quad9", "https://dns.example/dns-query"],
+    },
+    Documented {
         key: "local_names",
         about: "Names on your own network (a company's, say) that point at local addresses, comma-separated,\n\
                 with their subdomains. Other public names that point at this computer or the local network are\n\
@@ -244,6 +253,8 @@ pub struct Settings {
     pub i2pd_path: Option<PathBuf>,
     /// Public-looking names allowed to point at local addresses
     pub local_names: Vec<String>,
+    /// How names are looked up: "system", or an encrypted DNS provider (see dns::DNS_PROVIDERS)
+    pub dns: String,
     /// Encrypt saved cookies with a key in the system keychain
     pub encrypt_cookies: bool,
 }
@@ -273,6 +284,7 @@ impl Default for Settings {
             i2p_router_sam: false,
             i2pd_path: None,
             local_names: Vec::new(),
+            dns: String::from("system"),
             encrypt_cookies: true,
         }
     }
@@ -341,6 +353,7 @@ impl Settings {
                     settings.local_names =
                         value.split(',').map(|n| n.trim().to_ascii_lowercase()).filter(|n| !n.is_empty()).collect()
                 }
+                "dns" if crate::dns::is_dns_setting(value) => settings.dns = value.to_string(),
                 "history" if matches!(value, "on" | "off") => settings.save_history = value == "on",
                 "anubis" if matches!(value, "on" | "off") => settings.solve_anubis = value == "on",
                 "images" if matches!(value, "ask" | "site" | "all") => {
@@ -388,7 +401,7 @@ impl Settings {
                 "home_page" | "search_url" | "i2p_proxy" | "reticulum_bridge" | "download_dir" | "history"
                 | "user_agent" | "anubis" | "cache" | "cache_i2p" | "cache_size" | "images" | "image_display"
                 | "image_protocol" | "updates" | "update_channel" | "i2p_router" | "i2p_router_keep"
-                | "i2p_router_sam" | "i2pd_path" | "local_names" | "cookie_encryption" => {
+                | "i2p_router_sam" | "i2pd_path" | "local_names" | "cookie_encryption" | "dns" => {
                     problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
                 }
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),
@@ -447,6 +460,7 @@ impl Settings {
             "i2p_router_sam" => self.i2p_router_sam.then(|| "on".to_string()),
             "cookie_encryption" => (!self.encrypt_cookies).then(|| "off".to_string()),
             "local_names" => (!self.local_names.is_empty()).then(|| self.local_names.join(", ")),
+            "dns" => changed(self.dns.clone(), default.dns),
             "i2pd_path" => self.i2pd_path.as_ref().map(|d| d.to_string_lossy().into_owned()),
             "cache_size" => changed(self.cache_size_mb.to_string(), default.cache_size_mb.to_string()),
             _ => None,

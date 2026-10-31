@@ -7,6 +7,7 @@ pub mod cache;
 pub mod constants;
 pub mod cookies;
 pub mod dns;
+pub mod ech;
 pub mod event_handler;
 pub mod exact_rows;
 pub mod feeds;

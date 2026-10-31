@@ -64,6 +64,30 @@ impl App {
             "</select>",
         ));
 
+        // Encrypted DNS: a provider, or an address of your own
+        let provider = crate::dns::DNS_PROVIDERS.iter().find(|(name, ..)| *name == s.dns);
+        let mut providers = format!(
+            "<option value=\"system\"{}>System: your network's resolver (not encrypted)</option>",
+            if s.dns == "system" { " selected" } else { "" }
+        );
+        for (name, label, _) in crate::dns::DNS_PROVIDERS {
+            let selected = if provider.is_some_and(|(n, ..)| n == name) { " selected" } else { "" };
+            providers.push_str(&format!("<option value=\"{name}\"{selected}>{}</option>", escape_html(label)));
+        }
+        let custom = s.dns != "system" && provider.is_none();
+        providers.push_str(&format!(
+            "<option value=\"custom\"{}>Custom: the address below</option>",
+            if custom { " selected" } else { "" }
+        ));
+        html.push_str(&format!(
+            "<p><b>Looking up names (DNS)</b>: encrypted, your network can't see or change which sites you \
+             look up, and sites that publish a key get their name encrypted too (Encrypted Client Hello). \
+             The provider sees the names instead.<br><select name=\"dns\">{providers}</select></p>\
+             <p><b>Custom encrypted DNS address</b>: used when Custom is chosen (DNS over HTTPS).<br>\
+             <input type=\"text\" name=\"dns_url\" size=\"80\" value=\"{}\"></p>",
+            escape_html(if custom { &s.dns } else { "" })
+        ));
+
         html.push_str(&self.router_html());
 
         html.push_str("<h2>Browsing</h2>");
@@ -248,6 +272,8 @@ impl App {
         let mut router_keep = false;
         let mut router_sam = false;
         let mut engine = None;
+        let mut dns = None;
+        let mut dns_url = String::new();
         for (control, value) in tab.controls.iter().zip(&tab.control_values) {
             if control.form != Some(form) {
                 continue;
@@ -262,6 +288,12 @@ impl App {
                 ("i2p_router_keep", ControlValue::Checked(on)) => router_keep = *on,
                 ("i2p_router_sam", ControlValue::Checked(on)) => router_sam = *on,
                 ("cache_i2p", ControlValue::Checked(on)) => cache_i2p = *on,
+                ("dns", ControlValue::Selected(i)) => {
+                    if let ControlKind::Select { options } = &control.kind {
+                        dns = options.get(*i).map(|o| o.value.clone());
+                    }
+                }
+                ("dns_url", ControlValue::Text(text)) => dns_url = text.replace(['\r', '\n'], " ").trim().to_string(),
                 ("search_engine", ControlValue::Selected(i)) => {
                     if let ControlKind::Select { options } = &control.kind {
                         engine = options.get(*i).map(|o| o.value.clone());
@@ -289,6 +321,11 @@ impl App {
         {
             lines.retain(|line| !line.starts_with("search_url ="));
             lines.push(format!("search_url = {}", url));
+        }
+        match dns.as_deref() {
+            Some("custom") if !dns_url.is_empty() => lines.push(format!("dns = {}", dns_url)),
+            Some("custom") | None => {}
+            Some(choice) => lines.push(format!("dns = {}", choice)),
         }
         lines.push(format!("history = {}", if history { "on" } else { "off" }));
         lines.push(format!("anubis = {}", if anubis { "on" } else { "off" }));
@@ -351,6 +388,9 @@ impl App {
         }
         self.cache.configure(new.disk_cache, new.disk_cache_i2p, new.cache_size_mb);
         crate::dns::allow_local_names(&new.local_names);
+        if new.dns != self.settings.dns {
+            crate::dns::use_dns(&new.dns);
+        }
         crate::reticulum::set_bridge(&new.reticulum_bridge);
         self.images.use_protocol(new.image_protocol);
         match new.network {

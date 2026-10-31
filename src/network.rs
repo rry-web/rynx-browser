@@ -3,6 +3,7 @@ use crate::constants::{
     SAFARI_ACCEPT, SAFARI_ACCEPT_ENCODING, SAFARI_ACCEPT_LANGUAGE, USER_AGENT,
 };
 use reqwest::{Client, StatusCode};
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use url::{Host, Url};
@@ -227,9 +228,35 @@ impl NetworkManager {
         proxy_url: &str,
         cookies: &std::sync::Arc<crate::cookies::Jar>,
     ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
+        let tls = Self::tls_config(!use_proxy)?;
+        Ok(Self::client_builder(user_agent, use_proxy, proxy_url, cookies, tls)?.timeout(timeout).build()?)
+    }
+
+    /// A client like the clearweb browsing client, whose connections encrypt the site's name to its
+    /// ECH key. Without a timeout for the whole response, as it also downloads: one for
+    /// connecting, and one for the server going quiet.
+    fn ech_client(
+        user_agent: &str,
+        cookies: &std::sync::Arc<crate::cookies::Jar>,
+        key: &[u8],
+    ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
+        let tls = crate::ech::tls_config(key)?;
+        let quiet = Duration::from_secs(BROWSING_TIMEOUT_SECS);
+        Ok(Self::client_builder(user_agent, false, "", cookies, tls)?
+            .connect_timeout(quiet)
+            .read_timeout(quiet)
+            .build()?)
+    }
+
+    fn client_builder(
+        user_agent: &str,
+        use_proxy: bool,
+        proxy_url: &str,
+        cookies: &std::sync::Arc<crate::cookies::Jar>,
+        tls: rustls::ClientConfig,
+    ) -> Result<reqwest::ClientBuilder, Box<dyn std::error::Error + Send + Sync>> {
         // The only cookies kept are Anubis's bot-check passes and those of sites you allow
-        let mut builder =
-            Client::builder().user_agent(user_agent).timeout(timeout).cookie_provider(std::sync::Arc::clone(cookies));
+        let mut builder = Client::builder().user_agent(user_agent).cookie_provider(std::sync::Arc::clone(cookies));
         // Introducing itself as Safari, rynx sends Safari's other headers too, so the request
         // doesn't give it away (a request's own headers, like an image's Accept, replace these).
         // Responses are still decompressed: reqwest does that whatever asked for it.
@@ -239,7 +266,7 @@ impl NetworkManager {
 
         // The OS verifier fetches revocation data directly, outside the I2P proxy, which would
         // reveal the site being visited; I2P clients use the bundled webpki roots instead
-        builder = builder.use_preconfigured_tls(Self::tls_config(!use_proxy)?);
+        builder = builder.use_preconfigured_tls(tls);
 
         if use_proxy {
             // Every request, https:// as well as http:// (Proxy::http would send https:// straight
@@ -266,14 +293,16 @@ impl NetworkManager {
         // Redirects are followed by get_following_redirects so every hop is checked and upgraded
         builder = builder.redirect(reqwest::redirect::Policy::none());
 
-        Ok(builder.build()?)
+        Ok(builder)
     }
 
     /// TLS settings for every client. With `use_os_verifier`, certificates are checked by the
     /// operating system, which uses its own trust store (kept current by OS updates) and, on macOS
     /// and Windows, checks revocation. Otherwise they're checked against the bundled webpki roots.
     /// reqwest uses the config as-is, so the TLS 1.2 minimum and ALPN are set here.
-    fn tls_config(use_os_verifier: bool) -> Result<rustls::ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
+    pub(crate) fn tls_config(
+        use_os_verifier: bool,
+    ) -> Result<rustls::ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
         use rustls_platform_verifier::BuilderVerifierExt;
 
         let provider = std::sync::Arc::new(rustls::crypto::ring::default_provider());
@@ -344,6 +373,13 @@ impl NetworkManager {
             i2p_proxy,
             &i2p_cookies,
         )?;
+
+        // Clearweb clients for sites with ECH keys are made like the browsing client, as needed
+        *ECH_CLIENTS.lock().unwrap_or_else(|e| e.into_inner()) = Some(EchClients {
+            user_agent: user_agent.to_string(),
+            cookies: clearweb_cookies.clone(),
+            clients: HashMap::new(),
+        });
 
         Ok(Self { client, i2p_client, download_client, i2p_download_client, clearweb_cookies, i2p_cookies })
     }
@@ -480,6 +516,55 @@ pub async fn send_following_redirects(
     send_with_headers(client, url, i2p_mode, form_body, reqwest::header::HeaderMap::new()).await
 }
 
+/// What the clearweb clients are made with, and the clients made for sites with ECH keys
+struct EchClients {
+    user_agent: String,
+    cookies: std::sync::Arc<crate::cookies::Jar>,
+    clients: HashMap<String, Client>,
+}
+
+static ECH_CLIENTS: std::sync::Mutex<Option<EchClients>> = std::sync::Mutex::new(None);
+
+/// A client encrypting `url`'s site name with ECH, if names are looked up over encrypted DNS and
+/// the site publishes a key
+async fn ech_client_for(url: &Url) -> Option<Client> {
+    let host = url.host_str()?.to_ascii_lowercase();
+    if url.scheme() != "https" || url.port_or_known_default() != Some(443) || is_local_network_host(url) {
+        return None;
+    }
+    let key = crate::ech::key_for(&host).await?;
+    let mut ech = ECH_CLIENTS.lock().unwrap_or_else(|e| e.into_inner());
+    let ech = ech.as_mut()?;
+    if let Some(client) = ech.clients.get(&host) {
+        return Some(client.clone());
+    }
+    let client = NetworkManager::ech_client(&ech.user_agent, &ech.cookies, &key).ok()?;
+    ech.clients.insert(host, client.clone());
+    Some(client)
+}
+
+/// Stop using ECH for `url`'s site, after it refused its key
+fn forget_ech(url: &Url) {
+    if let Some(host) = url.host_str() {
+        crate::ech::forget(host);
+        if let Some(ech) = ECH_CLIENTS.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+            ech.clients.remove(&host.to_ascii_lowercase());
+        }
+    }
+}
+
+/// Whether a request failed because the server refused the ECH key
+fn refused_ech(error: &reqwest::Error) -> bool {
+    let mut source: Option<&dyn std::error::Error> = Some(error);
+    while let Some(e) = source {
+        if format!("{:?}", e).contains("EncryptedClientHello") {
+            return true;
+        }
+        source = e.source();
+    }
+    false
+}
+
 /// send_following_redirects with extra request headers on each hop (e.g. If-None-Match, to ask
 /// whether a cached page changed)
 pub async fn send_with_headers(
@@ -500,15 +585,30 @@ pub async fn send_with_headers(
         if crate::reticulum::is_bridge(&current) {
             headers.insert(crate::reticulum::BRIDGE_HEADER, reqwest::header::HeaderValue::from_static("1"));
         }
-        let request = match &form_body {
-            Some(body) => client
-                .post(current.clone())
-                .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(body.clone()),
-            None => client.get(current.clone()),
-        }
-        .headers(headers.clone());
-        let response = request.send().await.map_err(|e| request_error(&e))?;
+        let request = |client: &Client| {
+            match &form_body {
+                Some(body) => client
+                    .post(current.clone())
+                    .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                    .body(body.clone()),
+                None => client.get(current.clone()),
+            }
+            .headers(headers.clone())
+        };
+        // The site's name encrypted with ECH where it publishes a key (with encrypted DNS). A site
+        // refusing its key is reached as before: its name shows, as it would in other browsers.
+        let ech = if i2p_mode { None } else { ech_client_for(&current).await };
+        let response = match ech {
+            Some(ech) => match request(&ech).send().await {
+                Ok(response) => response,
+                Err(e) if refused_ech(&e) => {
+                    forget_ech(&current);
+                    request(client).send().await.map_err(|e| request_error(&e))?
+                }
+                Err(e) => return Err(request_error(&e)),
+            },
+            None => request(client).send().await.map_err(|e| request_error(&e))?,
+        };
         // A 3xx without Location (e.g. 304) is returned as-is
         let location = match response.headers().get(reqwest::header::LOCATION) {
             Some(location) if response.status().is_redirection() => location,

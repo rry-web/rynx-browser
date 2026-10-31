@@ -59,6 +59,10 @@ psl = "2.1.245"
 keyring = "4.2.0"
 # Without its JIT compiler: the interpreter gives the same hashes without writing code into memory
 hashx = { version = "0.8", default-features = false }
+# Encrypted DNS (DNS over HTTPS, with ring like everything else), and sites' ECH keys from it
+hickory-resolver = { version = "0.26.3", default-features = false, features = ["tokio", "https-ring", "rustls-platform-verifier"] }
+# HPKE for Encrypted Client Hello, in pure Rust: rustls has it only with aws-lc-rs, a C library
+hpke = { version = "0.15.1", default-features = false, features = ["alloc", "x25519", "aes", "chacha", "getrandom"] }
 
 # Tagging downloads with their origin (macOS quarantine, Linux xdg origin)
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
