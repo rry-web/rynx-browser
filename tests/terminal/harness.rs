@@ -121,6 +121,9 @@ impl Rynx {
         command.env("TERM", "xterm-256color");
         command.env("LANG", "en_US.UTF-8");
         command.env("PATH", std::env::var("PATH").unwrap_or_default());
+        // Without it, portable-pty looks the shell up with getpwuid, which isn't thread-safe:
+        // tests starting rynx at once corrupted musl's heap and crashed
+        command.env("SHELL", "/bin/sh");
         for (key, value) in env {
             command.env(key, value);
         }
