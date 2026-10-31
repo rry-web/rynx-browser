@@ -726,7 +726,7 @@ pub fn ui(f: &mut Frame, app: &App) {
     render_tabs(f, app, chunks[0]);
     render_url_bar(f, app, chunks[1]);
     render_browser_content(f, app, chunks[2]);
-    if app.settings.monochrome() {
+    if app.glasses || app.settings.monochrome() {
         without_colour(f.buffer_mut());
     }
 }

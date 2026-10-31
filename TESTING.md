@@ -34,6 +34,13 @@ Items marked **(priority)** haven't been checked by a person yet.
       *Expected:* scrolling stops when your fingers stop. (A short glide can be macOS
       momentum scrolling, which the terminal sends itself.)
 
+### Glasses mode
+- [ ] **GLASS-03 (priority) Browsing by voice.** `cargo build --release`, then
+      `scripts/rynx-glasses`; allow the microphone. Say "links", "follow" and a number, "down",
+      "back", "go to" then an address, "search" then words, "read", "stop".
+      *Expected:* each happens, with "Heard: ..." in the status line; misheard words show as
+      "not a command" and do nothing.
+
 ### Downloads
 - [ ] **DL-06 (priority) Gatekeeper checks downloads (macOS).** Download a small unsigned app
       or script (e.g. a `.zip` containing a `.app` from a GitHub release), then open it from
@@ -311,6 +318,8 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | NAV-11 | Link hints: links and fields on screen numbered (f, ; for a new tab), a number opens one, Esc or another key cancels | browsing::nav_11_link_hints; `hints` (all) |
 | NET-01 | Encrypted DNS through each provider, local names still refused, ECH hiding the site's name | encrypted_dns (live, weekly); ech (HPKE, RFC 9180 vector); settings::dns_setting_is_checked |
 | NET-03 | The system's proxy ignored unless system_proxy is on (it would look names up past the local-network check) | system_proxy (all) |
+| GLASS-01 | Glasses mode: no colour, reader mode; the control socket's commands, a second rynx refused, a stale socket replaced | glasses::glass_01_glasses_mode_driven_through_the_socket |
+| GLASS-02 | Voice: phrases to commands, numbers, commands said together, the bare-number guard; spoken commands recognised (macOS, with VOSK_MODEL) | glasses/test_voice.py |
 | CACHE-01 | Back is instant | browsing::cache_01_back_is_instant |
 | CACHE-02 | I2P site gone | i2p::cache_02_i2p_site_gone |
 | CACHE-03 | Disk cache | pages::cache_03_disk_cache |

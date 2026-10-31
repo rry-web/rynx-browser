@@ -5,6 +5,7 @@ pub mod app;
 pub mod bookmarks;
 pub mod cache;
 pub mod constants;
+pub mod control;
 pub mod cookies;
 pub mod dns;
 pub mod ech;

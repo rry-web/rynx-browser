@@ -75,6 +75,9 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
   system keychain (asked for only once a site keeps cookies; `cookie_encryption = off` skips it)
 - Anubis bot checks passed without JavaScript, by every method it uses
 - Monochrome when `NO_COLOR` is set (or `colour = off`), with reverse video where colour was
+- Glasses mode with voice control (`rynx --glasses`, and `scripts/rynx-glasses` in the source),
+  for monochrome AR glasses or a laptop: say "links", then "follow three". Other programs can
+  drive rynx through its control socket by naming actions. See [glasses/](glasses/README.md)
 - Changeable keys (`keys.conf`), settings in the browser (`S`) or in `settings.conf`
 - Signed updates, checked daily and installed when you agree (`U`)
 
@@ -184,8 +187,9 @@ only as coloured blocks.
 ```sh
 scripts/check.sh --quick          # formatting, lints and tests
 scripts/check.sh                  # everything CI checks
-scripts/release.sh 0.3.6         # a release, start to finish
+scripts/release.sh 0.3.7         # a release, start to finish
 scripts/i2p_sites.py update       # I2P sites from the registries: then check, search WORDS, new
+scripts/rynx-glasses              # glasses mode, driven by voice (glasses/README.md)
 ```
 
 CI tests every push on Linux, macOS and Windows, including terminal tests that run the real

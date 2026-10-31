@@ -59,6 +59,10 @@ jobs:
       # ROUTER-04: the distribution's i2pd started, reporting progress and stopped by rynx
       - name: The real i2pd
         run: cargo test --locked --test i2pd -- --ignored the_real_i2pd_starts_reports_and_stops
+      - name: The I2P site finder and the voice controller
+        run: |
+          python3 -I scripts/test_i2p_sites.py
+          python3 -I glasses/test_voice.py
       - name: The Reticulum bridge, with real Reticulum
         run: |
           python3 -m venv /tmp/rns

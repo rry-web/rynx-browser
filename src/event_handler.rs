@@ -29,6 +29,42 @@ fn viewport_height(terminal_height: u16) -> usize {
 }
 
 pub fn handle_key_event(app: &mut App, key: KeyEvent, terminal_width: u16, terminal_height: u16) -> Result<bool> {
+    handle_key(app, key, terminal_width, terminal_height, true)
+}
+
+/// An action's own key (keys::action_key), as if pressed while browsing whatever keys.conf binds:
+/// the control socket names actions, not keys. Quits if it returns true.
+pub fn handle_action(app: &mut App, key: KeyEvent, terminal_width: u16, terminal_height: u16) -> Result<bool> {
+    handle_key(app, key, terminal_width, terminal_height, false)
+}
+
+/// Open link number `number` of those f (or ; for a new tab) would number on screen. Err if
+/// there's no such link.
+pub fn follow_hint(
+    app: &mut App,
+    number: usize,
+    new_tab: bool,
+    terminal_width: u16,
+    terminal_height: u16,
+) -> Result<std::result::Result<bool, String>> {
+    let tab = app.current_tab();
+    let hints = crate::app::Hints::for_screen(&tab.link_regions, tab.scroll, viewport_height(terminal_height), new_tab);
+    let Some(&(_, region)) = hints.targets.iter().find(|(n, _)| *n == number) else {
+        return Ok(Err(format!("No link {} on screen ({} there)", number, hints.targets.len())));
+    };
+    tab.hints = None;
+    tab.selected_link_index = region;
+    let open = KeyEvent::from(if new_tab { KeyCode::Char('F') } else { KeyCode::Enter });
+    handle_normal_mode(app, open, terminal_width, terminal_height).map(Ok)
+}
+
+fn handle_key(
+    app: &mut App,
+    key: KeyEvent,
+    terminal_width: u16,
+    terminal_height: u16,
+    translate: bool,
+) -> Result<bool> {
     // Some terminals (and stty settings, e.g. on openSUSE) send ^H for Backspace, which arrives as
     // Ctrl+H; without this it typed an "h"
     let key = if key.code == KeyCode::Char('h') && key.modifiers == KeyModifiers::CONTROL {
@@ -96,6 +132,7 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent, terminal_width: u16, termi
 
     match active_mode {
         // Browsing keys can be rebound (keys.conf): each is handled as its action's default key
+        InputMode::Normal if !translate => handle_normal_mode(app, key, terminal_width, terminal_height),
         InputMode::Normal => match app.keymap.translate(key) {
             Some(key) => handle_normal_mode(app, key, terminal_width, terminal_height),
             None => Ok(false),

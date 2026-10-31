@@ -13,6 +13,17 @@
   what colour showed (the selected link, find's matches, copy mode's selection, the mode badges,
   progress bars) is drawn in reverse video; links stay underlined and headings bold. `colour =
   on` keeps colour even when `NO_COLOR` is set. Images keep their own colours.
+- Glasses mode, for monochrome AR glasses (or trying the idea on a laptop): `rynx --glasses` turns
+  colour off, opens pages in reader mode, asks the terminal for 80×30, and opens the control
+  socket. `scripts/rynx-glasses` starts it with voice control: `glasses/voice.py` recognises a
+  fixed list of commands on your computer with Vosk (nothing is sent anywhere), so you say
+  "links", then "follow three"; "go to", "search" and "find" take free words after them, and
+  "read" reads the page aloud. See `glasses/README.md`.
+- The control socket (`--control-socket`, included in `--glasses`): programs on your computer
+  drive rynx by naming actions (`scroll_down`, `back`, `hints`...) rather than pressing keys,
+  plus `follow 12`, `open words`, `find words`, `type`, `status` and `read`, each answered with
+  a line of JSON. A Unix socket in a folder only you can open, made before the sandbox starts
+  and there only while rynx runs with the option. Not on Windows yet.
 - `scripts/i2p_sites.py` (in the source, Python, nothing to install) finds I2P sites worth a look:
   `update` gathers the address books of reg.i2p, notbob.i2p and stats.i2p through your router,
   `check` visits sites' front pages a few at a time (text only, no redirects followed) to see

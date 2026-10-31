@@ -24,6 +24,7 @@ cargo +nightly fuzz run render -- -max_total_time=60    # coverage-guided fuzzin
 cargo run --example render_file -- page.html 100        # see how rynx lays out a saved page
 cargo llvm-cov --open        # test coverage, in the browser (needs cargo-llvm-cov and llvm-tools-preview)
 python3 scripts/test_i2p_sites.py   # the I2P site finder's tests (no network needed)
+python3 glasses/test_voice.py       # the voice controller's tests (VOSK_MODEL=path adds speech)
 ```
 
 If another Rust (Homebrew's, say) comes first on PATH, run rustup's tools by path, as

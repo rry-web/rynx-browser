@@ -17,6 +17,9 @@ cargo clippy --locked --all-targets -- -D warnings
 
 step "Tests"
 cargo test --locked
+# The Python helpers' own tests (no network; nothing to install), leaving no caches behind
+PYTHONDONTWRITEBYTECODE=1 python3 -I scripts/test_i2p_sites.py
+PYTHONDONTWRITEBYTECODE=1 python3 -I glasses/test_voice.py
 
 if [ "${1:-}" = "--quick" ]; then
     printf '\nQuick checks passed.\n'

@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# rynx in glasses mode, driven by voice: say "links", then "follow three".
+#
+#   scripts/rynx-glasses              voice control, with rynx in this terminal
+#   scripts/rynx-glasses --text       no microphone: type what you'd say into a second terminal
+#                                     (python3 glasses/voice.py --text)
+#
+# The first run sets up glasses/voice.py's Python packages (vosk, sounddevice) in
+# ~/.cache/rynx/glasses-venv and downloads the speech model (40 MB, checked). Speech is
+# recognised on this computer; nothing is sent anywhere. What was heard shows in rynx's status
+# line, and the voice controller's log is ~/.cache/rynx/voice.log. On macOS, the terminal app
+# needs permission to use the microphone (System Settings, Privacy & Security, Microphone);
+# macOS asks the first time.
+#
+# rynx is this source's build (cargo build --release) unless RYNX names another.
+set -euo pipefail
+
+here=$(cd "$(dirname "$0")/.." && pwd)
+cache=${XDG_CACHE_HOME:-$HOME/.cache}/rynx
+mkdir -p "$cache"
+
+text=false
+if [ "${1:-}" = "--text" ]; then
+    text=true
+    shift
+fi
+
+rynx=${RYNX:-}
+if [ -z "$rynx" ]; then
+    for candidate in "$here/target/release/rynx" "$here/target/debug/rynx" "$(command -v rynx || true)"; do
+        if [ -n "$candidate" ] && [ -x "$candidate" ] && "$candidate" --help | grep -q -- --glasses; then
+            rynx=$candidate
+            break
+        fi
+    done
+fi
+if [ -z "$rynx" ]; then
+    echo "No rynx with glasses mode found: build it with  cargo build --release  (or set RYNX)" >&2
+    exit 1
+fi
+
+if $text; then
+    echo "In another terminal:  python3 $here/glasses/voice.py --text" >&2
+    sleep 2
+    exec "$rynx" --glasses "$@"
+fi
+
+venv=$cache/glasses-venv
+if [ ! -x "$venv/bin/python" ] || ! "$venv/bin/python" -c "import vosk, sounddevice" 2>/dev/null; then
+    echo "Setting up voice control (once): Python packages vosk and sounddevice in $venv" >&2
+    python3 -m venv "$venv"
+    "$venv/bin/pip" install --quiet --disable-pip-version-check "vosk==0.3.44" "sounddevice==0.5.6"
+fi
+# The speech model, fetched now (once) so its progress shows before rynx takes the screen
+"$venv/bin/python" "$here/glasses/voice.py" --download --check-model
+
+log=$cache/voice.log
+# Its errors go to the log too: rynx has the terminal
+"$venv/bin/python" "$here/glasses/voice.py" --log "$log" </dev/null 2>>"$log" &
+voice=$!
+trap 'kill "$voice" 2>/dev/null || true' EXIT
+"$rynx" --glasses "$@"

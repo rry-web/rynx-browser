@@ -99,9 +99,9 @@ What rynx would need, in order:
 
 1. **Link hints** (done): "follow 12" instead of "next link" twenty times.
 2. **A monochrome mode** (done): `colour = off`, or `NO_COLOR`; what colour marked is reversed.
-3. **A control socket** taking action names (`next_tab`, `open_in_new_tab`... the names in
-   `src/keys.rs`), so a voice program needn't know which keys are bound. Until then, run rynx in
-   tmux and send keys with `tmux send-keys`, which needs no change to rynx.
+3. **A control socket** (done): `--control-socket`, and glasses mode (`--glasses`) with a voice
+   controller (`glasses/voice.py`, Vosk with a fixed phrase list), started together by
+   `scripts/rynx-glasses`.
 4. **Small-screen tuning:** reader mode by default; check every page and box at 80×30 and less.
 
 Outside rynx: typing addresses and searches needs free dictation, which is harder than fixed
@@ -109,9 +109,10 @@ commands (bookmarks and history make it rarer); headless Linux still needs a ter
 display (the framebuffer console, or a small terminal emulator drawing straight to it); and the
 computer and battery likely ride in a pocket, wired or wireless to the glasses.
 
-First step: a prototype on a laptop. An 80×30 terminal with colour off, a speech recogniser with
-a fixed command list, and a short script sending keys through tmux. That shows whether browsing by
-voice feels good before buying hardware.
+First step (ready): the prototype on a laptop, `scripts/rynx-glasses` (glasses/README.md). Using it
+for a while shows whether browsing by voice feels good, and what's missing, before buying hardware.
+Then: a compact layout for short displays (the tab bar and address bar take six rows now), and
+the voice controller on a Raspberry Pi.
 
 ## Process notes
 

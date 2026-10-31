@@ -50,19 +50,27 @@ Usage: rynx [OPTIONS]
 A terminal web browser with no JavaScript.
 
 Options:
-      --no-sandbox  Don't restrict filesystem access (Linux, macOS). Use only to troubleshoot, e.g. if
-                    downloads fail because your Downloads folder is somewhere unusual.
-  -V, --version     Print the version and exit
-  -h, --help        Print this help and exit
+      --glasses         Glasses mode: no colour, pages in reader mode, an 80x30 screen if the
+                        terminal allows, and the control socket (below) for a voice controller.
+                        See glasses/README.md in rynx's source.
+      --control-socket  Let programs on this computer drive rynx through a socket in the settings
+                        folder (only you can open it), by naming actions: see glasses/README.md
+      --no-sandbox      Don't restrict filesystem access (Linux, macOS). Use only to troubleshoot,
+                        e.g. if downloads fail because your Downloads folder is somewhere unusual.
+  -V, --version         Print the version and exit
+  -h, --help            Print this help and exit
 
 Key bindings are listed on the start page and in the README.";
 
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     rynx::sandbox::disable_core_dumps();
     let mut sandbox_enabled = true;
+    let (mut glasses, mut control_socket) = (false, false);
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "--no-sandbox" => sandbox_enabled = false,
+            "--glasses" => (glasses, control_socket) = (true, true),
+            "--control-socket" => control_socket = true,
             "-V" | "--version" => {
                 println!("rynx {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
@@ -107,6 +115,9 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     // honours NO_COLOR itself, through the colour setting (ui::without_colour)
     crossterm::style::force_color_output(true);
 
+    // The control socket is made now: the sandbox forbids making sockets
+    let control = if control_socket { control_listener(config_dir.as_deref()) } else { None };
+
     // The I2P router, if the settings ask for it: started now, so the sandbox doesn't confine it
     let (router_state, router) = rynx::i2pd::start_if_wanted(&settings, rynx::i2pd::data_dir());
 
@@ -140,14 +151,44 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let cookie_key = cookie_key(&settings, config_dir.as_deref());
 
     tokio::runtime::Builder::new_multi_thread().enable_all().build()?.block_on(run(
-        settings,
-        problems,
+        (settings, problems),
         config_dir,
         sandbox,
         (installed, update_dir, update_note),
         (router_state, router),
         cookie_key,
+        (glasses, control),
     ))
+}
+
+#[cfg(unix)]
+type ControlListener = std::os::unix::net::UnixListener;
+#[cfg(not(unix))]
+type ControlListener = ();
+
+/// The control socket, or None (saying why) if it can't be made
+fn control_listener(config_dir: Option<&std::path::Path>) -> Option<ControlListener> {
+    #[cfg(unix)]
+    {
+        let Some(dir) = config_dir else {
+            eprintln!("rynx: no settings folder for the control socket");
+            return None;
+        };
+        let path = rynx::control::socket_path(dir);
+        match rynx::control::bind(&path) {
+            Ok(listener) => Some(listener),
+            Err(e) => {
+                eprintln!("rynx: the control socket couldn't be made at {}: {}", path.display(), e);
+                std::process::exit(1);
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = config_dir;
+        eprintln!("rynx: the control socket isn't available on Windows yet");
+        None
+    }
 }
 
 /// The key saved cookies are encrypted with, if they're to be and a site has been allowed cookies
@@ -201,13 +242,13 @@ fn restart(program: &std::path::Path, version: &str) -> ! {
 }
 
 async fn run(
-    settings: Settings,
-    settings_problems: Vec<String>,
+    (settings, settings_problems): (Settings, Vec<String>),
     config_dir: Option<std::path::PathBuf>,
     sandbox: SandboxStatus,
     (installed, update_dir, update_note): (rynx::update::Installed, Option<std::path::PathBuf>, Option<String>),
     (router_state, router): (rynx::i2pd::RouterState, Option<rynx::i2pd::Router>),
     cookie_key: Option<Result<[u8; 32], String>>,
+    (glasses, control): (bool, Option<ControlListener>),
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // This hook catches panics and restores the terminal before printing the error
     let original_hook = std::panic::take_hook();
@@ -216,6 +257,12 @@ async fn run(
         let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture, DisableBracketedPaste);
         original_hook(panic_info);
     }));
+    // Glasses mode asks for the screen a 640x480 display with an 8x16 font has (Terminal and
+    // xterm honour it; others ignore it)
+    if glasses {
+        print!("\x1b[8;30;80t");
+        let _ = io::Write::flush(&mut io::stdout());
+    }
     // Setup Terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -293,9 +340,32 @@ async fn run(
     app.router_state = router_state;
     app.watch_router();
     app.check_for_updates_if_due();
+    if glasses {
+        app.glasses = true;
+        app.current_tab().reader_mode = true;
+    }
+    #[cfg(unix)]
+    let control = match control.map(rynx::control::serve).transpose() {
+        Ok(requests) => requests,
+        Err(e) => {
+            app.current_tab().status_message = format!("The control socket couldn't be used: {}", e);
+            None
+        }
+    };
+    #[cfg(not(unix))]
+    let control: Option<tokio::sync::mpsc::Receiver<rynx::control::Request>> = control.and(None);
+    if control.is_some() {
+        let mode = if glasses { "Glasses mode" } else { "Control socket on" };
+        app.current_tab().status_message = format!("{}: waiting for commands (say \"help\")", mode);
+    }
 
     // Run App
-    let res = run_app(&mut terminal, app).await;
+    let res = run_app(&mut terminal, app, control).await;
+    // The socket goes with rynx (one named by RYNX_CONTROL_SOCKET outside rynx's folders stays,
+    // as the sandbox forbids removing it; the next rynx replaces it, since it no longer answers)
+    if let Some(dir) = &config_dir {
+        let _ = std::fs::remove_file(rynx::control::socket_path(dir));
+    }
 
     // Teardown: stop mouse reporting and drain input while still in raw mode
     execute!(terminal.backend_mut(), DisableMouseCapture, DisableBracketedPaste)?;
@@ -318,7 +388,11 @@ async fn run(
     std::process::exit(0);
 }
 
-async fn run_app<B: Backend<Error = io::Error>>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
+async fn run_app<B: Backend<Error = io::Error>>(
+    terminal: &mut Terminal<B>,
+    mut app: App,
+    mut control: Option<tokio::sync::mpsc::Receiver<rynx::control::Request>>,
+) -> io::Result<()> {
     let mut size = terminal.size()?;
     // Lay out the start page for the actual terminal width
     app.resize(size.width, size.height);
@@ -345,6 +419,15 @@ async fn run_app<B: Backend<Error = io::Error>>(terminal: &mut Terminal<B>, mut 
 
         // Handle network events
         process_network_events(&mut app, size.width)?;
+
+        // Commands from the control socket, as if keys were pressed
+        while let Some(request) = control.as_mut().and_then(|c| c.try_recv().ok()) {
+            let (answer, quit) = rynx::control::run_command(&mut app, &request.line, size.width, size.height);
+            let _ = request.reply.send(answer);
+            if quit {
+                return Ok(());
+            }
+        }
 
         // Handle input events: wait briefly for the first, then everything already queued before
         // redrawing. One event per frame let touchpad bursts pile up and replay long after.

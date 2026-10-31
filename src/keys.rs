@@ -84,6 +84,22 @@ const ACTIONS: &[Action] = &[
     Action { name: "help", about: "The start page, with the keys", defaults: &["?"] },
 ];
 
+/// The key an action is handled as (its first default), by its name in keys.conf
+pub fn action_key(name: &str) -> Option<KeyEvent> {
+    let action = ACTIONS.iter().find(|a| a.name == name)?;
+    Key::parse(action.defaults[0]).map(Key::event)
+}
+
+/// Every action's name and what it does
+pub fn actions() -> impl Iterator<Item = (&'static str, &'static str)> {
+    ACTIONS.iter().map(|a| (a.name, a.about))
+}
+
+/// A key written as in keys.conf ("Esc", "Ctrl+f", "r"), as a key press
+pub fn parse_key(text: &str) -> Option<KeyEvent> {
+    Key::parse(text).map(Key::event)
+}
+
 /// A key as bindings see it: the key, and Ctrl and Alt (Shift is in the character, or Shift+Tab)
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 struct Key {
