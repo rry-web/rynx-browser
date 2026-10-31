@@ -13,7 +13,8 @@
 //! - `follow 12`, `follow_in_new_tab 12`: the link f (or ;) numbers 12
 //! - `open words`: an address, or words to search for, as typed into the address bar
 //! - `find words`: find on the page, and jump to the first match
-//! - `type text`: typed as keys, into the field being typed in, say
+//! - `type text`: typed into the field being typed in (or the address bar, or find); refused
+//!   while browsing, where each letter would be a key
 //! - `key Esc`: one key, as pressed (written as in keys.conf)
 //! - `status`: the page's title and address, the status line and the mode
 //! - `read`: the page's text from the top of the screen down, for reading aloud
@@ -219,6 +220,10 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
             done(app, false)
         }
         "type" => {
+            // Only into something being typed in: while browsing, each letter is a key (q quits)
+            if app.current_tab().input_mode == InputMode::Normal || app.current_tab().hints.is_some() {
+                return Err("Not typing into a field: say \"links\" and the field's number first".into());
+            }
             type_text(app, rest, width, height).map_err(failed)?;
             done(app, false)
         }

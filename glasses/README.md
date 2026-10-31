@@ -36,7 +36,7 @@ and in a second terminal `python3 glasses/voice.py --text` takes what you'd say,
 | go to *(pause)* wikipedia dot org | Open an address ("dot" and "slash" are typed) |
 | search *(pause)* terminal browsers | Search for the words |
 | find *(pause)* potato | Find on the page |
-| type *(pause)* words, submit | Type into the field being typed in; send the form |
+| type *(pause)* words, submit | Type into the field chosen with "links" and its number; send the form |
 | next link, previous link, select | Step through links, open the selected one |
 | new tab, close tab, next tab, previous tab, reopen tab | Tabs |
 | read, stop | Read the page aloud from the top of the screen; stop reading |
@@ -77,7 +77,7 @@ macOS, `~/.config/rynx-browser` on Linux), in a folder only you can open, or whe
 | `follow 12`, `follow_in_new_tab 12` | Open the link `f` (or `;`) numbers 12 |
 | `open words` | An address, or words to search for, as typed into the address bar |
 | `find words` | Find on the page, and jump to the first match |
-| `type text` | Typed as keys (into a field being typed in) |
+| `type text` | Typed into the field being typed in (or the address bar, or find); refused while browsing, where each letter would be a key |
 | `key Esc` | One key, as pressed (written as in `keys.conf`) |
 | `status` | `title`, `address`, the status line (`message`), `mode`, `tab` and `tabs` |
 | `read` | `text`: the page from the top of the screen down, for reading aloud |

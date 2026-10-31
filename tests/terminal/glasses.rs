@@ -48,6 +48,11 @@ fn glass_01_glasses_mode_driven_through_the_socket() {
         ),
         ("/b", "<title>Beta</title><h1>Beta page</h1><p>Beta's words.</p>"),
         ("/c", "<title>Gamma</title><h1>Gamma page</h1><p>Gamma's words.</p>"),
+        (
+            "/form",
+            "<title>Form</title><h1>Search here</h1><form action=\"/results\"><input name=q></form><p>A form to search with, and some words around it for reader mode.</p>",
+        ),
+        ("/results", "<title>Results</title><h1>Results for potatoes</h1><p>The results of the search.</p>"),
     ]);
     let home = Home::new("glasses");
     home.settings("");
@@ -85,6 +90,22 @@ fn glass_01_glasses_mode_driven_through_the_socket() {
     rynx.wait_for("1 match for \"beta\"");
     control.send("heard go back");
     rynx.wait_for("Heard: go back");
+
+    // Typing while browsing is refused: the letters would be keys, and q quits
+    let typed = control.send("type quick brown fox");
+    assert_eq!(typed["ok"], false, "{typed}");
+    assert!(rynx.is_running());
+    // Into a field: chosen by its number, typed into, sent
+    control.send(&format!("open {}", site.url("/form")));
+    rynx.wait_for("Search here");
+    control.send("follow 1");
+    assert_eq!(control.send("status")["mode"], "FormEdit");
+    assert_eq!(control.send("type potatoes")["ok"], true);
+    control.send("key Enter");
+    rynx.wait_for("Results for potatoes");
+    control.send("back");
+    control.send("back");
+    rynx.wait_for("Alpha page");
 
     let unknown = control.send("fly away");
     assert_eq!(unknown["ok"], false, "{unknown}");
