@@ -284,6 +284,13 @@ impl NetworkManager {
             builder = builder.pool_max_idle_per_host(0);
         }
 
+        // A proxy in the system's settings (or HTTPS_PROXY and the like) looks names up itself,
+        // past rynx's check for public names pointing at the local network, and past encrypted
+        // DNS; so it isn't used unless the system_proxy setting asks for it
+        if !use_proxy && !SYSTEM_PROXY.load(std::sync::atomic::Ordering::Relaxed) {
+            builder = builder.no_proxy();
+        }
+
         // Names are looked up by rynx, refusing public names that point at the local network
         // (through the I2P proxy, the proxy looks them up instead)
         if !use_proxy {
@@ -521,6 +528,14 @@ struct EchClients {
     user_agent: String,
     cookies: std::sync::Arc<crate::cookies::Jar>,
     clients: HashMap<String, Client>,
+}
+
+/// Whether the system's proxy is used on the clearweb (the system_proxy setting)
+static SYSTEM_PROXY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Use the system's proxy settings on the clearweb, or not; for clients made from now on
+pub fn use_system_proxy(on: bool) {
+    SYSTEM_PROXY.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
 static ECH_CLIENTS: std::sync::Mutex<Option<EchClients>> = std::sync::Mutex::new(None);

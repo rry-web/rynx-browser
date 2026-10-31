@@ -220,6 +220,11 @@ impl App {
             "Encrypt saved cookies with a key in the system keychain (asked for once a site keeps cookies; on macOS it may ask again after updates)",
         ));
         html.push_str(&checkbox(
+            "system_proxy",
+            s.system_proxy,
+            "Use the system's proxy settings (off: a proxy looks names up itself, past encrypted DNS and the check that keeps public names off your local network)",
+        ));
+        html.push_str(&checkbox(
             "cache_i2p",
             s.disk_cache_i2p,
             "Keep I2P pages on disk too (faster on slow I2P connections, but a record of I2P visits)",
@@ -284,6 +289,7 @@ impl App {
         let mut router = false;
         let mut router_keep = false;
         let mut router_sam = false;
+        let mut system_proxy = false;
         let mut engine = None;
         let mut dns = None;
         let mut dns_url = String::new();
@@ -300,6 +306,7 @@ impl App {
                 ("i2p_router", ControlValue::Checked(on)) => router = *on,
                 ("i2p_router_keep", ControlValue::Checked(on)) => router_keep = *on,
                 ("i2p_router_sam", ControlValue::Checked(on)) => router_sam = *on,
+                ("system_proxy", ControlValue::Checked(on)) => system_proxy = *on,
                 ("cache_i2p", ControlValue::Checked(on)) => cache_i2p = *on,
                 ("dns", ControlValue::Selected(i)) => {
                     if let ControlKind::Select { options } = &control.kind {
@@ -349,6 +356,7 @@ impl App {
         lines.push(format!("i2p_router = {}", if router { "start" } else { "off" }));
         lines.push(format!("i2p_router_keep = {}", if router_keep { "on" } else { "off" }));
         lines.push(format!("i2p_router_sam = {}", if router_sam { "on" } else { "off" }));
+        lines.push(format!("system_proxy = {}", if system_proxy { "on" } else { "off" }));
 
         let (settings, problems) = crate::settings::Settings::parse(&lines.join("\n"));
         if let Some(problem) = problems.first() {
@@ -388,7 +396,11 @@ impl App {
     /// Put new settings into effect without restarting (except the downloads folder, which the
     /// sandbox fixes at startup)
     fn apply_settings(&mut self, new: crate::settings::Settings) -> Result<(), String> {
-        if new.user_agent != self.settings.user_agent || new.i2p_proxy != self.settings.i2p_proxy {
+        crate::network::use_system_proxy(new.system_proxy);
+        if new.user_agent != self.settings.user_agent
+            || new.i2p_proxy != self.settings.i2p_proxy
+            || new.system_proxy != self.settings.system_proxy
+        {
             // The cookies carry over to the new clients
             let network = NetworkManager::with_cookies(
                 &new.i2p_proxy,

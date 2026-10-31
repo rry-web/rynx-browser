@@ -6,13 +6,10 @@ working one. Bugs found in testing come before all of it.
 
 ## Next
 
-1. **The system-proxy gap.** A proxy set in the system's settings bypasses the check that refuses
-   public names resolving to local addresses (see `src/dns.rs`). It's the one known hole in the
-   network protections, and small.
-2. **Multi-key sequences** (`gg`, `gt`), now that link hints are done (`f`, and `;` for a new
+1. **Multi-key sequences** (`gg`, `gt`), now that link hints are done (`f`, and `;` for a new
    tab; numbered, so they can be said as well as typed).
-3. **Homebrew tap.** A formula pointing at the release builds; then the AUR and others.
-4. **Session restore (opt-in).** Reopen the last session's tabs at start.
+2. **Homebrew tap.** A formula pointing at the release builds; then the AUR and others.
+3. **Session restore (opt-in).** Reopen the last session's tabs at start.
 
 ## Later
 

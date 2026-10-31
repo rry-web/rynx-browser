@@ -20,6 +20,13 @@
   open in rynx. Sites are reached by their `.b32.i2p` addresses, so the router's address book
   isn't changed.
 
+### Changed
+- A proxy set in the system's settings (or `HTTPS_PROXY` and the like) is no longer used on the
+  clearweb unless the new `system_proxy` setting (also on the settings page) turns it on. A proxy
+  looks names up itself, so through it a public name could still reach your local network, past
+  the check that stops that, and names went past encrypted DNS. This was the one known hole in
+  the network protections. I2P mode always goes through the I2P router, as before.
+
 ### Fixed
 - The terminal tests could crash on static musl builds (which failed the 0.3.6 release build, so
   0.3.6 was never published): the library running rynx in a pseudo-terminal looked up the shell

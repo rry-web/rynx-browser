@@ -120,8 +120,8 @@ being typed in, never run as keys.
 explained and commented out: the home page, the search engine (Marginalia by default, or
 DuckDuckGo's HTML version, or any address), locking to the clearweb or I2P, the I2P proxy and
 starting i2pd (and SAM, for torrent clients), encrypted DNS, the Reticulum bridge's address,
-history, the disk cache, images, colour, updates, the browser's identity, and names on your own
-network.
+history, the disk cache, images, colour, updates, the browser's identity, names on your own
+network, and whether to use the system's proxy (off by default).
 
 rynx introduces itself as Safari on a Mac, the identity millions of visitors send, so it doesn't
 stand out (the `user_agent` setting changes it). When a bot wall shows an Anubis check, rynx does
@@ -176,8 +176,8 @@ The longer list, with notes and ideas, is in [ROADMAP.md](ROADMAP.md).
   slow to answer while starting
 
 Known limits: sites that need JavaScript won't work, including those behind Cloudflare's bot
-check (the Internet Archive's copy or reader mode sometimes help); macOS Terminal draws images only as coloured blocks; a proxy set in the
-system's settings bypasses the local-network check for names.
+check (the Internet Archive's copy or reader mode sometimes help); macOS Terminal draws images
+only as coloured blocks.
 
 ## Development
 

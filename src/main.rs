@@ -100,6 +100,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let download_dir = settings.download_dir.clone().unwrap_or_else(App::default_download_dir);
     rynx::dns::allow_local_names(&settings.local_names);
     rynx::dns::use_dns(&settings.dns);
+    rynx::network::use_system_proxy(settings.system_proxy);
     rynx::reticulum::set_bridge(&settings.reticulum_bridge);
     // crossterm drops every colour when NO_COLOR is set, which would make colour = on do nothing
     // and break Kitty's images (their placeholders carry the image's number as a colour). rynx

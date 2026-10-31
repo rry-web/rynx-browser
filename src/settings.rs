@@ -64,6 +64,14 @@ const DOCUMENTED: &[Documented] = &[
         examples: &["system", "mullvad", "https://dns.example/dns-query"],
     },
     Documented {
+        key: "system_proxy",
+        about: "Use the proxy set in your system's settings (or HTTPS_PROXY and the like) on the clearweb.\n\
+                Off by default: a proxy looks names up itself, so neither encrypted DNS nor the check that\n\
+                stops public names reaching your local network applies through it. Turn it on only where\n\
+                the network allows nothing else, such as some workplaces.",
+        examples: &["on"],
+    },
+    Documented {
         key: "local_names",
         about: "Names on your own network (a company's, say) that point at local addresses, comma-separated,\n\
                 with their subdomains. Other public names that point at this computer or the local network are\n\
@@ -276,6 +284,8 @@ pub struct Settings {
     pub dns: String,
     /// Encrypt saved cookies with a key in the system keychain
     pub encrypt_cookies: bool,
+    /// Use the system's proxy on the clearweb
+    pub system_proxy: bool,
 }
 
 impl Default for Settings {
@@ -306,6 +316,7 @@ impl Default for Settings {
             local_names: Vec::new(),
             dns: String::from(crate::dns::DEFAULT_DNS),
             encrypt_cookies: true,
+            system_proxy: false,
         }
     }
 }
@@ -374,6 +385,7 @@ impl Settings {
                         value.split(',').map(|n| n.trim().to_ascii_lowercase()).filter(|n| !n.is_empty()).collect()
                 }
                 "dns" if crate::dns::is_dns_setting(value) => settings.dns = value.to_string(),
+                "system_proxy" if matches!(value, "on" | "off") => settings.system_proxy = value == "on",
                 "history" if matches!(value, "on" | "off") => settings.save_history = value == "on",
                 "anubis" if matches!(value, "on" | "off") => settings.solve_anubis = value == "on",
                 "images" if matches!(value, "ask" | "site" | "all") => {
@@ -429,9 +441,8 @@ impl Settings {
                 "home_page" | "search_url" | "i2p_proxy" | "reticulum_bridge" | "download_dir" | "history"
                 | "user_agent" | "anubis" | "cache" | "cache_i2p" | "cache_size" | "images" | "image_display"
                 | "image_protocol" | "updates" | "update_channel" | "i2p_router" | "i2p_router_keep"
-                | "i2p_router_sam" | "i2pd_path" | "local_names" | "cookie_encryption" | "dns" | "colour" | "color" => {
-                    problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
-                }
+                | "i2p_router_sam" | "i2pd_path" | "local_names" | "cookie_encryption" | "dns" | "colour" | "color"
+                | "system_proxy" => problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value)),
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),
             }
         }
@@ -492,6 +503,7 @@ impl Settings {
             "i2p_router_keep" => self.keep_i2p_router.then(|| "on".to_string()),
             "i2p_router_sam" => self.i2p_router_sam.then(|| "on".to_string()),
             "cookie_encryption" => (!self.encrypt_cookies).then(|| "off".to_string()),
+            "system_proxy" => self.system_proxy.then(|| "on".to_string()),
             "local_names" => (!self.local_names.is_empty()).then(|| self.local_names.join(", ")),
             "dns" => changed(self.dns.clone(), default.dns),
             "i2pd_path" => self.i2pd_path.as_ref().map(|d| d.to_string_lossy().into_owned()),

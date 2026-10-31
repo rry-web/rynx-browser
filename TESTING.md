@@ -310,6 +310,7 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | NAV-10 | Meta refreshes followed (noscript too), Back skipping them, loops stopped, countdowns and script redirects as links | `redirects` (all) |
 | NAV-11 | Link hints: links and fields on screen numbered (f, ; for a new tab), a number opens one, Esc or another key cancels | browsing::nav_11_link_hints; `hints` (all) |
 | NET-01 | Encrypted DNS through each provider, local names still refused, ECH hiding the site's name | encrypted_dns (live, weekly); ech (HPKE, RFC 9180 vector); settings::dns_setting_is_checked |
+| NET-03 | The system's proxy ignored unless system_proxy is on (it would look names up past the local-network check) | system_proxy (all) |
 | CACHE-01 | Back is instant | browsing::cache_01_back_is_instant |
 | CACHE-02 | I2P site gone | i2p::cache_02_i2p_site_gone |
 | CACHE-03 | Disk cache | pages::cache_03_disk_cache |

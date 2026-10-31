@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Rows marked Automated are covered by the tests TESTING.md names; the rest need a person.
 
-Total checks: 164; 20 still need a person (see TESTING.md's "Still by hand"), the rest are automated.
+Total checks: 165; 20 still need a person (see TESTING.md's "Still by hand"), the rest are automated.
 
 
 ## Automated checks
@@ -257,6 +257,7 @@ Total checks: 164; 20 still need a person (see TESTING.md's "Still by hand"), th
 |----|-------|:--------:|--------|------|-------|
 | NET-01 | Encrypted DNS and ECH |  | Automated |  |  |
 | NET-02 | Encrypted DNS on your networks | Yes |  |  |  |
+| NET-03 | System proxy only when asked |  | Automated |  |  |
 
 ## Reader mode
 
