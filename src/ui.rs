@@ -726,6 +726,29 @@ pub fn ui(f: &mut Frame, app: &App) {
     render_tabs(f, app, chunks[0]);
     render_url_bar(f, app, chunks[1]);
     render_browser_content(f, app, chunks[2]);
+    if app.settings.monochrome() {
+        without_colour(f.buffer_mut());
+    }
+}
+
+/// Monochrome: every colour taken away, and what a background colour marked (the selected link,
+/// matches, copy mode's selection, mode badges, progress bars) reversed instead. Underline and
+/// bold, which links and headings have already, stay. Images drawn as coloured blocks keep their
+/// colours: a monochrome display shows them as shades.
+fn without_colour(buffer: &mut ratatui::buffer::Buffer) {
+    for cell in buffer.content.iter_mut() {
+        // Image cells: Kitty's placeholders carry the image's number as their colour, and other
+        // protocols' cells are marked to be skipped or drawn at a forced width
+        if cell.diff_option != ratatui::buffer::CellDiffOption::None || cell.symbol() == "▀" {
+            continue;
+        }
+        if cell.bg != Color::Reset {
+            // Reversed already (the cursor on the selected link) shows as normal within it
+            cell.modifier.toggle(Modifier::REVERSED);
+        }
+        cell.fg = Color::Reset;
+        cell.bg = Color::Reset;
+    }
 }
 
 fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {

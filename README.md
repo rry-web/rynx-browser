@@ -74,6 +74,7 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
 - Staying signed in to the sites you choose (`C`), with their cookies encrypted by a key in the
   system keychain (asked for only once a site keeps cookies; `cookie_encryption = off` skips it)
 - Anubis bot checks passed without JavaScript, by every method it uses
+- Monochrome when `NO_COLOR` is set (or `colour = off`), with reverse video where colour was
 - Changeable keys (`keys.conf`), settings in the browser (`S`) or in `settings.conf`
 - Signed updates, checked daily and installed when you agree (`U`)
 
@@ -119,7 +120,8 @@ being typed in, never run as keys.
 explained and commented out: the home page, the search engine (Marginalia by default, or
 DuckDuckGo's HTML version, or any address), locking to the clearweb or I2P, the I2P proxy and
 starting i2pd (and SAM, for torrent clients), encrypted DNS, the Reticulum bridge's address,
-history, the disk cache, images, updates, the browser's identity, and names on your own network.
+history, the disk cache, images, colour, updates, the browser's identity, and names on your own
+network.
 
 rynx introduces itself as Safari on a Mac, the identity millions of visitors send, so it doesn't
 stand out (the `user_agent` setting changes it). When a bot wall shows an Anubis check, rynx does

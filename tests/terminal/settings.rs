@@ -69,9 +69,9 @@ fn set_03_home_page() {
 /// SET-04: a bad setting is named; everything else works
 #[test]
 fn set_04_bad_settings() {
-    let (_home, mut rynx) = started_with("bad-settings", "colour = blue\n");
+    let (_home, mut rynx) = started_with("bad-settings", "font = huge\n");
     rynx.wait_for("Problem in settings.conf, line");
-    rynx.wait_for("unknown setting \"colour\"");
+    rynx.wait_for("unknown setting \"font\"");
     rynx.keys("S");
     rynx.wait_for("Settings");
     rynx.quit();
@@ -401,4 +401,32 @@ fn i2p_only_chosen_on_the_page_survives_a_restart() {
     again.wait_for("locked on in settings");
     assert!(again.rows()[3].contains("I2P mode"), "{}", again.screen());
     again.quit();
+}
+
+/// SET-17: with NO_COLOR set, or colour = off, nothing is drawn in colour, and the selected link
+/// is reversed instead; colour = on keeps colour despite NO_COLOR
+#[test]
+fn set_17_monochrome() {
+    let site = Site::new(&[("/", "<h1>Plain</h1><p><a href=\"/a\">First link</a> <a href=\"/b\">Second link</a></p>")]);
+    let no_color = [("NO_COLOR", String::from("1"))];
+    for (settings, env, monochrome) in
+        [("", &no_color[..], true), ("colour = off\n", &[][..], true), ("colour = on\n", &no_color[..], false)]
+    {
+        let home = Home::new("monochrome");
+        home.settings(settings);
+        let mut rynx = Rynx::start_with(std::path::Path::new(env!("CARGO_BIN_EXE_rynx")), &home, &[], env);
+        rynx.wait_for("RYNX BROWSER");
+        rynx.open(&site.url("/"));
+        rynx.wait_for("Second link");
+        rynx.keys("\t");
+        rynx.settle();
+        let (row, col) = rynx.find("Second link").unwrap();
+        if monochrome {
+            assert_eq!(rynx.coloured_cells(), vec![], "{settings:?}:\n{}", rynx.screen());
+            assert!(rynx.reversed_cells().contains(&(row, col + 3)), "{settings:?}:\n{}", rynx.screen());
+        } else {
+            assert!(rynx.cells_with_background(3).contains(&(row, col + 3)), "{}", rynx.screen());
+        }
+        rynx.quit();
+    }
 }

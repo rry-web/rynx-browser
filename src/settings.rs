@@ -143,6 +143,13 @@ const DOCUMENTED: &[Documented] = &[
         examples: &["blocks"],
     },
     Documented {
+        key: "colour",
+        about: "Colour on screen: \"auto\" (the default: on, unless the NO_COLOR environment variable is set),\n\
+                \"on\", or \"off\" for monochrome displays: no colour at all, with what colour showed (the\n\
+                selected link, matches, modes) shown in reverse video instead.",
+        examples: &["off"],
+    },
+    Documented {
         key: "cache",
         about: "Keep pages on disk (compressed, in rynx's cache folder), so Back, unchanged pages and sites\n\
                 that can't be reached are served from it. Off by default: pages are then kept only in memory,\n\
@@ -197,6 +204,16 @@ pub enum ImageProtocol {
     Blocks,
 }
 
+/// Whether the screen is in colour
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Colour {
+    /// Colour, unless NO_COLOR is set (https://no-color.org)
+    Auto,
+    On,
+    /// Monochrome
+    Off,
+}
+
 /// Whether the browser may switch between the clearweb and I2P
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NetworkMode {
@@ -242,6 +259,7 @@ pub struct Settings {
     pub images: ImageLoading,
     pub image_display: ImageDisplay,
     pub image_protocol: ImageProtocol,
+    pub colour: Colour,
     /// Check for updates once a day
     pub check_updates: bool,
     /// Update to pre-releases (betas) too
@@ -278,6 +296,7 @@ impl Default for Settings {
             images: ImageLoading::Ask,
             image_display: ImageDisplay::Inline,
             image_protocol: ImageProtocol::Auto,
+            colour: Colour::Auto,
             check_updates: true,
             beta_updates: false,
             start_i2p_router: false,
@@ -376,6 +395,14 @@ impl Settings {
                         _ => ImageProtocol::Auto,
                     }
                 }
+                // Either spelling
+                "colour" | "color" if matches!(value, "auto" | "on" | "off") => {
+                    settings.colour = match value {
+                        "on" => Colour::On,
+                        "off" => Colour::Off,
+                        _ => Colour::Auto,
+                    }
+                }
                 "updates" if matches!(value, "daily" | "off") => settings.check_updates = value == "daily",
                 "update_channel" if matches!(value, "beta" | "stable") => settings.beta_updates = value == "beta",
                 "cache" if matches!(value, "on" | "off") => settings.disk_cache = value == "on",
@@ -402,7 +429,7 @@ impl Settings {
                 "home_page" | "search_url" | "i2p_proxy" | "reticulum_bridge" | "download_dir" | "history"
                 | "user_agent" | "anubis" | "cache" | "cache_i2p" | "cache_size" | "images" | "image_display"
                 | "image_protocol" | "updates" | "update_channel" | "i2p_router" | "i2p_router_keep"
-                | "i2p_router_sam" | "i2pd_path" | "local_names" | "cookie_encryption" | "dns" => {
+                | "i2p_router_sam" | "i2pd_path" | "local_names" | "cookie_encryption" | "dns" | "colour" | "color" => {
                     problems.push(format!("line {}: invalid {} \"{}\"", number + 1, key, value))
                 }
                 _ => problems.push(format!("line {}: unknown setting \"{}\"", number + 1, key)),
@@ -452,6 +479,11 @@ impl Settings {
                 ImageProtocol::Sixel => Some("sixel".to_string()),
                 ImageProtocol::Blocks => Some("blocks".to_string()),
             },
+            "colour" => match self.colour {
+                Colour::Auto => None,
+                Colour::On => Some("on".to_string()),
+                Colour::Off => Some("off".to_string()),
+            },
             "updates" => (!self.check_updates).then(|| "off".to_string()),
             "update_channel" => self.beta_updates.then(|| "beta".to_string()),
             "cache" => self.disk_cache.then(|| "on".to_string()),
@@ -497,6 +529,15 @@ impl Settings {
             .and_then(|_| std::fs::write(&temporary, self.to_file_text()))
             .and_then(|_| std::fs::rename(&temporary, &path))
             .map_err(|e| format!("Couldn't save settings: {}", e))
+    }
+
+    /// Whether the screen is drawn without colour: colour off, or left to NO_COLOR and it's set
+    pub fn monochrome(&self) -> bool {
+        match self.colour {
+            Colour::On => false,
+            Colour::Off => true,
+            Colour::Auto => std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()),
+        }
     }
 
     /// The address that searches for `words`

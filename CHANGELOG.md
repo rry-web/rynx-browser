@@ -8,6 +8,11 @@
   `;` does the same for links, opening them in a new tab. The numbers are drawn in reverse
   video, so they read without colour. Both keys can be changed in `keys.conf` (`hints`,
   `hints_in_new_tab`).
+- Monochrome: the `colour` setting (also on the settings page, under Screen) can turn colour off,
+  for monochrome displays, and by default follows the `NO_COLOR` convention. Without colour,
+  what colour showed (the selected link, find's matches, copy mode's selection, the mode badges,
+  progress bars) is drawn in reverse video; links stay underlined and headings bold. `colour =
+  on` keeps colour even when `NO_COLOR` is set. Images keep their own colours.
 - `scripts/i2p_sites.py` (in the source, Python, nothing to install) finds I2P sites worth a look:
   `update` gathers the address books of reg.i2p, notbob.i2p and stats.i2p through your router,
   `check` visits sites' front pages a few at a time (text only, no redirects followed) to see

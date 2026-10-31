@@ -140,7 +140,20 @@ impl App {
                 .collect();
             format!("<select name=\"{name}\">{options}</select>")
         };
-        use crate::settings::{ImageDisplay, ImageLoading, ImageProtocol};
+        use crate::settings::{Colour, ImageDisplay, ImageLoading, ImageProtocol};
+        let colour = match s.colour {
+            Colour::Auto => "auto",
+            Colour::On => "on",
+            Colour::Off => "off",
+        };
+        html.push_str(&format!(
+            "<h2>Screen</h2><p><b>Colour</b>: off suits monochrome displays; what colour marked is shown reversed.<br>{}</p>",
+            choice("colour", colour, &[
+                ("auto", "On, unless NO_COLOR is set"),
+                ("on", "On"),
+                ("off", "Off (monochrome)"),
+            ]),
+        ));
         let loading = match s.images {
             ImageLoading::Ask => "ask",
             ImageLoading::Site => "site",

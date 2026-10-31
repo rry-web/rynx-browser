@@ -294,6 +294,25 @@ impl Rynx {
         self.page_cells(|cell| cell.bgcolor() == vt100::Color::Idx(colour))
     }
 
+    /// Cells anywhere on the screen drawn in a colour, as (row, column)
+    pub fn coloured_cells(&self) -> Vec<(u16, u16)> {
+        let parser = self.screen.lock().unwrap();
+        let screen = parser.screen();
+        let (rows, cols) = screen.size();
+        let mut found = Vec::new();
+        for row in 0..rows.get() {
+            for col in 0..cols.get() {
+                if screen
+                    .cell(row, col)
+                    .is_some_and(|c| c.fgcolor() != vt100::Color::Default || c.bgcolor() != vt100::Color::Default)
+                {
+                    found.push((row, col));
+                }
+            }
+        }
+        found
+    }
+
     fn page_cells(&self, wanted: impl Fn(&vt100::Cell) -> bool) -> Vec<(u16, u16)> {
         let parser = self.screen.lock().unwrap();
         let screen = parser.screen();

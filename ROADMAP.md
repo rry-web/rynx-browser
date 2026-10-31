@@ -101,8 +101,7 @@ the base. A board with a built-in NPU is the easier step up if the CPU isn't eno
 What rynx would need, in order:
 
 1. **Link hints** (done): "follow 12" instead of "next link" twenty times.
-2. **A monochrome mode:** no colour, meaning carried by bold, underline and reverse; and honour
-   the `NO_COLOR` convention.
+2. **A monochrome mode** (done): `colour = off`, or `NO_COLOR`; what colour marked is reversed.
 3. **A control socket** taking action names (`next_tab`, `open_in_new_tab`... the names in
    `src/keys.rs`), so a voice program needn't know which keys are bound. Until then, run rynx in
    tmux and send keys with `tmux send-keys`, which needs no change to rynx.

@@ -263,6 +263,26 @@ fn dns_setting_is_checked() {
     }
 }
 
+#[test]
+fn colour_setting_is_checked_and_saved() {
+    use rynx::settings::Colour;
+    assert_eq!(Settings::default().colour, Colour::Auto);
+    // Either spelling; on and off decide whatever NO_COLOR says
+    for (line, colour, monochrome) in
+        [("colour = off", Colour::Off, Some(true)), ("color = on", Colour::On, Some(false))]
+    {
+        let (settings, problems) = Settings::parse(line);
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(settings.colour, colour);
+        assert_eq!(Some(settings.monochrome()), monochrome);
+        let saved = settings.to_file_text();
+        assert_eq!(Settings::parse(&saved).0.colour, colour, "{saved}");
+    }
+    let (settings, problems) = Settings::parse("colour = grey");
+    assert_eq!(settings.colour, Colour::Auto);
+    assert_eq!(problems.len(), 1);
+}
+
 /// The headers of each request to a local server, which sends its page compressed, and the
 /// page as shown
 async fn requests_sent(settings: Settings, i2p: bool) -> (Vec<wiremock::http::HeaderMap>, String) {

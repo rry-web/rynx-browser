@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Rows marked Automated are covered by the tests TESTING.md names; the rest need a person.
 
-Total checks: 163; 20 still need a person (see TESTING.md's "Still by hand"), the rest are automated.
+Total checks: 164; 20 still need a person (see TESTING.md's "Still by hand"), the rest are automated.
 
 
 ## Automated checks
@@ -112,6 +112,7 @@ Total checks: 163; 20 still need a person (see TESTING.md's "Still by hand"), th
 | SET-14 | Settings page |  | Automated |  |  |
 | SET-15 | I2P lock | Yes | Automated |  |  |
 | SET-16 | Archived copy |  | Automated |  |  |
+| SET-17 | Monochrome |  | Automated |  |  |
 | SET-07 | Session history |  | Automated |  |  |
 | SET-08 | Saved history |  | Automated |  |  |
 | SET-09 | Clearing history |  | Automated |  |  |

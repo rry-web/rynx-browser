@@ -101,6 +101,10 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     rynx::dns::allow_local_names(&settings.local_names);
     rynx::dns::use_dns(&settings.dns);
     rynx::reticulum::set_bridge(&settings.reticulum_bridge);
+    // crossterm drops every colour when NO_COLOR is set, which would make colour = on do nothing
+    // and break Kitty's images (their placeholders carry the image's number as a colour). rynx
+    // honours NO_COLOR itself, through the colour setting (ui::without_colour)
+    crossterm::style::force_color_output(true);
 
     // The I2P router, if the settings ask for it: started now, so the sandbox doesn't confine it
     let (router_state, router) = rynx::i2pd::start_if_wanted(&settings, rynx::i2pd::data_dir());

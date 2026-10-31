@@ -245,6 +245,7 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | SET-14 | Settings page | settings::set_14_settings_page |
 | SET-15 | I2P lock | settings::set_15_network_lock |
 | SET-16 | Archived copy | tests/live_sites::set_16_archived_copy |
+| SET-17 | Monochrome: NO_COLOR or colour = off draws nothing in colour, the selected link reversed; colour = on overrides NO_COLOR | settings::set_17_monochrome; tests/settings.rs (parsing) |
 | SET-07 | Session history | settings::set_07_session_history |
 | SET-08 | Saved history | i2p::set_08_i2p_visits_never_reach_history_txt; settings::set_08_09_saved_and_cleared_history |
 | SET-09 | Clearing history | settings::set_08_09_saved_and_cleared_history |
