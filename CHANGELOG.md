@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Fixed
+- The page cache could track you like a cookie. To ask whether a cached page had changed, rynx
+  sent the site back the `ETag` (or `Last-Modified` date) it gave with the page, and a site can
+  make that unique to each visitor and recognise them by it, across restarts with the disk cache
+  on, even when it isn't allowed cookies. Now only sites you let keep cookies (`C`) are asked;
+  others' pages are downloaded again once stale, and their validators are never kept.
+
+### Added
+- Pages that say "you need JavaScript to continue" often carry their own way on for browsers
+  without it, which rynx now takes:
+  - A meta refresh (`<meta http-equiv="refresh">`, often inside `<noscript>`) of up to 5 seconds
+    is followed like a redirect: checked the same way (never from a public site into your local
+    network), and left out of history, so Back returns past it. Pages sending rynx round in
+    circles are stopped after 5. A slower one is shown above the page as a link.
+  - A page that's only a script sending you elsewhere (`location = "…"`, `location.replace(…)`)
+    shows where it would go, as a link at the top. The script isn't run: the address is read
+    from its text, and only a single fixed address counts.
+
 ### Changed
 - rynx introduces itself to websites as Safari on a Mac again, the identity millions of visitors
   send, instead of as `rynx/<version>`, which marked every visit as a rynx user's. Bot walls like

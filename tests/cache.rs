@@ -152,6 +152,11 @@ fn test_app() -> App {
     app
 }
 
+/// Let the local test sites keep cookies, and so be asked whether a page changed
+fn allow_cookies(app: &App) {
+    app.network_manager.cookies(false).allow("127.0.0.1").unwrap();
+}
+
 fn press(app: &mut App, code: KeyCode) {
     let key =
         KeyEvent { code, modifiers: KeyModifiers::empty(), kind: KeyEventKind::Press, state: KeyEventState::empty() };
@@ -189,6 +194,7 @@ fn count(n: &Arc<Mutex<usize>>) -> usize {
 async fn back_and_fresh_pages_come_from_the_cache() {
     let site = site("max-age=600").await;
     let mut app = test_app();
+    allow_cookies(&app);
     let home = format!("{}/", site.server.uri());
     open(&mut app, &home).await;
     open(&mut app, &format!("{}/other", site.server.uri())).await;
@@ -218,6 +224,7 @@ async fn back_and_fresh_pages_come_from_the_cache() {
 async fn stale_pages_are_checked_and_no_store_is_never_kept() {
     let site = site("no-cache").await;
     let mut app = test_app();
+    allow_cookies(&app);
     let home = format!("{}/", site.server.uri());
     open(&mut app, &home).await;
     open(&mut app, &home).await;
@@ -230,6 +237,26 @@ async fn stale_pages_are_checked_and_no_store_is_never_kept() {
     press(&mut app, KeyCode::Backspace);
     settle(&mut app).await;
     assert_eq!(count(&private.full), 2, "no-store pages are fetched again");
+}
+
+/// A site can tag each visitor with a unique ETag and recognise them when asked whether the page
+/// changed: only sites allowed cookies are asked, and others' validators aren't kept
+#[tokio::test]
+async fn sites_not_allowed_cookies_never_get_their_etags_back() {
+    let site = site("no-cache").await;
+    let mut app = test_app();
+    let home = format!("{}/", site.server.uri());
+    open(&mut app, &home).await;
+    open(&mut app, &home).await;
+    press(&mut app, KeyCode::Char('r'));
+    settle(&mut app).await;
+    assert_eq!((count(&site.full), count(&site.not_modified)), (3, 0));
+    let asked = site.server.received_requests().await.unwrap();
+    assert!(
+        asked.iter().all(|r| !r.headers.contains_key("if-none-match") && !r.headers.contains_key("if-modified-since"))
+    );
+    let kept = app.cache.get(&home, false).expect("still cached");
+    assert!(kept.etag.is_none() && kept.last_modified.is_none(), "{:?}", kept.etag);
 }
 
 /// A web server that answers `pages` requests, then stops listening altogether
@@ -311,6 +338,7 @@ async fn tracked_sites_get_a_snapshot_when_a_page_changes() {
     let dir = temp_dir("snapshots");
     let site = site("no-cache").await;
     let mut app = test_app();
+    allow_cookies(&app);
     app.snapshots = Arc::new(Snapshots::load(Some(dir.join("snapshots")), Some(dir.join("tracked.txt"))));
     let home = format!("{}/", site.server.uri());
 

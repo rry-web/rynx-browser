@@ -103,6 +103,11 @@ pub(super) async fn fetch(request: PageRequest, shared: Shared) {
     // Form submissions are never served from (or kept in) the cache
     let cached = if request.form_body.is_none() { shared.cache.get(&request.url, private) } else { None };
     let now = crate::cache::now();
+    // A site can give each visitor a unique ETag (or Last-Modified date) and recognise them by it
+    // when asked whether the page changed, like a cookie. So only sites allowed cookies are asked;
+    // others' stale pages are downloaded again, and their validators never kept.
+    let host = Url::parse(&request.url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+    let may_revalidate = shared.network.cookies(request.i2p_mode).allowed(&host);
     if let Some(entry) = &cached
         && (request.cache_use == CacheUse::History || (request.cache_use == CacheUse::Normal && entry.is_fresh(now)))
     {
@@ -120,7 +125,7 @@ pub(super) async fn fetch(request: PageRequest, shared: Shared) {
     } else if crate::reticulum::is_nomadnet(&request.url) {
         fetch_nomadnet(&request, shared.network.get_client(false)).await
     } else {
-        let revalidate = cached.as_deref().filter(|e| e.can_revalidate());
+        let revalidate = cached.as_deref().filter(|e| may_revalidate && e.can_revalidate());
         fetch_web(&request, shared.network.get_client(request.i2p_mode), tx, revalidate).await
     };
     match (result, cached) {
@@ -144,8 +149,8 @@ pub(super) async fn fetch(request: PageRequest, shared: Shared) {
                     page: page.clone(),
                     stored: now,
                     fresh_until: info.fresh_until,
-                    etag: info.etag,
-                    last_modified: info.last_modified,
+                    etag: info.etag.filter(|_| may_revalidate),
+                    last_modified: info.last_modified.filter(|_| may_revalidate),
                 };
                 shared.cache.put(&request.url, entry, private);
                 if shared.snapshots.record(&request.url, &page, now).is_some() && note.is_none() {

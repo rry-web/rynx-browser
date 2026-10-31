@@ -43,6 +43,11 @@ pub use settings_page::SETTINGS_PAGE;
 pub use tab::BrowserTab;
 
 /// Status shown while a new page is laid out in the background
+/// A meta refresh waiting longer than this (a countdown page) is shown as a link, not followed
+const MAX_FOLLOWED_REFRESH_DELAY: u32 = 5;
+/// Meta refreshes followed in a row before rynx stops, so pages can't send it round in circles
+const MAX_REFRESHES_FOLLOWED: u8 = 5;
+
 pub const RENDERING_STATUS: &str = "Rendering...";
 
 pub struct App {
@@ -228,6 +233,7 @@ impl App {
             tab.apply_render(render_page(&job));
             self.record_visit_if_pending(tab_index);
             self.load_images_if_pending(tab_index);
+            self.follow_refresh_if_pending(tab_index);
             return;
         }
 
@@ -261,6 +267,7 @@ impl App {
             }
             self.record_visit_if_pending(tab_index);
             self.load_images_if_pending(tab_index);
+            self.follow_refresh_if_pending(tab_index);
         }
         let tab = &mut self.tabs[tab_index];
         if tab.render_in_flight == Some(version) {
@@ -444,6 +451,41 @@ impl App {
         tab.pending_restore = None;
         tab.pending_referer = referer.map(|referer| (url.clone(), referer));
         tab.url_input = url;
+        self.load_url_input(false);
+    }
+
+    /// Follow a freshly loaded page's quick meta refresh, as an HTTP redirect is followed: checked
+    /// the same way, and without keeping the page that sent you on in history (Back skips it)
+    fn follow_refresh_if_pending(&mut self, index: usize) {
+        let tab = &mut self.tabs[index];
+        if !std::mem::take(&mut tab.follow_refresh_after_render) {
+            return;
+        }
+        let followed = std::mem::take(&mut tab.refreshes_followed);
+        let Some(refresh) = tab.refresh.clone().filter(|r| r.delay <= MAX_FOLLOWED_REFRESH_DELAY) else {
+            return;
+        };
+        let target = crate::network::resolve_url(tab.link_base(), &refresh.url);
+        let (Some(page), Ok(to)) = (tab.page_url.as_deref().and_then(|p| Url::parse(p).ok()), Url::parse(&target))
+        else {
+            return;
+        };
+        // Only the tab you're looking at moves on by itself; another shows where its page leads
+        if index != self.active_tab_index || tab.is_current_document(&target) {
+            return;
+        }
+        if followed >= MAX_REFRESHES_FOLLOWED {
+            tab.status_message = String::from("This page keeps sending you on, so rynx stopped; its link is above");
+            return;
+        }
+        if let Err(reason) = crate::network::check_redirect(&page, &to) {
+            tab.status_message = reason;
+            return;
+        }
+        tab.refreshes_followed = followed + 1;
+        tab.forward_history.clear();
+        tab.pending_restore = None;
+        tab.url_input = target;
         self.load_url_input(false);
     }
 

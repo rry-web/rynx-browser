@@ -295,8 +295,10 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | KEY-01 | Changed keys in a real terminal | settings::key_01_changed_keys |
 | KEY-02 | Mistakes in keys.conf | main::a_mistake_in_keys_conf_is_named |
 | IMG-03 | Loading settings | pages::img_03_own_images_load_by_themselves |
+| NAV-01 | Meta refreshes followed (noscript too), Back skipping them, loops stopped, countdowns and script redirects as links | `redirects` (all) |
 | CACHE-01 | Back is instant | browsing::cache_01_back_is_instant |
 | CACHE-02 | I2P site gone | i2p::cache_02_i2p_site_gone |
+| CACHE-04 | No tracking through cache validators (ETag, Last-Modified) for sites without cookies | cache::sites_not_allowed_cookies_never_get_their_etags_back |
 | CACHE-03 | Disk cache | pages::cache_03_disk_cache |
 | CACHE-04 | Snapshots | pages::cache_04_snapshots |
 | READ-02 | Wikipedia | tests/live_sites::render_02_read_02_wikipedia |

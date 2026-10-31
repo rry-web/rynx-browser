@@ -35,6 +35,12 @@ pub struct BrowserTab {
     pub image_sizes: Arc<HashMap<String, (u16, u16)>>,
     /// A page just arrived: load the images it may load by itself once it's laid out
     pub load_images_after_render: bool,
+    /// A page just arrived by following a link or typing (not Back, Forward or reloading):
+    /// follow its meta refresh, if it has a quick one, once it's laid out
+    pub follow_refresh_after_render: bool,
+    /// The displayed page's meta refresh, and how many in a row were followed to reach it
+    pub refresh: Option<crate::renderer::Refresh>,
+    pub refreshes_followed: u8,
     /// Address bar contents when Edit mode was entered, for history and cancelling
     pub url_before_edit: Option<String>,
     /// Line index of each in-page link target on the displayed page
@@ -236,6 +242,12 @@ impl BrowserTab {
 
     /// A new page has arrived: if it was loaded by going back, forward or reloading, return to
     /// the saved position once it's laid out (instead of any #fragment)
+    /// Whether the page being loaded is one returned to (Back, Forward, Reload), which restores
+    /// where it was
+    pub fn is_returning(&self) -> bool {
+        self.pending_restore.is_some()
+    }
+
     pub fn restore_position_after_render(&mut self) {
         self.restore_after_render = self.pending_restore.take();
     }
@@ -271,6 +283,7 @@ impl BrowserTab {
         self.anchors = page.anchors;
         self.page_images = page.images;
         self.image_blocks = page.image_blocks;
+        self.refresh = page.refresh;
         // A re-layout of the same page (e.g. a resize) keeps what was typed
         if self.control_values.len() != page.controls.len() {
             self.control_values = page.controls.iter().map(FormControl::initial_value).collect();
@@ -341,6 +354,9 @@ impl BrowserTab {
             image_blocks: Vec::new(),
             image_sizes: Arc::default(),
             load_images_after_render: false,
+            follow_refresh_after_render: false,
+            refresh: None,
+            refreshes_followed: 0,
             url_before_edit: None,
             anchors: renderer.anchors,
             page_url: None,

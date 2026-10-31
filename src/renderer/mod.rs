@@ -19,9 +19,11 @@ mod images;
 mod menus;
 mod plain;
 mod reader;
+mod redirects;
 mod tables;
 
 use menus::{looks_like_menu, menu_items};
+pub use redirects::Refresh;
 
 /// Make untrusted text safe to draw. Control characters are dropped because a terminal acts on
 /// them (escape sequences can set the title, clear the screen or write the clipboard) instead of
@@ -91,6 +93,8 @@ pub struct RenderedPage {
     /// Every image on the page, and where space was reserved to draw the loaded ones
     pub images: Vec<PageImage>,
     pub image_blocks: Vec<ImageBlock>,
+    /// A meta refresh sending the page on to another address
+    pub refresh: Option<Refresh>,
 }
 
 /// An image on the page: its address as written, its description, and the width and height the
@@ -130,18 +134,32 @@ pub fn render_page(job: &RenderJob) -> RenderedPage {
             reader_found: None,
             images: Vec::new(),
             image_blocks: Vec::new(),
+            refresh: None,
         };
     }
     let mut renderer = DomRenderer::new(job.width as usize);
     renderer.image_sizes = Arc::clone(&job.image_sizes);
     let mut reader_found = None;
+    let mut refresh = None;
     let title = match job.kind {
         PageKind::Html => {
             let document = Html::parse_document(&job.source);
+            refresh = redirects::meta_refresh(&document);
             if job.reader {
                 reader_found = Some(renderer.render_reader(&document));
             } else {
                 renderer.render(&document);
+                // A page that's only a script sending you on: where it would go, as a link
+                // (laid out again, so the link is on top; such a page is short)
+                if refresh.is_none()
+                    && renderer.is_sparse()
+                    && let Some(target) = redirects::script_redirect(&document)
+                {
+                    renderer = DomRenderer::new(job.width as usize);
+                    renderer.image_sizes = Arc::clone(&job.image_sizes);
+                    renderer.render_redirect_notice("This page's script would take you to: ", &target);
+                    renderer.render(&document);
+                }
             }
             document_title(&document)
         }
@@ -160,6 +178,7 @@ pub fn render_page(job: &RenderJob) -> RenderedPage {
         reader_found,
         images: renderer.images,
         image_blocks: renderer.image_blocks,
+        refresh,
     }
 }
 
@@ -419,6 +438,9 @@ impl DomRenderer {
     }
 
     pub fn render(&mut self, document: &Html) {
+        if let Some(refresh) = redirects::meta_refresh(document) {
+            self.render_redirect_notice("This page sends you on to: ", &refresh.url);
+        }
         self.render_tools_link(document);
         self.render_feed_links(document);
         for node in document.tree.root().children() {

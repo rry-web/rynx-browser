@@ -758,6 +758,9 @@ pub fn handle_network_event(app: &mut App, response: NetworkResponse, terminal_w
                 tab.page_url = Some(page_url);
                 tab.record_visit_after_render = true;
                 tab.load_images_after_render = true;
+                // Back, Forward and Reload restore a position; a refresh is followed only on the
+                // way to a page, so Back can still return past it
+                tab.follow_refresh_after_render = !tab.is_returning();
 
                 tab.jump_after_render(fragment);
                 tab.restore_position_after_render();

@@ -37,6 +37,8 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
   menus (`Home · News · Sport`); plain text and JSON as written
 - Reader mode (`R`): only an article's text, staying on as you follow links
 - Forms: text fields, checkboxes, choices and buttons, sent with GET or POST
+- Pages that "need JavaScript" to send you on: their no-script refresh is followed, and a script
+  redirect is shown as a link (read, never run)
 - Tabs, Back and Forward to where you were, jumps within a page, find (`/`), copy mode (`v`)
 - Images when you want them (`I`): drawn with Kitty, iTerm2 or Sixel graphics, or coloured blocks,
   in the page at the size the page gives them (tables and galleries too; `+`/`-` zoom), or full
@@ -63,7 +65,8 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
 
 **Slow connections and staying in control**
 - A page cache: Back is instant, unchanged pages aren't downloaded again, unreachable sites show
-  the copy kept (on disk too, if you turn it on)
+  the copy kept (on disk too, if you turn it on). Only sites allowed cookies are asked whether a
+  page changed, since that question can identify you like a cookie
 - Dated snapshots of sites you track (`T`, `Z`)
 - Downloads that resume where they stopped, tagged so your system checks them
 - Staying signed in to the sites you choose (`C`), with their cookies encrypted by a key in the

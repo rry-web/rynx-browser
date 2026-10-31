@@ -40,15 +40,20 @@ working one. Bugs found in testing come before all of it.
   questions while a tool runs.
 - **Code-signed builds** for macOS (Apple Developer account, about $99 a year, plus
   notarization) and Windows (a certificate, or Azure Trusted Signing). A cost decision.
+- **"Needs JavaScript" pages, next step:** when a page is only a JavaScript notice, show the
+  article the page carries as data (`application/ld+json`, Next.js's `__NEXT_DATA__`, its
+  description), in reader mode or in place of the notice. (Meta refreshes and simple script
+  redirects are done.)
 - **A built-in I2P router**, probably emissary (Rust) once it matures, so I2P needs nothing
   installed. Until then, better progress reports from older i2pd versions, whose console is slow
   to answer while starting.
 
 ## Won't do
 
-- **Getting past JavaScript bot checks** such as Cloudflare's. rynx introduces itself honestly
-  and doesn't disguise itself; since 0.3.1 it says what the check is and offers the Internet
-  Archive's copy (`A`). Anubis is different: its proof of work is passed natively, as designed.
+- **Getting past JavaScript bot checks** such as Cloudflare's. rynx sends Safari's identity so it
+  doesn't stand out, but doesn't fake a browser's environment to pass checks; since 0.3.1 it says
+  what the check is and offers the Internet Archive's copy (`A`). Anubis is different: its proof
+  of work is passed natively, as designed.
 - **Running JavaScript.**
 
 ## Reticulum and NomadNet
