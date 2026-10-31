@@ -115,8 +115,8 @@ pub struct App {
     pub terminal_width: u16,
     /// The terminal's height, for drawing images no taller than the screen
     pub terminal_height: u16,
-    /// Glasses mode (--glasses): no colour, and new tabs in reader mode
-    pub glasses: bool,
+    /// New tabs in reader mode (glasses mode's reader_mode)
+    pub reader_by_default: bool,
 }
 
 /// The start page with the key bindings
@@ -182,7 +182,7 @@ impl App {
             next_result_id: 0,
             terminal_width: 100,
             terminal_height: 30,
-            glasses: false,
+            reader_by_default: false,
         })
     }
 
@@ -307,10 +307,10 @@ impl App {
         }
     }
 
-    /// A new tab showing `url`, in reader mode in glasses mode
+    /// A new tab showing `url`, in reader mode if glasses mode's layout asks
     fn make_tab(&self, url: String) -> BrowserTab {
         let mut tab = BrowserTab::new(self.id_counter, url);
-        tab.reader_mode = self.glasses;
+        tab.reader_mode = self.reader_by_default;
         tab
     }
 

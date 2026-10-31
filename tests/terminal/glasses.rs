@@ -78,7 +78,13 @@ fn glass_01_glasses_mode_driven_through_the_socket() {
     rynx.keys("j");
     rynx.wait_for("Some words about alpha");
     let status = control.send("status");
-    assert!(rynx.rows().last().unwrap().contains(status["message"].as_str().unwrap()), "{}", rynx.screen());
+    // The test's window is 140x40: rynx draws in the 80x30 screen glasses.conf (written now) has,
+    // with its edge drawn, and the status line on the screen's last row
+    assert!(home.read_config("glasses.conf").unwrap().contains("screen = 80x30"));
+    let rows = rynx.rows();
+    assert!(rows[29].contains(status["message"].as_str().unwrap()), "{}", rynx.screen());
+    assert_eq!(rows[0].chars().nth(80), Some('│'), "{}", rynx.screen());
+    assert!(rows[30].contains("glasses screen 80x30"), "{}", rynx.screen());
     assert_eq!(status["title"], "Alpha", "{status}");
     assert!(status["address"].as_str().unwrap().ends_with("/a"), "{status}");
 
@@ -146,5 +152,53 @@ fn glass_01_glasses_mode_driven_through_the_socket() {
     again.wait_for("Control socket on");
     Control::connect(&path).send("quit");
     assert!(again.wait_exit());
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+/// A layout file for a small display (GLASS-04): the screen it says, the rows and margin it asks
+#[test]
+fn glass_04_a_layout_file_for_a_small_screen() {
+    let words = "Many words about the small display, which wrap at its edge and not the window's. ".repeat(4);
+    let site = Site::new(&[
+        ("/a", &format!("<title>Small</title><h1>Small page</h1><p>{words}<a href=\"/b\">Next page</a></p>")),
+        ("/b", "<title>Next</title><h1>The next page</h1><p>Words on the next page, for reader mode.</p>"),
+    ]);
+    let home = Home::new("glasses-small");
+    home.settings("");
+    let layout = home.config().join("small.conf");
+    std::fs::write(&layout, "screen = 320x192 pixels\ntitle_row = off\nmargin = 0\n").unwrap();
+    let path = socket_path("small");
+    let program = Path::new(env!("CARGO_BIN_EXE_rynx"));
+    let layout_arg = layout.display().to_string();
+    let mut rynx = Rynx::start_with(
+        program,
+        &home,
+        &["--glasses-layout", &layout_arg],
+        &[("RYNX_CONTROL_SOCKET", path.display().to_string())],
+    );
+    rynx.wait_for("Glasses mode, 40x12");
+    let mut control = Control::connect(&path);
+    control.send(&format!("open {}", site.url("/a")));
+    rynx.wait_for("Small page");
+    let rows = rynx.rows();
+    // No title row: the page from the first row, from the first column, wrapped at 40
+    assert!(rows[0].starts_with("Small page"), "{}", rynx.screen());
+    for row in &rows[..12] {
+        let outside: String = row.chars().skip(40).collect();
+        assert_eq!(outside.trim(), "│", "{}", rynx.screen());
+    }
+    assert!(rows[12].contains("glasses screen 40x12"), "{}", rynx.screen());
+    assert!(rows[13..].iter().all(|r| r.trim().is_empty()), "{}", rynx.screen());
+    // The status line on the screen's last row (cut to fit)
+    let message: String = control.send("status")["message"].as_str().unwrap().chars().take(30).collect();
+    assert!(rows[11].starts_with(&message), "{}", rynx.screen());
+    // Clicks outside the screen do nothing; inside, they land on what's under them
+    rynx.click(30, 100);
+    rynx.settle();
+    assert!(rynx.is_running());
+    rynx.click_text("Next page");
+    rynx.wait_for("The next page");
+    control.send("quit");
+    assert!(rynx.wait_exit());
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }

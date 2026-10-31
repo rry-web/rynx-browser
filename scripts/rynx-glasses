@@ -4,6 +4,9 @@
 #   scripts/rynx-glasses              voice control, with rynx in this terminal
 #   scripts/rynx-glasses --text       no microphone: type what you'd say into a second terminal
 #                                     (python3 glasses/voice.py --text)
+#   scripts/rynx-glasses --layout 640x200
+#                                     a layout from glasses/layouts/ (or a file) instead of
+#                                     glasses.conf in rynx's settings folder
 #
 # The first run sets up glasses/voice.py's Python packages (vosk, sounddevice) in
 # ~/.cache/rynx/glasses-venv and downloads the speech model (40 MB, checked). Speech is
@@ -20,10 +23,27 @@ cache=${XDG_CACHE_HOME:-$HOME/.cache}/rynx
 mkdir -p "$cache"
 
 text=false
-if [ "${1:-}" = "--text" ]; then
-    text=true
+args=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --text) text=true ;;
+        --layout)
+            shift
+            layout=${1:-}
+            [ -f "$layout" ] || layout=$here/glasses/layouts/$layout.conf
+            if [ ! -f "$layout" ]; then
+                echo "No layout \"${1:-}\": name a file, or one of these:" >&2
+                ls "$here/glasses/layouts" | sed 's/\.conf$//; s/^/    /' >&2
+                exit 1
+            fi
+            args+=(--glasses-layout "$layout")
+            ;;
+        *) args+=("$1") ;;
+    esac
     shift
-fi
+done
+# (bash 3.2, macOS's, calls an empty array unbound)
+set -- ${args[@]+"${args[@]}"}
 
 rynx=${RYNX:-}
 if [ -z "$rynx" ]; then

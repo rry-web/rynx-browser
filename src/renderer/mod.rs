@@ -1,4 +1,3 @@
-use crate::constants::UI_BORDER_WIDTH;
 use crate::forms::{ControlKind, Form, FormControl, FormMethod, SelectOption};
 use crate::models::LinkRegion;
 use crate::network::PageKind;
@@ -393,7 +392,7 @@ pub struct DomRenderer {
 
 impl DomRenderer {
     pub fn new(width: usize) -> Self {
-        Self::with_content_width(width.saturating_sub(UI_BORDER_WIDTH))
+        Self::with_content_width(width.saturating_sub(crate::ui::side_columns()))
     }
 
     /// A renderer whose lines are at most `max_width` columns (no allowance for UI borders)

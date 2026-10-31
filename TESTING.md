@@ -320,6 +320,7 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | NET-03 | The system's proxy ignored unless system_proxy is on (it would look names up past the local-network check) | system_proxy (all) |
 | GLASS-01 | Glasses mode: no colour, reader mode, the compact layout (rows, clicks); the control socket's commands, a second rynx refused, a stale socket replaced | glasses::glass_01_glasses_mode_driven_through_the_socket |
 | GLASS-02 | Voice: phrases to commands, numbers, commands said together, the bare-number guard; spoken commands recognised (macOS, with VOSK_MODEL) | glasses/test_voice.py |
+| GLASS-04 | Glasses mode's layout: glasses.conf written and read, sizes in characters or pixels, problems said; a small screen in a larger window (its edge, wrapping, no title row, no margin, the status row, clicks outside ignored) | glasses_layout.rs; glasses::glass_04_a_layout_file_for_a_small_screen |
 | CACHE-01 | Back is instant | browsing::cache_01_back_is_instant |
 | CACHE-02 | I2P site gone | i2p::cache_02_i2p_site_gone |
 | CACHE-03 | Disk cache | pages::cache_03_disk_cache |

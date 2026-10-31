@@ -1,6 +1,7 @@
 use rynx::app::App;
 use rynx::bookmarks::Bookmarks;
 use rynx::event_handler::{handle_key_event, handle_mouse_event, process_network_events};
+use rynx::glasses::Layout;
 use rynx::history::History;
 use rynx::sandbox::SandboxStatus;
 use rynx::settings::Settings;
@@ -50,9 +51,12 @@ Usage: rynx [OPTIONS]
 A terminal web browser with no JavaScript.
 
 Options:
-      --glasses         Glasses mode: no colour, pages in reader mode, an 80x30 screen if the
-                        terminal allows, and the control socket (below) for a voice controller.
-                        See glasses/README.md in rynx's source.
+      --glasses         Glasses mode: an 80x30 screen with a compact layout, no colour, pages
+                        in reader mode, and the control socket (below) for a voice controller.
+                        The layout is in glasses.conf in the settings folder. See
+                        glasses/README.md in rynx's source.
+      --glasses-layout FILE
+                        Glasses mode, with the layout in FILE instead of glasses.conf
       --control-socket  Let programs on this computer drive rynx through a socket in the settings
                         folder (only you can open it), by naming actions: see glasses/README.md
       --no-sandbox      Don't restrict filesystem access (Linux, macOS). Use only to troubleshoot,
@@ -66,10 +70,23 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     rynx::sandbox::disable_core_dumps();
     let mut sandbox_enabled = true;
     let (mut glasses, mut control_socket) = (false, false);
-    for arg in std::env::args().skip(1) {
+    let mut layout_file: Option<std::path::PathBuf> = None;
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if let Some(file) = arg.strip_prefix("--glasses-layout=") {
+            (glasses, control_socket, layout_file) = (true, true, Some(file.into()));
+            continue;
+        }
         match arg.as_str() {
             "--no-sandbox" => sandbox_enabled = false,
             "--glasses" => (glasses, control_socket) = (true, true),
+            "--glasses-layout" => match args.next() {
+                Some(file) => (glasses, control_socket, layout_file) = (true, true, Some(file.into())),
+                None => {
+                    eprintln!("rynx: --glasses-layout needs a file\n\n{}", USAGE);
+                    std::process::exit(2);
+                }
+            },
             "--control-socket" => control_socket = true,
             "-V" | "--version" => {
                 use std::io::Write;
@@ -108,6 +125,21 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         Some(dir) => Settings::load_or_create(dir),
         None => (Settings::default(), Vec::new()),
     };
+    // Glasses mode's layout, read before the sandbox (a file named with --glasses-layout may be
+    // anywhere)
+    let glasses = glasses.then(|| match &layout_file {
+        Some(file) => match Layout::load(file) {
+            Ok((layout, problems)) => (layout, problems, file.display().to_string()),
+            Err(e) => {
+                eprintln!("rynx: {}", e);
+                std::process::exit(2);
+            }
+        },
+        None => {
+            let (layout, problems) = config_dir.as_deref().map(Layout::load_or_create).unwrap_or_default();
+            (layout, problems, rynx::glasses::LAYOUT_FILE.to_string())
+        }
+    });
     let download_dir = settings.download_dir.clone().unwrap_or_else(App::default_download_dir);
     rynx::dns::allow_local_names(&settings.local_names);
     rynx::dns::use_dns(&settings.dns);
@@ -163,6 +195,9 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         (glasses, control),
     ))
 }
+
+/// Glasses mode's layout, what couldn't be used in its file, and the file's name
+type Glasses = (Layout, Vec<String>, String);
 
 #[cfg(unix)]
 type ControlListener = std::os::unix::net::UnixListener;
@@ -251,7 +286,7 @@ async fn run(
     (installed, update_dir, update_note): (rynx::update::Installed, Option<std::path::PathBuf>, Option<String>),
     (router_state, router): (rynx::i2pd::RouterState, Option<rynx::i2pd::Router>),
     cookie_key: Option<Result<[u8; 32], String>>,
-    (glasses, control): (bool, Option<ControlListener>),
+    (glasses, control): (Option<Glasses>, Option<ControlListener>),
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // This hook catches panics and restores the terminal before printing the error
     let original_hook = std::panic::take_hook();
@@ -260,10 +295,10 @@ async fn run(
         let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture, DisableBracketedPaste);
         original_hook(panic_info);
     }));
-    // Glasses mode asks for the screen a 640x480 display with an 8x16 font has (Terminal and
-    // xterm honour it; others ignore it)
-    if glasses {
-        print!("\x1b[8;30;80t");
+    // Glasses mode draws in its screen's size whatever the window's, and asks for a window that
+    // size too (Terminal and xterm honour it; others ignore it)
+    if let Some((Layout { screen: Some((columns, rows)), .. }, _, _)) = &glasses {
+        print!("\x1b[8;{};{}t", rows, columns);
         let _ = io::Write::flush(&mut io::stdout());
     }
     // Setup Terminal
@@ -343,10 +378,10 @@ async fn run(
     app.router_state = router_state;
     app.watch_router();
     app.check_for_updates_if_due();
-    if glasses {
-        app.glasses = true;
-        rynx::ui::set_compact(true);
-        app.current_tab().reader_mode = true;
+    if let Some((layout, _, _)) = &glasses {
+        rynx::ui::set_layout(Some(*layout));
+        app.reader_by_default = layout.reader_mode;
+        app.current_tab().reader_mode = layout.reader_mode;
     }
     #[cfg(unix)]
     let control = match control.map(rynx::control::serve).transpose() {
@@ -359,8 +394,17 @@ async fn run(
     #[cfg(not(unix))]
     let control: Option<tokio::sync::mpsc::Receiver<rynx::control::Request>> = control.and(None);
     if control.is_some() {
-        let mode = if glasses { "Glasses mode" } else { "Control socket on" };
+        let mode = match &glasses {
+            Some((layout, _, file)) => format!("Glasses mode, {} ({})", layout.describe(), file),
+            None => "Control socket on".into(),
+        };
         app.current_tab().status_message = format!("{}: waiting for commands (say \"help\")", mode);
+    }
+    // What couldn't be used in the layout file, said instead
+    if let Some((_, problems, file)) = &glasses
+        && !problems.is_empty()
+    {
+        app.current_tab().status_message = format!("{}: {}", file, problems.join("; "));
     }
 
     // Run App
@@ -397,11 +441,17 @@ async fn run_app<B: Backend<Error = io::Error>>(
     mut app: App,
     mut control: Option<tokio::sync::mpsc::Receiver<rynx::control::Request>>,
 ) -> io::Result<()> {
-    let mut size = terminal.size()?;
+    // The screen drawn in: the window, or glasses mode's screen in it
+    let screen = |width, height| {
+        let (width, height) = rynx::ui::screen_size(width, height);
+        ratatui::layout::Size::new(width, height)
+    };
+    let window = terminal.size()?;
+    let mut size = screen(window.width, window.height);
     // Lay out the start page for the actual terminal width
     app.resize(size.width, size.height);
     let mut exact = rynx::exact_rows::ExactRows::default();
-    let mut drawn_size = size;
+    let mut drawn_size = window;
     loop {
         let frame = terminal.draw(|f| ui(f, &app))?;
         // Rows with text terminals disagree on the width of are written again cell by cell
@@ -440,16 +490,16 @@ async fn run_app<B: Backend<Error = io::Error>>(
             timeout = Duration::ZERO;
             match event::read()? {
                 Event::Resize(width, height) => {
-                    size.width = width;
-                    size.height = height;
-                    app.resize(width, height);
+                    size = screen(width, height);
+                    app.resize(size.width, size.height);
                 }
                 Event::Key(key) => {
                     if handle_key_event(&mut app, key, size.width, size.height)? {
                         return Ok(()); // Quit signal received
                     }
                 }
-                Event::Mouse(mouse) => {
+                // Outside glasses mode's screen, nothing is drawn to click
+                Event::Mouse(mouse) if mouse.column < size.width && mouse.row < size.height => {
                     handle_mouse_event(&mut app, mouse, size.width, size.height)?;
                 }
                 Event::Paste(text) => rynx::event_handler::handle_paste(&mut app, &text),

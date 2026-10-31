@@ -21,6 +21,7 @@ Say **"links"**: every link on screen gets a number. Say **"follow three"** (or 
 **"three"** while they're numbered). What was heard shows in rynx's status line; the voice
 controller's log is `~/.cache/rynx/voice.log`.
 
+`scripts/rynx-glasses --layout 640x200` tries another display's size (see "Layouts" below).
 No microphone, or just checking the commands? `scripts/rynx-glasses --text` starts rynx alone,
 and in a second terminal `python3 glasses/voice.py --text` takes what you'd say, typed.
 
@@ -55,16 +56,47 @@ since the microphone hears the voice too.
 
 `rynx --glasses` is rynx as usual, plus:
 
-- **No colour**: what colour marked (the selected link, matches, modes) is drawn in reverse video,
-  for monochrome displays. (`colour = off` in settings, or `NO_COLOR`, does this in ordinary mode.)
+- **A screen the display's size**: 80×30 by default (what a 640×480 display with an 8×16 font
+  shows), drawn in the window's top left corner whatever the window's size, with a line along
+  its edge. rynx also asks the terminal for a window that size (Terminal does it; iTerm2 and
+  others may not, which doesn't matter).
 - **A compact layout**: one row at the top for the mode and the page's title (or the address
   being typed), the page, and one row at the bottom for the status line and where the selected
   link goes. The tab bar, address bar and border took eight rows; at 80×30 the page gets 28
   rows instead of 22.
+- **No colour**: what colour marked (the selected link, matches, modes) is drawn in reverse video,
+  for monochrome displays. (`colour = off` in settings, or `NO_COLOR`, does this in ordinary mode.)
 - **Reader mode** in every tab: only a page's main text.
-- **An 80×30 screen**, asked of the terminal (what a 640×480 display with an 8×16 font shows);
-  terminals that don't allow it keep their size.
 - **The control socket**, below.
+
+## Layouts for other displays
+
+The screen and layout are in `glasses.conf` in rynx's settings folder
+(`~/Library/Application Support/rynx-browser` on macOS, `~/.config/rynx-browser` on Linux),
+written with the defaults the first time glasses mode starts. Change it and restart rynx.
+
+| Line | Does |
+| :--- | :--- |
+| `screen = 80x30` | Columns and rows of text |
+| `screen = 640x480 pixels` and `font = 8x16` | The same, worked out from the display's pixels and the font's size |
+| `screen = window` | The whole terminal window |
+| `title_row = on` | The top row: the mode and the page's title |
+| `status_row = on` | The bottom row: the status line, where what was heard shows |
+| `margin = 1` | Blank columns either side of the page |
+| `colour = off` | Off: reverse video where colour was, for monochrome displays |
+| `reader_mode = on` | Every tab in reader mode |
+
+To compare layouts without editing it, name another file: `rynx --glasses-layout FILE`, or
+`scripts/rynx-glasses --layout NAME` for the ones in [layouts/](layouts/):
+
+| Layout | Screen | For |
+| :--- | :--- | :--- |
+| `640x480` | 80×30 | 640×480 displays (the default), like the Vuzix Z100's |
+| `640x350` | 80×21 | Wide, short displays, like the size reported for the Even Realities G2's |
+| `640x200` | 80×12, no title row | A strip, like the Even Realities G1's |
+| `304x256` | 38×16, no margins | Small displays, like ActiveLook's |
+| `large-font` | 53×20 | 640×480 with a 12×24 font, easier to read at a glance |
+| `window` | The whole window, in colour | The compact layout on an ordinary screen |
 
 ## The control socket
 

@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::constants::*;
 use crate::constants::{TAB_BAR_HEIGHT, URL_BAR_HEIGHT};
+use crate::glasses::Layout as GlassesLayout;
 use crate::models::{InputMode, LinkRegion};
 use crate::renderer::sanitize_for_terminal;
 use ratatui::{
@@ -11,26 +12,89 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Gauge, Paragraph, Tabs},
 };
 
-/// The compact layout (glasses mode): a header row, the page, and a status row, instead of the
-/// tab bar, address bar and the page's border, which take eight rows of a short display
-static COMPACT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Glasses mode's layout (glasses.conf), or None for the ordinary one. Its compact layout has a
+/// title row, the page and a status row, instead of the tab bar, address bar and the page's
+/// border, which take eight rows of a short display; and it draws in a screen of the display's
+/// size, whatever the window's.
+static LAYOUT: std::sync::RwLock<Option<GlassesLayout>> = std::sync::RwLock::new(None);
 
-pub fn set_compact(on: bool) {
-    COMPACT.store(on, std::sync::atomic::Ordering::Relaxed);
+pub fn set_layout(layout: Option<GlassesLayout>) {
+    *LAYOUT.write().unwrap_or_else(|e| e.into_inner()) = layout;
+}
+
+pub fn layout() -> Option<GlassesLayout> {
+    *LAYOUT.read().unwrap_or_else(|e| e.into_inner())
 }
 
 pub fn compact() -> bool {
-    COMPACT.load(std::sync::atomic::Ordering::Relaxed)
+    layout().is_some()
 }
 
 /// Rows of the screen not showing the page
 pub fn chrome_rows() -> u16 {
-    if compact() { 2 } else { UI_HEIGHT_OFFSET }
+    match layout() {
+        Some(l) => l.title_row as u16 + l.status_row as u16,
+        None => UI_HEIGHT_OFFSET,
+    }
 }
 
 /// The screen row the page's first line is drawn on
 pub fn page_top_row() -> u16 {
-    if compact() { 1 } else { UI_ROW_OFFSET }
+    match layout() {
+        Some(l) => l.title_row as u16,
+        None => UI_ROW_OFFSET,
+    }
+}
+
+/// The screen column the page's text starts at: inside the border, or after the margin
+pub fn page_left_column() -> u16 {
+    layout().map_or(1, |l| l.margin)
+}
+
+/// Columns either side of the page's text, which pages are laid out without
+pub fn side_columns() -> usize {
+    layout().map_or(UI_BORDER_WIDTH, |l| 2 * l.margin as usize)
+}
+
+/// The part of a `width` x `height` window rynx draws in: all of it, or glasses mode's screen in
+/// its top left corner (all of a smaller window)
+pub fn screen_size(width: u16, height: u16) -> (u16, u16) {
+    match layout().and_then(|l| l.screen) {
+        Some((w, h)) => (w.min(width), h.min(height)),
+        None => (width, height),
+    }
+}
+
+fn screen_area(f: &Frame) -> Rect {
+    let area = f.area();
+    let (width, height) = screen_size(area.width, area.height);
+    Rect { width, height, ..area }
+}
+
+/// In a window larger than glasses mode's screen, a line along the screen's edge and its size
+/// under it, so what the display would show is plain
+fn draw_screen_edge(f: &mut Frame, screen: Rect) {
+    let window = f.area();
+    let style = Style::default().add_modifier(Modifier::DIM);
+    let buffer = f.buffer_mut();
+    let (right, below) = (screen.right() < window.right(), screen.bottom() < window.bottom());
+    if right {
+        for y in screen.top()..screen.bottom() {
+            buffer[(screen.right(), y)].set_symbol("│").set_style(style);
+        }
+    }
+    if below {
+        for x in screen.left()..screen.right() {
+            buffer[(x, screen.bottom())].set_symbol("─").set_style(style);
+        }
+        let label = format!(" glasses screen {}x{} ", screen.width, screen.height);
+        if label.len() as u16 + 2 <= screen.width {
+            buffer.set_string(screen.x + 1, screen.bottom(), label, style);
+        }
+    }
+    if right && below {
+        buffer[(screen.right(), screen.bottom())].set_symbol("┘").set_style(style);
+    }
 }
 
 fn text_width(text: &str) -> usize {
@@ -711,10 +775,10 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
     }
 
     f.render_widget(Clear, area);
-    // Where the page's text goes: inside the border, or in compact mode between a column's margin
-    // either side (pages are laid out for the same width either way)
+    // Where the page's text goes: inside the border, or in compact mode between the margins (pages are laid out for the same width either way)
     let inner = if compact() {
-        Rect { x: area.x + 1, y: area.y, width: area.width.saturating_sub(2), height: area.height }
+        let margin = page_left_column();
+        Rect { x: area.x + margin, y: area.y, width: area.width.saturating_sub(2 * margin), height: area.height }
     } else {
         let block = Block::default()
             .borders(Borders::ALL)
@@ -787,15 +851,25 @@ fn render_image_viewer(f: &mut Frame, app: &App, area: Rect) {
 }
 
 pub fn ui(f: &mut Frame, app: &App) {
-    if compact() {
+    let screen = screen_area(f);
+    if let Some(layout) = layout() {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Min(0), Constraint::Length(1)])
-            .split(f.area());
-        render_compact_header(f, app, chunks[0]);
+            .constraints([
+                Constraint::Length(layout.title_row as u16),
+                Constraint::Min(0),
+                Constraint::Length(layout.status_row as u16),
+            ])
+            .split(screen);
+        if layout.title_row {
+            render_compact_header(f, app, chunks[0]);
+        }
         render_browser_content(f, app, chunks[1]);
-        render_compact_footer(f, &app.tabs[app.active_tab_index], chunks[2]);
-        if app.glasses || app.settings.monochrome() {
+        if layout.status_row {
+            render_compact_footer(f, &app.tabs[app.active_tab_index], chunks[2]);
+        }
+        draw_screen_edge(f, screen);
+        if !layout.colour || app.settings.monochrome() {
             without_colour(f.buffer_mut());
         }
         return;
@@ -807,13 +881,13 @@ pub fn ui(f: &mut Frame, app: &App) {
             Constraint::Length(URL_BAR_HEIGHT), // URL Input
             Constraint::Min(0),                 // Content area
         ])
-        .split(f.area());
+        .split(screen);
 
     // Render each UI component
     render_tabs(f, app, chunks[0]);
     render_url_bar(f, app, chunks[1]);
     render_browser_content(f, app, chunks[2]);
-    if app.glasses || app.settings.monochrome() {
+    if app.settings.monochrome() {
         without_colour(f.buffer_mut());
     }
 }
@@ -843,7 +917,7 @@ fn render_download_overlay(f: &mut Frame, app: &App, area: Rect) {
         // Clip to the frame so small terminals don't underflow or draw out of bounds
         let popup_area =
             Rect { x: area.width / 4, y: (area.height / 2).saturating_sub(2), width: area.width / 2, height: 5 }
-                .intersection(f.area());
+                .intersection(screen_area(f));
 
         // Clear the background to prevent content bleed
         f.render_widget(Clear, popup_area);
@@ -917,7 +991,7 @@ fn render_tool_prompt(f: &mut Frame, app: &App) {
     let Some(prompt) = &app.tabs[app.active_tab_index].tool_prompt else {
         return;
     };
-    let area = f.area();
+    let area = screen_area(f);
     let width = (area.width.saturating_mul(4) / 5).max(20).min(area.width);
     let host = url::Url::parse(&prompt.server).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
     let inner = width.saturating_sub(4) as usize;
@@ -961,7 +1035,7 @@ fn render_tool_prompt(f: &mut Frame, app: &App) {
 
 fn render_download_prompt(f: &mut Frame, app: &App) {
     if let Some(prompt) = &app.tabs[app.active_tab_index].download_prompt {
-        let area = f.area();
+        let area = screen_area(f);
 
         let block = Block::default()
             .title(" Confirm Download ")

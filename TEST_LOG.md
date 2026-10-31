@@ -6,7 +6,7 @@ the expected result. Fill in **Result** as Pass / Fail / Skipped, with the date 
 
 Rows marked Automated are covered by the tests TESTING.md names; the rest need a person.
 
-Total checks: 168; 21 still need a person (see TESTING.md's "Still by hand"), the rest are automated.
+Total checks: 169; 21 still need a person (see TESTING.md's "Still by hand"), the rest are automated.
 
 
 ## Automated checks
@@ -261,6 +261,7 @@ Total checks: 168; 21 still need a person (see TESTING.md's "Still by hand"), th
 | GLASS-01 | Glasses mode and the control socket |  | Automated |  |  |
 | GLASS-02 | Voice commands |  | Automated |  |  |
 | GLASS-03 | Browsing by voice | Yes |  |  |  |
+| GLASS-04 | Glasses mode's layout file |  | Automated |  |  |
 
 ## Reader mode
 

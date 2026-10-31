@@ -708,7 +708,7 @@ pub fn handle_mouse_event(app: &mut App, mouse: MouseEvent, terminal_width: u16,
             if mouse.row >= top {
                 let visual_line = (mouse.row - top) as usize;
                 let real_line_idx = visual_line + tab.scroll;
-                let click_x = (mouse.column as usize).saturating_sub(1);
+                let click_x = (mouse.column as usize).saturating_sub(crate::ui::page_left_column() as usize);
 
                 // Clicking below the end of the page puts the cursor on the last line
                 tab.cursor_line = real_line_idx.min(tab.rendered_content.len().saturating_sub(1));

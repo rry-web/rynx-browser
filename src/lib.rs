@@ -14,6 +14,7 @@ pub mod exact_rows;
 pub mod feeds;
 pub mod forms;
 pub mod gemini;
+pub mod glasses;
 pub mod gopher;
 pub mod history;
 pub mod i2pd;

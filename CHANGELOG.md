@@ -15,8 +15,13 @@
   on` keeps colour even when `NO_COLOR` is set. Images keep their own colours.
 - Glasses mode, for monochrome AR glasses (or trying the idea on a laptop): `rynx --glasses` turns
   colour off, opens pages in reader mode, uses a compact layout (a title row and a status row
-  instead of the tab bar, address bar and border: 28 rows of page at 80×30 rather than 22), asks
-  the terminal for 80×30, and opens the control socket. `scripts/rynx-glasses` starts it with voice control: `glasses/voice.py` recognises a
+  instead of the tab bar, address bar and border: 28 rows of page at 80×30 rather than 22), draws
+  in an 80×30 screen in the window's top left corner whatever the window's size (with a line
+  along its edge), and opens the control socket. The layout is in `glasses.conf` in the settings
+  folder: the screen in columns and rows, or a display's pixels and a font size; the title and
+  status rows; the margin; colour; reader mode. `--glasses-layout FILE` uses another file, and
+  `glasses/layouts/` has some for displays of other sizes (`scripts/rynx-glasses --layout
+  640x200`). `scripts/rynx-glasses` starts it with voice control: `glasses/voice.py` recognises a
   fixed list of commands on your computer with Vosk (nothing is sent anywhere), so you say
   "links", then "follow three"; "go to", "search" and "find" take free words after them, and
   "read" reads the page aloud. See `glasses/README.md`.
