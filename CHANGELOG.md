@@ -9,7 +9,10 @@
   covers the web, Gemini and Gopher; I2P is unchanged, since the router looks its names up. There's
   no falling back to the system's resolver, which would show the names after all; names only
   your network knows (`printer.local`, `router.lan`) still go to it. Public names pointing at
-  your local network are refused as before. The default stays `system`.
+  your local network are refused as before. On by default, through Quad9 (a Swiss non-profit
+  that keeps no addresses of who asks); `dns = system` goes back to the system's resolver, for
+  networks that block encrypted DNS or whose Wi-Fi sign-in page needs their own, as rynx's
+  error then says.
 - Encrypted Client Hello (ECH), with encrypted DNS: a site that publishes a key in DNS gets its
   name encrypted as the connection starts, where it otherwise shows to anyone on the way
   (Cloudflare's sites do, for one). A site refusing its key is reached as before. rustls does the

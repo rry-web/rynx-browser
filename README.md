@@ -132,9 +132,10 @@ its proof of work itself, without JavaScript.
   (like the router's console at 127.0.0.1:7070), which you type, and which I2P sites can't link to.
 - **HTTPS everywhere,** with certificates checked by your operating system (revocation too on
   macOS and Windows) and TLS 1.2 or newer.
-- **Encrypted DNS, if you choose it** (`dns`: Quad9, Mullvad, Cloudflare or your own provider):
-  your network can't see or change which sites you look up, and sites that publish a key get
-  their name encrypted as the connection starts too (Encrypted Client Hello).
+- **Encrypted DNS** (through Quad9 by default; Mullvad, Cloudflare, your own provider or the
+  system's resolver in settings): your network can't see or change which sites you look up, and
+  sites that publish a key get their name encrypted as the connection starts too (Encrypted
+  Client Hello).
 - **A sandbox** on Linux (Landlock) and macOS (Seatbelt): rynx can write only to its own folders
   and Downloads, can't read the rest of your home folder, and can't start programs or listen for
   connections. Crash dumps are off.

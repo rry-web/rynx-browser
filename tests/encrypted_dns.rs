@@ -30,6 +30,14 @@ async fn names_are_looked_up_encrypted_and_ech_hides_the_site_name() {
         assert!(rynx::dns::resolve("localtest.me", 80).await.is_err(), "{provider}");
     }
 
+    // A name that doesn't exist, and a provider that can't be reached, each say so
+    rynx::dns::use_dns("quad9");
+    let missing = rynx::dns::resolve("no-such-name.invalid", 443).await.unwrap_err();
+    assert!(missing.contains("no such name"), "{missing}");
+    rynx::dns::use_dns("https://192.0.2.1/dns-query");
+    let unreachable = rynx::dns::resolve("example.com", 443).await.unwrap_err();
+    assert!(unreachable.contains("choose System"), "{unreachable}");
+
     rynx::dns::use_dns("quad9");
     assert!(rynx::ech::key_for("crypto.cloudflare.com").await.is_some(), "Cloudflare publishes an ECH key");
     let encrypted = trace().await;

@@ -55,12 +55,13 @@ const DOCUMENTED: &[Documented] = &[
     },
     Documented {
         key: "dns",
-        about: "How names are looked up: \"system\" (the default: your system's resolver, usually your\n\
-                network's, unencrypted), or encrypted DNS (DNS over HTTPS) through \"quad9\", \"mullvad\",\n\
-                \"cloudflare\" or a provider's https:// address, so your network can't see or change which\n\
-                sites you look up. With encrypted DNS, sites that publish a key also get their name\n\
-                encrypted as the connection starts (Encrypted Client Hello). Not used in I2P mode.",
-        examples: &["quad9", "https://dns.example/dns-query"],
+        about: "How names are looked up: encrypted (DNS over HTTPS) through \"quad9\" (the default),\n\
+                \"mullvad\", \"cloudflare\" or a provider's https:// address, so your network can't see or\n\
+                change which sites you look up, and sites that publish a key also get their name encrypted\n\
+                as the connection starts (Encrypted Client Hello). \"system\" uses your system's resolver\n\
+                instead (usually your network's, unencrypted), for networks that block encrypted DNS.\n\
+                Not used in I2P mode.",
+        examples: &["system", "mullvad", "https://dns.example/dns-query"],
     },
     Documented {
         key: "local_names",
@@ -284,7 +285,7 @@ impl Default for Settings {
             i2p_router_sam: false,
             i2pd_path: None,
             local_names: Vec::new(),
-            dns: String::from("system"),
+            dns: String::from(crate::dns::DEFAULT_DNS),
             encrypt_cookies: true,
         }
     }

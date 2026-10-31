@@ -22,6 +22,10 @@ use hickory_resolver::config::{NameServerConfig, ResolverConfig, ServerGroup};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::{Arc, RwLock};
 
+/// Names are looked up encrypted through Quad9 unless the dns setting says otherwise: a
+/// non-profit, in Switzerland, that keeps no addresses of who asks
+pub const DEFAULT_DNS: &str = "quad9";
+
 /// Encrypted DNS providers to choose from: (setting value, name, servers)
 pub const DNS_PROVIDERS: &[(&str, &str, ServerGroup<'static>)] = &[
     ("quad9", "Quad9 (Switzerland, non-profit, blocks malware domains)", hickory_resolver::config::QUAD9),
@@ -102,10 +106,14 @@ async fn make_resolver(setting: String) -> Result<Arc<TokioResolver>, String> {
     };
     let config = ResolverConfig::from_name_servers(servers);
     let tls = crate::network::NetworkManager::tls_config(true).map_err(|e| e.to_string())?;
-    let resolver = TokioResolver::builder_with_config(config, Default::default())
-        .with_tls_config(tls)
-        .build()
-        .map_err(|e| e.to_string())?;
+    let mut builder = TokioResolver::builder_with_config(config, Default::default()).with_tls_config(tls);
+    // A blocked provider is said so in seconds, not after several long tries: the answer to
+    // a name normally comes well within this
+    let options = builder.options_mut();
+    options.timeout = std::time::Duration::from_secs(4);
+    options.attempts = 1;
+    options.num_concurrent_reqs = 2;
+    let resolver = builder.build().map_err(|e| e.to_string())?;
     Ok(Arc::new(resolver))
 }
 
@@ -187,7 +195,21 @@ pub async fn resolve(name: &str, port: u16) -> Result<Vec<SocketAddr>, String> {
         Some(Ok(resolver)) => resolver
             .lookup_ip(format!("{}.", name.trim_end_matches('.')))
             .await
-            .map_err(|e| format!("Couldn't find {} through encrypted DNS: {}", name, e))?
+            .map_err(|e| {
+                // A name that doesn't exist, or a provider that can't be reached (some networks
+                // block encrypted DNS, and sign-in pages on public Wi-Fi need their own)
+                if e.is_no_records_found() {
+                    format!("Couldn't find {}: there's no such name", name)
+                } else {
+                    format!(
+                        "Couldn't find {} through encrypted DNS ({}): {}. If this network blocks encrypted \
+                         DNS, or its sign-in page needs its own, choose System for DNS in settings (S)",
+                        name,
+                        encrypted_provider().unwrap_or_default(),
+                        e
+                    )
+                }
+            })?
             .iter()
             .map(|ip| SocketAddr::new(ip, port))
             .collect(),

@@ -250,7 +250,7 @@ fn user_agent_setting_is_checked() {
 
 #[test]
 fn dns_setting_is_checked() {
-    assert_eq!(Settings::default().dns, "system", "the system's resolver unless asked");
+    assert_eq!(Settings::default().dns, "quad9", "encrypted unless asked otherwise");
     for good in ["quad9", "mullvad", "cloudflare", "https://dns.example/dns-query", "system"] {
         let (settings, problems) = Settings::parse(&format!("dns = {good}"));
         assert_eq!(settings.dns, good);
@@ -258,7 +258,7 @@ fn dns_setting_is_checked() {
     }
     for bad in ["google", "http://dns.example/dns-query", "dns.example", "https://"] {
         let (settings, problems) = Settings::parse(&format!("dns = {bad}"));
-        assert_eq!(settings.dns, "system", "{bad}");
+        assert_eq!(settings.dns, Settings::default().dns, "{bad}");
         assert_eq!(problems.len(), 1, "{bad}");
     }
 }
