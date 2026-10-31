@@ -28,7 +28,10 @@ fi
 rynx=${RYNX:-}
 if [ -z "$rynx" ]; then
     for candidate in "$here/target/release/rynx" "$here/target/debug/rynx" "$(command -v rynx || true)"; do
-        if [ -n "$candidate" ] && [ -x "$candidate" ] && "$candidate" --help | grep -q -- --glasses; then
+        # Its help read in full first: grep -q stops reading at the match, and pipefail would
+        # count the closed pipe against rynx
+        if [ -n "$candidate" ] && [ -x "$candidate" ] && help=$("$candidate" --help 2>/dev/null) &&
+            grep -q -- --glasses <<<"$help"; then
             rynx=$candidate
             break
         fi

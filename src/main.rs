@@ -72,11 +72,14 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             "--glasses" => (glasses, control_socket) = (true, true),
             "--control-socket" => control_socket = true,
             "-V" | "--version" => {
-                println!("rynx {}", env!("CARGO_PKG_VERSION"));
+                use std::io::Write;
+                // Not println!, which panics when the reader has gone (rynx --version | head -c 4)
+                let _ = writeln!(std::io::stdout(), "rynx {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
             "-h" | "--help" => {
-                println!("{}", USAGE);
+                use std::io::Write;
+                let _ = writeln!(std::io::stdout(), "{}", USAGE);
                 return Ok(());
             }
             other => {
