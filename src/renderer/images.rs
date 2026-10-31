@@ -64,7 +64,7 @@ impl DomRenderer {
             return;
         }
         let index = source.map(|src| {
-            self.images.push(PageImage { src, alt: label.clone() });
+            self.images.push(PageImage { src, alt: label.clone(), width: size("width"), height: size("height") });
             self.images.len() - 1
         });
 

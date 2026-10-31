@@ -14,7 +14,7 @@ const TEXT_FIELDS: &[(&str, &str, &str)] = &[
     (
         "user_agent",
         "Browser identity (User-Agent)",
-        "How rynx introduces itself on the clearweb. I2P mode always sends a generic one.",
+        "How rynx introduces itself on the clearweb (by default as Safari on a Mac, so it doesn't stand out). I2P mode always sends a generic one.",
     ),
     ("i2p_proxy", "I2P proxy", "The I2P router's HTTP proxy, used in I2P mode."),
     (

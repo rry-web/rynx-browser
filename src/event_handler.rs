@@ -36,10 +36,28 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent, terminal_width: u16, termi
     } else {
         key
     };
-    // The image viewer covers the page: Esc (or q, or i) closes it
+    // The image viewer covers the page: its own keys move about the image and between the page's
+    // images, and Esc (or q, or i) closes it
     if app.images.viewer.is_some() {
-        if matches!(key.code, KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('i') | KeyCode::Enter) {
-            app.close_viewer();
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('i') | KeyCode::Enter => app.close_viewer(),
+            KeyCode::Char('f' | 'd') if ctrl => app.viewer_scroll(1, 0, true),
+            KeyCode::Char('b' | 'u') if ctrl => app.viewer_scroll(-1, 0, true),
+            KeyCode::Char('j') | KeyCode::Down => app.viewer_scroll(3, 0, false),
+            KeyCode::Char('k') | KeyCode::Up => app.viewer_scroll(-3, 0, false),
+            KeyCode::Char('l') | KeyCode::Right => app.viewer_scroll(0, 6, false),
+            KeyCode::Char('h') | KeyCode::Left => app.viewer_scroll(0, -6, false),
+            KeyCode::Char(' ') | KeyCode::PageDown => app.viewer_scroll(1, 0, true),
+            KeyCode::Char('b') | KeyCode::PageUp => app.viewer_scroll(-1, 0, true),
+            KeyCode::Char('g') | KeyCode::Home => app.viewer_to_end(false),
+            KeyCode::Char('G') | KeyCode::End => app.viewer_to_end(true),
+            KeyCode::Char('+' | '=') => app.viewer_zoom(1),
+            KeyCode::Char('-') => app.viewer_zoom(-1),
+            KeyCode::Char('0') => app.viewer_zoom(0),
+            KeyCode::Char('n' | ']') => app.viewer_step(1),
+            KeyCode::Char('p' | 'N' | '[') => app.viewer_step(-1),
+            _ => {}
         }
         return Ok(false);
     }
@@ -396,6 +414,8 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
         KeyCode::Char('I') => app.load_images(app.active_tab_index, true),
         KeyCode::Char('U') => app.follow_link(crate::update::UPDATE_PAGE.to_string()),
         KeyCode::Char('i') => app.view_image(viewport_height(terminal_height)),
+        KeyCode::Char('+') => app.zoom_images(1),
+        KeyCode::Char('-') => app.zoom_images(-1),
         KeyCode::Char('Z') => app.open_snapshots(),
         KeyCode::Char('?') => app.follow_link(crate::app::HELP_PAGE.to_string()),
         KeyCode::Char('C') => app.toggle_cookies(),

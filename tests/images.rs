@@ -176,6 +176,10 @@ async fn picture_site() -> MockServer {
         .respond_with(ResponseTemplate::new(200).set_body_raw(png(200, 100), "image/png"))
         .mount(&server)
         .await;
+    Mock::given(path("/tall.png"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(png(100, 600), "image/png"))
+        .mount(&server)
+        .await;
     Mock::given(path("/bomb.png"))
         .respond_with(ResponseTemplate::new(200).set_body_raw(png_bomb(), "image/png"))
         .mount(&server)
@@ -246,6 +250,10 @@ async fn images_load_when_asked_and_are_drawn_in_the_page() {
     assert!(app.current_tab().status_message.contains("Loading 1 image"));
     images_arrive(&mut app, 1).await;
     assert_eq!(app.current_tab().image_blocks.len(), 1, "space is made for it");
+    // Asked for as Safari asks for an image
+    let asked = server.received_requests().await.unwrap();
+    let accept = asked.iter().find(|r| r.url.path() == "/pic.png").and_then(|r| r.headers.get("accept"));
+    assert_eq!(accept.map(|v| v.to_str().unwrap()), Some(rynx::constants::SAFARI_IMAGE_ACCEPT));
     // Drawn with coloured half blocks here (the test terminal has no graphics)
     let (text, buffer) = screen(&app);
     let block = app.current_tab().image_blocks[0];
@@ -435,4 +443,100 @@ fn wide_captions_keep_their_images_apart() {
     assert_eq!(b.x, a.x + "[A long description]".len() + 2);
     let captions = page.lines[a.line_index + 2].to_string();
     assert!(captions.contains("[A long description]  [Two]"), "{captions:?}");
+}
+
+/// Wikipedia's galleries: each item an image with its caption under it, side by side, where the
+/// caption used to end the row
+#[test]
+fn gallery_captions_stay_under_their_images() {
+    let item = |src: &str, text: &str| {
+        format!(
+            "<li class=gallerybox><div class=thumb><span><a href='/wiki/File:{src}'>\
+             <img src={src} alt='{text}' width=180 height=135></a></span></div>\
+             <div class=gallerytext>{text}</div></li>"
+        )
+    };
+    let html = format!(
+        "<ul class='gallery mw-gallery-nolines'>{}{}{}</ul><p>After</p>",
+        item("a.png", "Planting"),
+        item("b.png", "Field"),
+        item("c.png", "Harvest")
+    );
+    let sizes = [("a.png", (20, 5)), ("b.png", (20, 5)), ("c.png", (20, 5))];
+    let page = laid_out(&html, &sizes, 80);
+    let blocks: Vec<(usize, usize)> = page.image_blocks.iter().map(|b| (b.line_index, b.x)).collect();
+    assert!(blocks.iter().all(|b| b.0 == blocks[0].0), "not on one row: {blocks:?}");
+    assert_eq!(blocks.iter().map(|b| b.1).collect::<Vec<_>>(), [0, 22, 44]);
+    // Each caption under its image, starting at its column
+    let below: Vec<String> = page.lines[blocks[0].0 + 5..].iter().take(3).map(|l| l.to_string()).collect();
+    for (text, x) in [("Planting", 0), ("Field", 22), ("Harvest", 44)] {
+        let found = below.iter().any(|line| line.chars().skip(x).collect::<String>().starts_with(text));
+        assert!(found, "{text} isn't under its image: {below:#?}");
+    }
+    assert!(texts(&page).iter().any(|l| l == "After"));
+
+    // Until its images are loaded, it's a list as before
+    let unloaded = laid_out(&html, &[], 80);
+    assert!(texts(&unloaded).iter().any(|l| l.contains('•')), "{:#?}", texts(&unloaded));
+}
+
+/// The viewer reads like a comic: a tall image fits the width and scrolls, Space at its bottom
+/// goes on to the next image, p goes back, and + and - zoom
+#[tokio::test]
+async fn the_viewer_scrolls_zooms_and_steps_through_images() {
+    let server = picture_site().await;
+    let mut app = test_app(Settings::default());
+    let page = format!("{}/", server.uri());
+    show(&mut app, &page, "<img src='/tall.png' alt='Page one'><img src='/pic.png' alt='Page two'>");
+    press(&mut app, KeyCode::Char('I'));
+    images_arrive(&mut app, 2).await;
+
+    press(&mut app, KeyCode::Char('i'));
+    let alt = |app: &App| app.images.viewer.as_ref().map(|(_, alt)| alt.clone()).unwrap_or_default();
+    assert_eq!(alt(&app), "Page one");
+    let text = screen(&app).0;
+    assert!(text.contains("1 of 2, 100%"), "a tall image fits the width: {text}");
+    press(&mut app, KeyCode::Char('j'));
+    assert_eq!(app.images.view.top, 3);
+    press(&mut app, KeyCode::Char('k'));
+    assert_eq!(app.images.view.top, 0);
+    press(&mut app, KeyCode::Char('G'));
+    let bottom = app.images.view.top;
+    assert!(bottom > 0);
+    screen(&app);
+    press(&mut app, KeyCode::Char(' '));
+    assert_eq!(alt(&app), "Page two", "Space at the bottom goes on to the next image");
+    assert_eq!(app.images.view.top, 0);
+    press(&mut app, KeyCode::Char('n'));
+    assert!(screen(&app).0.contains("last image"));
+    press(&mut app, KeyCode::Char('p'));
+    assert_eq!(alt(&app), "Page one");
+
+    screen(&app);
+    press(&mut app, KeyCode::Char('-'));
+    assert!(app.images.view.zoom.is_some_and(|z| z < 1.0));
+    assert!(screen(&app).0.contains("1 of 2, 80%"));
+    press(&mut app, KeyCode::Char('0'));
+    assert_eq!(app.images.view.zoom, Some(1.0));
+    press(&mut app, KeyCode::Esc);
+    assert!(app.images.viewer.is_none());
+}
+
+/// + and - draw the page's images larger and smaller
+#[tokio::test]
+async fn zoom_keys_resize_the_pages_images() {
+    let server = picture_site().await;
+    let mut app = test_app(Settings::default());
+    let page = format!("{}/", server.uri());
+    show(&mut app, &page, "<img src='/pic.png' alt='A picture' width=200 height=100>");
+    press(&mut app, KeyCode::Char('I'));
+    images_arrive(&mut app, 1).await;
+    let columns = |app: &mut App| app.current_tab().image_blocks[0].columns;
+    let before = columns(&mut app);
+    press(&mut app, KeyCode::Char('+'));
+    assert!(columns(&mut app) > before);
+    assert!(app.current_tab().status_message.contains("125%"));
+    press(&mut app, KeyCode::Char('-'));
+    press(&mut app, KeyCode::Char('-'));
+    assert!(columns(&mut app) < before);
 }

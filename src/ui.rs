@@ -650,7 +650,9 @@ fn render_inline_images(f: &mut Frame, app: &App, area: Rect, start: usize, end:
         }
         .intersection(area);
         app.with_drawn_image(&url, |state| {
-            f.render_stateful_widget(ratatui_image::StatefulImage::default(), rect, state);
+            // Scaled to its block, larger than its pixels if the page draws it larger
+            let image = ratatui_image::StatefulImage::default().resize(ratatui_image::Resize::Scale(None));
+            f.render_stateful_widget(image, rect, state);
         });
     }
 }
@@ -658,9 +660,13 @@ fn render_inline_images(f: &mut Frame, app: &App, area: Rect, start: usize, end:
 /// The full-screen image viewer, over the page
 fn render_image_viewer(f: &mut Frame, app: &App, area: Rect) {
     let Some((_, alt)) = &app.images.viewer else { return };
-    let mut state = app.images.viewer_state.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(state) = state.as_mut() else { return };
     f.render_widget(Clear, area);
+    // The image first, inside the border: drawing it measures the zoom the foot shows
+    app.draw_viewer_image(f, Block::default().borders(Borders::ALL).inner(area));
+    let note = match app.images.viewer_note.as_str() {
+        "" => String::new(),
+        note => format!("{} · ", sanitize_for_terminal(note)),
+    };
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan))
@@ -668,10 +674,12 @@ fn render_image_viewer(f: &mut Frame, app: &App, area: Rect) {
             format!(" {} ", sanitize_for_terminal(alt)),
             Style::default().add_modifier(Modifier::BOLD),
         )]))
-        .title_bottom(" Esc closes ");
-    let inner = block.inner(area);
+        .title_bottom(format!(
+            " {}{} · j/k scroll · +/- zoom · n/p next/previous · Esc closes ",
+            note,
+            app.viewer_position()
+        ));
     f.render_widget(block, area);
-    f.render_stateful_widget(ratatui_image::StatefulImage::default(), inner, state);
 }
 
 pub fn ui(f: &mut Frame, app: &App) {

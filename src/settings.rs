@@ -91,12 +91,10 @@ const DOCUMENTED: &[Documented] = &[
     },
     Documented {
         key: "user_agent",
-        about: "How rynx introduces itself to websites (by default rynx/<version> (+<project page>)).\n\
-                Sites that refuse unknown browsers may work with a common browser's, but bot walls like Anubis\n\
-                then demand JavaScript. I2P mode always sends a generic one instead, so visits don't stand out.",
-        examples: &[
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
-        ],
+        about: "How rynx introduces itself to websites (by default as Safari on a Mac, so it doesn't stand out).\n\
+                rynx's own name gets through some bot walls without a check, but marks you as a rynx user.\n\
+                I2P mode always sends a generic one instead, so visits don't stand out there either.",
+        examples: &["rynx/1.0 (+https://github.com/rry-web/rynx-browser)"],
     },
     Documented {
         key: "anubis",

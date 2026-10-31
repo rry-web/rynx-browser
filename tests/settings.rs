@@ -234,8 +234,9 @@ async fn visits_are_listed_on_the_history_page_and_can_be_cleared() {
 
 #[test]
 fn user_agent_setting_is_checked() {
-    assert!(Settings::default().user_agent.starts_with("rynx/"), "honest by default");
-    assert!(!Settings::default().user_agent.contains("Mozilla"));
+    // Safari's, which many send, rather than one naming rynx
+    assert!(Settings::default().user_agent.contains("Safari/"));
+    assert!(!Settings::default().user_agent.contains("rynx"));
     let (settings, problems) = Settings::parse("user_agent = Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0");
     assert!(problems.is_empty());
     assert_eq!(settings.user_agent, "Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0");
@@ -247,12 +248,20 @@ fn user_agent_setting_is_checked() {
     }
 }
 
-/// The User-Agent each request to a local server carried
-async fn user_agents_sent(settings: Settings, i2p: bool) -> Vec<String> {
+/// The headers of each request to a local server, which sends its page compressed, and the
+/// page as shown
+async fn requests_sent(settings: Settings, i2p: bool) -> (Vec<wiremock::http::HeaderMap>, String) {
+    use std::io::Write;
     use wiremock::{Mock, MockServer, ResponseTemplate};
+    let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    gzip.write_all(b"<p>Compressed hello</p>").unwrap();
     let server = MockServer::start().await;
     Mock::given(wiremock::matchers::any())
-        .respond_with(ResponseTemplate::new(200).set_body_raw("<p>hi</p>", "text/html"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(gzip.finish().unwrap(), "text/html")
+                .insert_header("content-encoding", "gzip"),
+        )
         .mount(&server)
         .await;
     let mut settings = settings;
@@ -271,19 +280,36 @@ async fn user_agents_sent(settings: Settings, i2p: bool) -> Vec<String> {
         }
     }
     let requests = server.received_requests().await.unwrap();
-    requests.iter().map(|r| r.headers.get("user-agent").unwrap().to_str().unwrap().to_string()).collect()
+    (requests.into_iter().map(|r| r.headers).collect(), text(&mut app))
+}
+
+fn header(headers: &wiremock::http::HeaderMap, name: &str) -> Option<String> {
+    headers.get(name).map(|v| v.to_str().unwrap().to_string())
 }
 
 #[tokio::test]
 async fn the_user_agent_is_sent() {
-    let default = user_agents_sent(Settings::default(), false).await;
-    assert_eq!(default, [rynx::constants::USER_AGENT]);
+    let (default, page) = requests_sent(Settings::default(), false).await;
+    assert_eq!(default.len(), 1);
+    assert_eq!(header(&default[0], "user-agent").as_deref(), Some(rynx::constants::USER_AGENT));
+    // With Safari's identity, Safari's other headers, and its compressed page still read
+    assert_eq!(header(&default[0], "accept").as_deref(), Some(rynx::constants::SAFARI_ACCEPT));
+    assert_eq!(header(&default[0], "accept-language").as_deref(), Some(rynx::constants::SAFARI_ACCEPT_LANGUAGE));
+    assert_eq!(header(&default[0], "accept-encoding").as_deref(), Some(rynx::constants::SAFARI_ACCEPT_ENCODING));
+    assert!(page.contains("Compressed hello"), "{page}");
 
+    // Another identity doesn't carry Safari's headers
     let (custom, _) = Settings::parse("user_agent = Custom/1.0");
-    assert_eq!(user_agents_sent(custom.clone(), false).await, ["Custom/1.0"]);
+    let (sent, _) = requests_sent(custom.clone(), false).await;
+    assert_eq!(header(&sent[0], "user-agent").as_deref(), Some("Custom/1.0"));
+    assert_eq!(header(&sent[0], "accept-language"), None);
 
-    // I2P mode always sends the generic one, whatever the setting
-    assert_eq!(user_agents_sent(custom, true).await, [rynx::constants::I2P_USER_AGENT]);
+    // I2P mode always sends the generic one, whatever the setting, and no language
+    for settings in [custom, Settings::default()] {
+        let (sent, _) = requests_sent(settings, true).await;
+        assert_eq!(header(&sent[0], "user-agent").as_deref(), Some(rynx::constants::I2P_USER_AGENT));
+        assert_eq!(header(&sent[0], "accept-language"), None);
+    }
 }
 
 // --- The settings file written back, and the settings page ---
@@ -449,8 +475,9 @@ async fn search_engines_are_chosen_or_custom_and_defaults_can_be_restored() {
     app.config_dir = Some(dir.clone());
     app.terminal_width = 100;
     press(&mut app, KeyCode::Char('S'));
-    // Fields are wide enough to show a whole address
-    assert!(text(&mut app).contains(&format!("[{}", rynx::constants::USER_AGENT)), "{}", text(&mut app));
+    // Fields are wide enough to show most of a long value (80 columns of Safari's identity)
+    let shown: String = rynx::constants::USER_AGENT.chars().take(80).collect();
+    assert!(text(&mut app).contains(&format!("[{}", shown)), "{}", text(&mut app));
 
     choose(&mut app, "search_engine", "duckduckgo");
     app.submit_form(0, None);

@@ -1,6 +1,6 @@
 use crate::constants::{
     BROWSING_TIMEOUT_SECS, DOWNLOAD_TIMEOUT_SECS, I2P_PROXY_URL, I2P_USER_AGENT, JUMP_SERVICES, MAX_REDIRECTS,
-    USER_AGENT,
+    SAFARI_ACCEPT, SAFARI_ACCEPT_ENCODING, SAFARI_ACCEPT_LANGUAGE, USER_AGENT,
 };
 use reqwest::{Client, StatusCode};
 use std::time::Duration;
@@ -230,6 +230,12 @@ impl NetworkManager {
         // The only cookies kept are Anubis's bot-check passes and those of sites you allow
         let mut builder =
             Client::builder().user_agent(user_agent).timeout(timeout).cookie_provider(std::sync::Arc::clone(cookies));
+        // Introducing itself as Safari, rynx sends Safari's other headers too, so the request
+        // doesn't give it away (a request's own headers, like an image's Accept, replace these).
+        // Responses are still decompressed: reqwest does that whatever asked for it.
+        if !use_proxy && user_agent == USER_AGENT {
+            builder = builder.default_headers(safari_headers());
+        }
 
         // The OS verifier fetches revocation data directly, outside the I2P proxy, which would
         // reveal the site being visited; I2P clients use the bundled webpki roots instead
@@ -449,6 +455,16 @@ pub fn request_error(error: &reqwest::Error) -> String {
 }
 
 /// GET a URL, following redirects manually so every hop is upgraded to HTTPS and SSRF-checked
+/// The headers Safari sends with every page request, besides its identity
+fn safari_headers() -> reqwest::header::HeaderMap {
+    use reqwest::header::{ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, HeaderMap, HeaderValue};
+    let mut headers = HeaderMap::new();
+    headers.insert(ACCEPT, HeaderValue::from_static(SAFARI_ACCEPT));
+    headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static(SAFARI_ACCEPT_LANGUAGE));
+    headers.insert(ACCEPT_ENCODING, HeaderValue::from_static(SAFARI_ACCEPT_ENCODING));
+    headers
+}
+
 pub async fn get_following_redirects(client: &Client, url: &str, i2p_mode: bool) -> Result<reqwest::Response, String> {
     send_following_redirects(client, url, i2p_mode, None).await
 }

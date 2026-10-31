@@ -130,6 +130,16 @@ Items marked **(priority)** haven't been checked by a person yet.
       (a Wikipedia article's infobox, or an imageboard's form with a captcha).
       *Expected:* each image is drawn in its cell, beside the cell's label, with nothing written
       over it and the rows below moved down to make room; `i` on its caption views it.
+- [ ] **IMG-05 Sizes and galleries.** Open https://en.wikipedia.org/wiki/Potato and press `I`;
+      scroll to "In art", then press `+` and `-`.
+      *Expected:* the lead picture is large and the gallery's thumbnails small, side by side in
+      rows, each with its caption under it; no image is taller than the screen. `+` and `-`
+      draw them larger and smaller, keeping the place on the page.
+- [ ] **IMG-06 Reading in the viewer.** On a page of comic pages or tall pictures, select one
+      and press `i`.
+      *Expected:* it fits the width; `j`/`k` and Space scroll, Space at its bottom goes to the
+      next image, `n`/`p` step between images, `+`/`-` zoom (`h`/`l` move across), `0` fits the
+      width, and the foot says which image of how many, at what zoom.
 
 ### Reader mode
 - [ ] **READ-01 News article.** Open an article on a news site (BBC News, Ars Technica) and press

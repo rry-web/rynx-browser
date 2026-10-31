@@ -315,7 +315,7 @@ async fn run(
 async fn run_app<B: Backend<Error = io::Error>>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     let mut size = terminal.size()?;
     // Lay out the start page for the actual terminal width
-    app.resize_all_tabs(size.width);
+    app.resize(size.width, size.height);
     let mut exact = rynx::exact_rows::ExactRows::default();
     let mut drawn_size = size;
     loop {
@@ -349,7 +349,7 @@ async fn run_app<B: Backend<Error = io::Error>>(terminal: &mut Terminal<B>, mut 
                 Event::Resize(width, height) => {
                     size.width = width;
                     size.height = height;
-                    app.resize_all_tabs(width);
+                    app.resize(width, height);
                 }
                 Event::Key(key) => {
                     if handle_key_event(&mut app, key, size.width, size.height)? {

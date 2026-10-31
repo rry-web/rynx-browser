@@ -39,7 +39,9 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
 - Forms: text fields, checkboxes, choices and buttons, sent with GET or POST
 - Tabs, Back and Forward to where you were, jumps within a page, find (`/`), copy mode (`v`)
 - Images when you want them (`I`): drawn with Kitty, iTerm2 or Sixel graphics, or coloured blocks,
-  in the page (tables and galleries too) or full screen (`i`); optionally loading by themselves
+  in the page at the size the page gives them (tables and galleries too; `+`/`-` zoom), or full
+  screen (`i`) in a viewer that scrolls, zooms and steps through a page's images, for reading
+  comics; optionally loading by themselves
 - The Internet Archive's copy of a page that's gone or blocked (`A`)
 - Bookmarks (`b`, `B`) and history (`s`), kept on disk only if you turn it on
 
@@ -89,7 +91,7 @@ them (`reload = F5` adds a key, `reload = F5 only` replaces them, `reload = none
 | `/`, `n` / `N` (or `>` / `<`) | Find on the page, next / previous match |
 | `v` (then `y`) | Copy mode: select text and copy it |
 | `R`, `Shift+V` | Reader mode, page source |
-| `I`, `i` | Load the page's images, view one full screen |
+| `I`, `i`, `+` / `-` | Load the page's images, view one full screen, draw them larger / smaller |
 | `d` | Download the selected link |
 | `b`, `B`, `s` | Bookmark the page, show bookmarks, show history (`D` twice there clears it) |
 | `Y` | Copy the page's address |
@@ -113,8 +115,9 @@ DuckDuckGo's HTML version, or any address), locking to the clearweb or I2P, the 
 starting i2pd (and SAM, for torrent clients), the Reticulum bridge's address, history, the disk
 cache, images, updates, the browser's identity, and names on your own network.
 
-rynx introduces itself honestly as `rynx/<version>`, which bot walls usually let through without
-JavaScript; when one shows an Anubis check anyway, rynx does its proof of work itself.
+rynx introduces itself as Safari on a Mac, the identity millions of visitors send, so it doesn't
+stand out (the `user_agent` setting changes it). When a bot wall shows an Anubis check, rynx does
+its proof of work itself, without JavaScript.
 
 ## Security and privacy
 
@@ -150,7 +153,7 @@ The longer list, with notes and ideas, is in [ROADMAP.md](ROADMAP.md).
 - **Sign-in for site tools** (OAuth), and servers asking questions while a tool runs
 - **Encryption at rest** for history, the cache and snapshots (cookies are encrypted already)
 - **Session restore** (opt-in): reopen your tabs
-- **SVG images**, drawing images only partly on screen, and images at their real size or larger
+- **SVG images**, drawing images only partly on screen, and the sharper copies pages offer
 - **Downloads from Gemini and Gopher**, and Gemini client certificates
 - **Finer cookie control** (per cookie, and third-party rules), and history times in your time zone
 - **A Windows sandbox**, and **code-signed** macOS and Windows builds

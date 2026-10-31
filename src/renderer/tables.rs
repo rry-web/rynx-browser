@@ -125,7 +125,7 @@ fn control_width(elem: &scraper::node::Element) -> Option<usize> {
 }
 
 /// Columns the widest loaded image in a cell is drawn in
-fn image_columns(cell: ElementRef, sizes: &HashMap<String, (u16, u16)>) -> usize {
+pub(super) fn image_columns(cell: ElementRef, sizes: &HashMap<String, (u16, u16)>) -> usize {
     cell.descendants()
         .filter_map(|node| node.value().as_element())
         .filter(|elem| elem.name() == "img" && !is_hidden(elem))
@@ -137,7 +137,7 @@ fn image_columns(cell: ElementRef, sizes: &HashMap<String, (u16, u16)>) -> usize
 
 /// (natural, minimum) width of a cell: all its words on one line, and its widest word (capped),
 /// or its widest loaded image (which can be drawn smaller, down to the cap)
-fn measure_cell(cell: ElementRef, sizes: &HashMap<String, (u16, u16)>) -> (usize, usize) {
+pub(super) fn measure_cell(cell: ElementRef, sizes: &HashMap<String, (u16, u16)>) -> (usize, usize) {
     let words = cell_words(cell);
     let natural = words.iter().map(|(w, _)| text_width(w)).sum::<usize>()
         + words.len().saturating_sub(1)

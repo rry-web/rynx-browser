@@ -13,6 +13,7 @@ use unicode_width::UnicodeWidthChar;
 
 mod columns;
 mod forms;
+mod gallery;
 mod head;
 mod images;
 mod menus;
@@ -92,11 +93,14 @@ pub struct RenderedPage {
     pub image_blocks: Vec<ImageBlock>,
 }
 
-/// An image on the page: its address as written, and its description
+/// An image on the page: its address as written, its description, and the width and height the
+/// page draws it at (its attributes, in CSS pixels), if it says
 #[derive(Clone, Debug, PartialEq)]
 pub struct PageImage {
     pub src: String,
     pub alt: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
 }
 
 /// Space reserved in the page to draw a loaded image
@@ -848,6 +852,7 @@ impl DomRenderer {
             "textarea" => return self.render_textarea(element),
             "select" => return self.render_select(element),
             "table" => return self.outside_one_line(|r| r.render_table(element)),
+            _ if self.inline_depth == 0 && gallery::is_gallery(elem) && self.render_gallery(element) => return,
             _ if elem.attr(columns::COLUMNS_ATTRIBUTE).is_some() => {
                 let count = self.column_count(element);
                 if count > 1 {

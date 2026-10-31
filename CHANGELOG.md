@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- rynx introduces itself to websites as Safari on a Mac again, the identity millions of visitors
+  send, instead of as `rynx/<version>`, which marked every visit as a rynx user's. Bot walls like
+  Anubis check it more often, and rynx passes their checks itself. With it go Safari's other
+  headers (what it accepts for pages and images, its language, its compression), so a request
+  doesn't give itself away; the TLS handshake still differs from Safari's. The `user_agent`
+  setting still changes it (without Safari's headers), and I2P mode still sends the generic
+  `MYOB/6.66 (AN/ON)` and nothing more.
+- Images in the page are sized as the page sizes them: an image's share of the page's width
+  (from its width and height attributes, or its own size) is its share of the terminal's, so a
+  gallery's thumbnails stay small and a page's main picture is large, where they used to be drawn
+  at their pixel size (often tiny). No image is taller than the screen. `+` and `-` draw them
+  larger or smaller, for the session.
+- Galleries (Wikipedia's, WordPress's and others marked as galleries) lay their images out side
+  by side with their captions under them, in rows across the width. A caption used to end the
+  row, so Wikipedia's galleries came out one image under another.
+- The full-screen viewer (`i`) is for reading: a tall image (a comic page) fits the width and
+  scrolls (`j`/`k`, Space, `g`/`G`), `+`/`-` zoom (`h`/`l` move across), `0` fits the width, and
+  `n`/`p` go to the page's next or previous image, with the next one loaded ahead. Space at the
+  bottom of an image goes on to the next.
+- Images up to 32 MB load (8 MB before); long comic strips decode, and are kept sharper.
+
 ## [0.3.5]
 
 ### Fixed

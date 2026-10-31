@@ -106,6 +106,8 @@ pub struct App {
     pub confirm_clear_history: bool,
     /// Latest terminal width, for laying out pages the browser makes itself
     pub terminal_width: u16,
+    /// The terminal's height, for drawing images no taller than the screen
+    pub terminal_height: u16,
 }
 
 /// The start page with the key bindings
@@ -170,6 +172,7 @@ impl App {
             tool_results: std::collections::VecDeque::new(),
             next_result_id: 0,
             terminal_width: 100,
+            terminal_height: 30,
         })
     }
 
@@ -276,6 +279,19 @@ impl App {
     pub fn resize_all_tabs(&mut self, width: u16) {
         for i in 0..self.tabs.len() {
             self.render_tab(i, width);
+        }
+    }
+
+    /// The terminal changed size: lay every tab out again, with its images sized for the screen
+    pub fn resize(&mut self, width: u16, height: u16) {
+        self.terminal_width = width;
+        self.terminal_height = height;
+        for i in 0..self.tabs.len() {
+            if self.tabs[i].image_sizes.is_empty() {
+                self.render_tab(i, width);
+            } else {
+                self.update_image_sizes(i);
+            }
         }
     }
 

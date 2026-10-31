@@ -17,15 +17,24 @@ use ratatui_image::protocol::StatefulProtocol;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
-/// Largest image fetched
-const MAX_IMAGE_BYTES: u64 = crate::cache::MAX_FILE_BYTES;
-/// Largest picture decoded, in pixels per side; and how far big ones are scaled down
-const MAX_DECODE_SIDE: u32 = 12_000;
+/// Largest image fetched (big comic pages and photos); the cache keeps those up to its own limit
+const MAX_IMAGE_BYTES: u64 = 32 * 1024 * 1024;
+/// Largest picture decoded, in pixels per side (a long comic strip is tall); and how far big
+/// ones are scaled down: to this width, and this many pixels in all
+const MAX_DECODE_SIDE: u32 = 30_000;
 const MAX_KEPT_SIDE: u32 = 2048;
+const MAX_KEPT_PIXELS: u64 = 2048 * 4096;
 /// Images fetched at once
 const PARALLEL_FETCHES: usize = 6;
-/// Tallest an image drawn in the page gets, in rows
-const MAX_INLINE_ROWS: u16 = 24;
+/// The width pages are designed for, in CSS pixels: an image a page draws this wide fills the
+/// width in rynx, and smaller ones take their share of it, so a gallery's thumbnails stay small
+/// and a page's main picture is large
+const PAGE_PIXELS: f64 = 1000.0;
+/// How much larger or smaller + and - draw the page's images
+pub const ZOOMS: [f64; 8] = [0.5, 0.67, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0];
+/// The viewer's zoom range, as a share of the screen's width
+const VIEWER_MAX_ZOOM: f64 = 4.0;
+const VIEWER_ZOOM_STEP: f64 = 1.25;
 /// Most memory decoded images may use (4 bytes a pixel); the least recently used are dropped
 /// beyond it, and decoded again from the cache if they're needed on screen
 const DECODED_BUDGET: usize = 192 * 1024 * 1024;
@@ -51,11 +60,52 @@ pub struct Images {
     fetches: Arc<tokio::sync::Semaphore>,
     /// Drawing state per image address; the UI draws through a shared reference
     pub drawn: Mutex<HashMap<String, StatefulProtocol>>,
+    /// How much larger or smaller than the page sizes them the page's images are drawn (+ and -)
+    pub zoom: f64,
     /// The image open in the full-screen viewer: its address and description
     pub viewer: Option<(String, String)>,
-    pub viewer_state: Mutex<Option<StatefulProtocol>>,
-    /// An image asked for in the viewer that's still loading
-    viewer_wanted: Option<(String, String)>,
+    /// Its place among the page's images, and where in it the viewer is
+    pub viewer_index: usize,
+    /// A note shown at the viewer's foot (the next image loading, say)
+    pub viewer_note: String,
+    pub view: ViewerView,
+    /// Its drawing state, for the part of it on screen
+    viewer_state: Mutex<Option<(ViewerCrop, StatefulProtocol)>>,
+    /// What the last frame showed, for keys to move within
+    viewer_frame: Mutex<ViewerFrame>,
+    /// An image asked for in the viewer that's still loading: its place among the page's images,
+    /// address and description
+    viewer_wanted: Option<(usize, String, String)>,
+}
+
+/// Where the viewer is in its image
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ViewerView {
+    /// The image's width as a share of the screen's (1 fits the width), or None to choose: the
+    /// whole image if that's nearly as large, else the width (a comic page, read by scrolling)
+    pub zoom: Option<f64>,
+    /// The first row and column of the (zoomed) image on screen
+    pub top: usize,
+    pub left: usize,
+}
+
+/// What the viewer showed in the last frame: its zoom, the smallest it can go (the whole image
+/// on screen), how far it can scroll, and the rows on screen
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct ViewerFrame {
+    zoom: f64,
+    min_zoom: f64,
+    max_top: usize,
+    max_left: usize,
+    rows: usize,
+}
+
+/// The part of the viewer's image on screen: its address, pixels, and cells
+#[derive(Clone, Debug, PartialEq)]
+struct ViewerCrop {
+    url: String,
+    pixels: (u32, u32, u32, u32),
+    cells: (u16, u16),
 }
 
 impl Default for Images {
@@ -73,8 +123,13 @@ impl Default for Images {
             pending: HashMap::new(),
             fetches: Arc::new(tokio::sync::Semaphore::new(PARALLEL_FETCHES)),
             drawn: Mutex::default(),
+            zoom: 1.0,
             viewer: None,
+            viewer_index: 0,
+            viewer_note: String::new(),
+            view: ViewerView::default(),
             viewer_state: Mutex::default(),
+            viewer_frame: Mutex::default(),
             viewer_wanted: None,
         }
     }
@@ -212,8 +267,10 @@ fn decode(data: &[u8]) -> Result<DynamicImage, String> {
     limits.max_alloc = Some(512 * 1024 * 1024);
     reader.limits(limits);
     let image = reader.decode().map_err(|e| format!("couldn't decode the image: {}", e))?;
-    Ok(if image.width() > MAX_KEPT_SIDE || image.height() > MAX_KEPT_SIDE {
-        image.thumbnail(MAX_KEPT_SIDE, MAX_KEPT_SIDE)
+    let (width, height) = (image.width() as f64, image.height() as f64);
+    let scale = (MAX_KEPT_SIDE as f64 / width).min((MAX_KEPT_PIXELS as f64 / (width * height)).sqrt());
+    Ok(if scale < 1.0 {
+        image.thumbnail(((width * scale) as u32).max(1), ((height * scale) as u32).max(1))
     } else {
         image
     })
@@ -224,13 +281,22 @@ async fn fetch(
     client: &reqwest::Client,
     url: &str,
     i2p_mode: bool,
+    safari: bool,
     cache: &crate::cache::Cache,
 ) -> Result<Arc<Vec<u8>>, String> {
     let private = crate::cache::is_i2p(url, i2p_mode);
     if let Some(data) = cache.get_bytes(url, private) {
         return Ok(data);
     }
-    let response = crate::network::get_following_redirects(client, url, i2p_mode).await?;
+    // What Safari accepts for an image (on the clearweb; I2P requests stay generic)
+    let mut headers = reqwest::header::HeaderMap::new();
+    if safari {
+        headers.insert(
+            reqwest::header::ACCEPT,
+            reqwest::header::HeaderValue::from_static(crate::constants::SAFARI_IMAGE_ACCEPT),
+        );
+    }
+    let response = crate::network::send_with_headers(client, url, i2p_mode, None, headers).await?;
     if !response.status().is_success() {
         return Err(format!("the site answered {}", response.status()));
     }
@@ -240,22 +306,38 @@ async fn fetch(
     }
     let keep = crate::cache::freshness(response.headers(), crate::cache::now()).is_some();
     let data = Arc::new(crate::network::read_bytes_limited(response, MAX_IMAGE_BYTES).await?);
-    if keep {
+    if keep && data.len() as u64 <= crate::cache::MAX_FILE_BYTES {
         cache.put_bytes(url, Arc::clone(&data), private);
     }
     Ok(data)
 }
 
-/// The columns and rows to draw an image of `size` pixels in, keeping its shape on a terminal
-/// whose character cells are `font` pixels, within `available` columns
-fn cells_for(size: (u32, u32), font: (u16, u16), available: u16) -> (u16, u16) {
+/// The columns and rows to draw an image of `size` pixels in, which the page draws `declared`
+/// CSS pixels wide and high (its width and height attributes, if any): its share of the page's
+/// width, times `zoom`, within `available` columns and `max_rows` rows, keeping its shape on a
+/// terminal whose character cells are `font` pixels
+fn cells_for(
+    size: (u32, u32),
+    declared: (Option<u32>, Option<u32>),
+    font: (u16, u16),
+    available: u16,
+    max_rows: u16,
+    zoom: f64,
+) -> (u16, u16) {
     let (fw, fh) = (font.0.max(1) as f64, font.1.max(1) as f64);
     let (iw, ih) = (size.0.max(1) as f64, size.1.max(1) as f64);
-    let mut columns = (iw / fw).ceil().min(available.max(1) as f64).max(1.0);
+    let available = available.max(1) as f64;
+    let css_width = match declared {
+        (Some(width), _) => width as f64,
+        (None, Some(height)) => height as f64 * iw / ih,
+        (None, None) => iw,
+    };
+    let mut columns = (css_width / PAGE_PIXELS * available * zoom).ceil().clamp(1.0, available);
     let mut rows = (columns * fw * ih / iw / fh).ceil().max(1.0);
-    if rows > MAX_INLINE_ROWS as f64 {
-        rows = MAX_INLINE_ROWS as f64;
-        columns = (rows * fh * iw / ih / fw).ceil().clamp(1.0, available.max(1) as f64);
+    let max_rows = max_rows.max(1) as f64;
+    if rows > max_rows {
+        rows = max_rows;
+        columns = (rows * fh * iw / ih / fw).ceil().clamp(1.0, available);
     }
     (columns as u16, rows as u16)
 }
@@ -320,12 +402,13 @@ impl App {
         *self.images.pending.entry(tab_id).or_default() += 1;
         let client = self.network_manager.get_client(self.i2p_mode).clone();
         let i2p_mode = self.i2p_mode;
+        let safari = !i2p_mode && self.settings.user_agent == crate::constants::USER_AGENT;
         let cache = Arc::clone(&self.cache);
         let fetches = Arc::clone(&self.images.fetches);
         let tx = self.tx.clone();
         tokio::spawn(async move {
             let _permit = fetches.acquire_owned().await;
-            let result = match fetch(&client, &url, i2p_mode, &cache).await {
+            let result = match fetch(&client, &url, i2p_mode, safari, &cache).await {
                 Ok(data) => tokio::task::spawn_blocking(move || decode(&data))
                     .await
                     .unwrap_or_else(|_| Err("the image couldn't be decoded".to_string()))
@@ -351,9 +434,13 @@ impl App {
                 self.images.failed.insert(url.clone(), e);
             }
         }
-        if self.images.viewer_wanted.as_ref().is_some_and(|(u, _)| *u == url) {
-            let (url, alt) = self.images.viewer_wanted.take().expect("checked");
-            self.open_viewer(url, alt);
+        if self.images.viewer_wanted.as_ref().is_some_and(|(_, u, _)| *u == url) {
+            let (place, url, alt) = self.images.viewer_wanted.take().expect("checked");
+            if self.images.decoded.contains_key(&url) {
+                self.open_viewer(place, url, alt);
+            } else {
+                self.say("That image couldn't be loaded");
+            }
         }
         // Lay the page out once the batch is in (and every few images on long pages)
         let decoded_here = self.page_images(index).iter().filter(|(u, _)| self.images.decoded.contains_key(u)).count();
@@ -379,15 +466,20 @@ impl App {
     }
 
     /// Reserve space in the page for its decoded images, and lay it out again
-    fn update_image_sizes(&mut self, index: usize) {
+    pub(super) fn update_image_sizes(&mut self, index: usize) {
         let available = self.terminal_width.saturating_sub(4);
+        // No taller than the screen, with a line for its caption
+        let max_rows = self.terminal_height.saturating_sub(crate::constants::UI_HEIGHT_OFFSET + 1);
         let font = self.images.picker.font_size();
         let font = (font.width, font.height);
         let mut sizes = HashMap::new();
         for (url, image) in self.page_images(index) {
             // Dimensions are kept after an image is dropped from memory, so the layout stays put
             if let Some(size) = self.images.dimensions.get(&url) {
-                sizes.insert(image.src.clone(), cells_for(*size, font, available));
+                let declared = (image.width, image.height);
+                sizes
+                    .entry(image.src.clone())
+                    .or_insert_with(|| cells_for(*size, declared, font, available, max_rows, self.images.zoom));
             }
         }
         let tab = &mut self.tabs[index];
@@ -415,8 +507,7 @@ impl App {
 
     /// i: show the selected image (or the first one on screen) full screen, loading it if needed
     pub fn view_image(&mut self, viewport_height: usize) {
-        let index = self.active_tab_index;
-        let tab = &self.tabs[index];
+        let tab = &self.tabs[self.active_tab_index];
         let chosen = tab
             .link_regions
             .get(tab.selected_link_index)
@@ -431,42 +522,221 @@ impl App {
                     .and_then(|r| r.image)
             })
             .or(if tab.page_images.is_empty() { None } else { Some(0) });
-        let Some(image) = chosen.and_then(|i| tab.page_images.get(i)).cloned() else {
+        let Some(place) = chosen.filter(|&i| i < tab.page_images.len()) else {
             self.current_tab().status_message = String::from("There's no image here");
             return;
         };
+        self.show_in_viewer(place);
+    }
+
+    /// Show the page's image at `place` in the viewer, loading it first if needed
+    fn show_in_viewer(&mut self, place: usize) {
+        let index = self.active_tab_index;
+        let tab = &self.tabs[index];
+        let Some(image) = tab.page_images.get(place).cloned() else { return };
         let url = crate::network::resolve_url(tab.link_base(), &image.src);
         if self.images.decoded.contains_key(&url) {
             self.images.touch(&url);
-            self.open_viewer(url, image.alt);
+            self.open_viewer(place, url, image.alt);
             return;
         }
-        if !url.starts_with("http") {
-            self.current_tab().status_message = String::from("This image can't be loaded");
-            return;
+        if let Err(reason) = self.may_load(&url) {
+            return self.say(reason);
         }
-        let page = tab.page_url.clone().unwrap_or_default();
-        if crate::network::is_local_network_url(&url) && !crate::network::is_local_network_url(&page) {
-            self.current_tab().status_message = String::from("Blocked: a public page's image on your local network");
-            return;
-        }
-        self.images.viewer_wanted = Some((url.clone(), image.alt));
+        self.images.viewer_wanted = Some((place, url.clone(), image.alt));
         if !self.images.loading.contains(&url) {
             self.fetch_image(index, url);
         }
-        self.current_tab().status_message = String::from("Loading the image...");
+        self.say("Loading the image...");
     }
 
-    fn open_viewer(&mut self, url: String, alt: String) {
-        let Some(image) = self.images.decoded.get(&url) else { return };
-        let state = self.images.picker.new_resize_protocol((**image).clone());
-        *self.images.viewer_state.lock().unwrap_or_else(|e| e.into_inner()) = Some(state);
+    /// Tell the reader something: at the viewer's foot if it's open, else in the status line
+    fn say(&mut self, note: &str) {
+        match self.images.viewer {
+            Some(_) => self.images.viewer_note = note.to_string(),
+            None => self.current_tab().status_message = note.to_string(),
+        }
+    }
+
+    /// Whether the active page may load an image: only from the web, and never a public page's
+    /// from the local network
+    fn may_load(&self, url: &str) -> Result<(), &'static str> {
+        if !url.starts_with("http") {
+            return Err("This image can't be loaded");
+        }
+        let page = self.tabs[self.active_tab_index].page_url.clone().unwrap_or_default();
+        if crate::network::is_local_network_url(url) && !crate::network::is_local_network_url(&page) {
+            return Err("Blocked: a public page's image on your local network");
+        }
+        Ok(())
+    }
+
+    fn open_viewer(&mut self, place: usize, url: String, alt: String) {
+        if !self.images.decoded.contains_key(&url) {
+            return;
+        }
         self.images.viewer = Some((url, alt));
+        self.images.viewer_index = place;
+        self.images.view = ViewerView::default();
+        self.images.viewer_note.clear();
+        // The next image, ready for reading on (a comic's next page)
+        if let Some((next, _)) = self.viewer_neighbour(1) {
+            let tab = &self.tabs[self.active_tab_index];
+            let url = crate::network::resolve_url(tab.link_base(), &tab.page_images[next].src);
+            let wanted = !self.images.decoded.contains_key(&url) && !self.images.loading.contains(&url);
+            if wanted && self.may_load(&url).is_ok() {
+                self.fetch_image(self.active_tab_index, url);
+            }
+        }
+    }
+
+    /// The page's next (or previous) image after the viewer's that's a different picture, with
+    /// its address
+    fn viewer_neighbour(&self, step: isize) -> Option<(usize, String)> {
+        let tab = &self.tabs[self.active_tab_index];
+        let current = self.images.viewer.as_ref().map(|(url, _)| url.as_str())?;
+        let mut place = self.images.viewer_index;
+        loop {
+            place = place.checked_add_signed(step)?;
+            let image = tab.page_images.get(place)?;
+            let url = crate::network::resolve_url(tab.link_base(), &image.src);
+            if url != current {
+                return Some((place, url));
+            }
+        }
+    }
+
+    /// n and p in the viewer: the page's next or previous image
+    pub fn viewer_step(&mut self, step: isize) {
+        match self.viewer_neighbour(step) {
+            Some((place, _)) => self.show_in_viewer(place),
+            None => self.say(if step > 0 { "That's the page's last image" } else { "That's the page's first image" }),
+        }
+    }
+
+    /// Scroll the viewer by rows and columns (a screen's worth with `screens`); scrolling down
+    /// past the bottom of the image goes on to the next one
+    pub fn viewer_scroll(&mut self, rows: isize, columns: isize, screens: bool) {
+        let frame = *self.images.viewer_frame.lock().unwrap_or_else(|e| e.into_inner());
+        let rows = if screens { rows * frame.rows.saturating_sub(2).max(1) as isize } else { rows };
+        let view = &mut self.images.view;
+        if screens && rows > 0 && view.top >= frame.max_top {
+            return self.viewer_step(1);
+        }
+        view.top = view.top.saturating_add_signed(rows).min(frame.max_top);
+        view.left = view.left.saturating_add_signed(columns).min(frame.max_left);
+    }
+
+    /// The top or bottom of the viewer's image
+    pub fn viewer_to_end(&mut self, bottom: bool) {
+        let frame = *self.images.viewer_frame.lock().unwrap_or_else(|e| e.into_inner());
+        self.images.view.top = if bottom { frame.max_top } else { 0 };
+    }
+
+    /// The viewer's zoom keys: in (+) and out (-), keeping the middle of the screen where it is,
+    /// and 0 fits the width
+    pub fn viewer_zoom(&mut self, step: i32) {
+        let frame = *self.images.viewer_frame.lock().unwrap_or_else(|e| e.into_inner());
+        let zoom = match step {
+            0 => 1.0,
+            _ if step > 0 => (frame.zoom * VIEWER_ZOOM_STEP).min(VIEWER_MAX_ZOOM),
+            _ => (frame.zoom / VIEWER_ZOOM_STEP).max(frame.min_zoom),
+        };
+        let ratio = zoom / frame.zoom.max(f64::EPSILON);
+        let middle = frame.rows as f64 / 2.0;
+        let view = &mut self.images.view;
+        view.top = ((view.top as f64 + middle) * ratio - middle).max(0.0) as usize;
+        view.left = (view.left as f64 * ratio) as usize;
+        view.zoom = Some(zoom);
     }
 
     pub fn close_viewer(&mut self) {
         self.images.viewer = None;
+        self.images.viewer_wanted = None;
+        self.images.viewer_note.clear();
         *self.images.viewer_state.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+
+    /// Draw the viewer's image in `area`: zoomed as the view says, the part on screen only
+    pub fn draw_viewer_image(&self, f: &mut ratatui::Frame, area: ratatui::layout::Rect) {
+        let Some((url, _)) = &self.images.viewer else { return };
+        let Some(image) = self.images.decoded.get(url) else { return };
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+        let font = self.images.picker.font_size();
+        let (fw, fh) = (font.width.max(1) as f64, font.height.max(1) as f64);
+        let (iw, ih) = (image.width().max(1) as f64, image.height().max(1) as f64);
+        let (width, height) = (area.width as f64, area.height as f64);
+        // Columns for the whole image on screen, and the zoom (a share of the width) that is
+        let whole = width.min(height * fh * iw / ih / fw);
+        let min_zoom = (whole / width).min(1.0);
+        let zoom = self.images.view.zoom.unwrap_or(if min_zoom >= 0.6 { min_zoom } else { 1.0 });
+        let zoom = zoom.clamp(min_zoom, VIEWER_MAX_ZOOM);
+        let columns = (width * zoom).round().max(1.0);
+        let rows = (columns * fw * ih / iw / fh).round().max(1.0);
+        let max_top = (rows - height).max(0.0) as usize;
+        let max_left = (columns - width).max(0.0) as usize;
+        let top = self.images.view.top.min(max_top);
+        let left = self.images.view.left.min(max_left);
+        *self.images.viewer_frame.lock().unwrap_or_else(|e| e.into_inner()) =
+            ViewerFrame { zoom, min_zoom, max_top, max_left, rows: area.height as usize };
+
+        // The cells on screen, centred when the image is smaller than the screen, and the pixels
+        // they show
+        let shown = (columns.min(width), rows.min(height));
+        let (per_column, per_row) = (iw / columns, ih / rows);
+        let x = (left as f64 * per_column) as u32;
+        let y = (top as f64 * per_row) as u32;
+        let pixels = (
+            x.min(image.width() - 1),
+            y.min(image.height() - 1),
+            ((shown.0 * per_column).round() as u32).clamp(1, image.width() - x.min(image.width() - 1)),
+            ((shown.1 * per_row).round() as u32).clamp(1, image.height() - y.min(image.height() - 1)),
+        );
+        let cells = (shown.0 as u16, shown.1 as u16);
+        let target = ratatui::layout::Rect {
+            x: area.x + (area.width - cells.0) / 2,
+            y: area.y + (area.height - cells.1) / 2,
+            width: cells.0,
+            height: cells.1,
+        };
+        let crop = ViewerCrop { url: url.clone(), pixels, cells };
+        let mut state = self.images.viewer_state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.as_ref().is_none_or(|(drawn, _)| *drawn != crop) {
+            let (x, y, w, h) = pixels;
+            let part = image.crop_imm(x, y, w, h);
+            *state = Some((crop, self.images.picker.new_resize_protocol(part)));
+        }
+        if let Some((_, protocol)) = state.as_mut() {
+            let image = ratatui_image::StatefulImage::default().resize(ratatui_image::Resize::Scale(None));
+            f.render_stateful_widget(image, target, protocol);
+        }
+    }
+
+    /// Where the viewer is: the image's place among the page's, and its zoom
+    pub fn viewer_position(&self) -> String {
+        let frame = *self.images.viewer_frame.lock().unwrap_or_else(|e| e.into_inner());
+        let count = self.tabs[self.active_tab_index].page_images.len();
+        format!("{} of {}, {}%", self.images.viewer_index + 1, count, (frame.zoom * 100.0).round())
+    }
+
+    /// The page's zoom keys (+ and -): draw its images larger or smaller, for the session
+    pub fn zoom_images(&mut self, step: isize) {
+        let current = ZOOMS.iter().position(|&z| z >= self.images.zoom).unwrap_or(ZOOMS.len() - 1);
+        let next = current.saturating_add_signed(step).min(ZOOMS.len() - 1);
+        self.images.zoom = ZOOMS[next];
+        let index = self.active_tab_index;
+        let loaded = self.page_images(index).iter().any(|(url, _)| self.images.dimensions.contains_key(url));
+        let percent = (self.images.zoom * 100.0).round();
+        self.current_tab().status_message = if loaded {
+            format!("Images at {}% of their size on the page", percent)
+        } else {
+            format!("Images will be drawn at {}% (I loads them)", percent)
+        };
+        if self.settings.image_display == ImageDisplay::Inline {
+            self.update_image_sizes(index);
+        }
     }
 
     /// Decode again the images the last frame needed but had been dropped from memory (from the
@@ -499,6 +769,30 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn images_take_the_share_of_the_width_the_page_gives_them() {
+        let font = (10, 20);
+        // A gallery's 180-pixel thumbnail: 18% of the width; a page's 1200-pixel picture: all of
+        // it, but no taller than the screen
+        assert_eq!(cells_for((250, 188), (Some(180), Some(135)), font, 160, 40, 1.0), (29, 11));
+        assert_eq!(cells_for((1200, 400), (Some(1200), None), font, 160, 40, 1.0), (160, 27));
+        assert_eq!(cells_for((800, 1200), (None, None), font, 160, 40, 1.0), (54, 40));
+        // Only a height: the width follows from the image's shape
+        assert_eq!(cells_for((400, 200), (None, Some(100)), font, 100, 40, 1.0), (20, 5));
+        // Zoomed
+        assert_eq!(cells_for((250, 188), (Some(180), None), font, 160, 40, 2.0).0, 58);
+    }
+
+    #[test]
+    fn long_strips_are_kept_sharp() {
+        let strip = DynamicImage::new_rgb8(800, 12_000);
+        let mut data = std::io::Cursor::new(Vec::new());
+        strip.write_to(&mut data, image::ImageFormat::Png).unwrap();
+        let kept = decode(data.get_ref()).unwrap();
+        assert!(kept.width() >= 600, "{}x{}", kept.width(), kept.height());
+        assert!(kept.width() as u64 * kept.height() as u64 <= MAX_KEPT_PIXELS);
+    }
 
     #[test]
     fn decoded_images_stay_within_their_budget() {
