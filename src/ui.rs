@@ -11,6 +11,28 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Gauge, Paragraph, Tabs},
 };
 
+/// The compact layout (glasses mode): a header row, the page, and a status row, instead of the
+/// tab bar, address bar and the page's border, which take eight rows of a short display
+static COMPACT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_compact(on: bool) {
+    COMPACT.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn compact() -> bool {
+    COMPACT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Rows of the screen not showing the page
+pub fn chrome_rows() -> u16 {
+    if compact() { 2 } else { UI_HEIGHT_OFFSET }
+}
+
+/// The screen row the page's first line is drawn on
+pub fn page_top_row() -> u16 {
+    if compact() { 1 } else { UI_ROW_OFFSET }
+}
+
 fn text_width(text: &str) -> usize {
     unicode_width::UnicodeWidthStr::width(text)
 }
@@ -161,8 +183,64 @@ fn bar_title(label: &BarLabel, i2p: bool, width: usize) -> (Line<'static>, Line<
 /// label on the left of its title and the network on the right, all fitted to the width
 fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
     let active_tab = &app.tabs[app.active_tab_index];
-    let key = |text: &'static str| Span::styled(text, Style::default().add_modifier(Modifier::BOLD));
     let width = area.width.saturating_sub(2) as usize;
+    let (label, body) = url_bar_parts(active_tab, width);
+    let (title, network) = bar_title(&label, app.i2p_mode, width);
+    let border = match active_tab.input_mode {
+        InputMode::Visual => Style::default().fg(Color::Cyan),
+        InputMode::Editing => Style::default().fg(Color::Yellow),
+        InputMode::Search => Style::default().fg(Color::Magenta),
+        InputMode::FormEdit => Style::default().fg(Color::Green),
+        InputMode::Normal => Style::default(),
+    };
+    let block = Block::default().borders(Borders::ALL).border_style(border).title(title).title(network.right_aligned());
+    f.render_widget(Paragraph::new(body).block(block), area);
+}
+
+/// The compact layout's header: the mode, then what's being typed (the address, find's words) or
+/// copy mode's keys, or else the tab's place among the tabs and its title; I2P on the right
+fn render_compact_header(f: &mut Frame, app: &App, area: Rect) {
+    let tab = &app.tabs[app.active_tab_index];
+    let width = area.width as usize;
+    let (label, body) = url_bar_parts(tab, width);
+    let mut spans = Vec::new();
+    if let Some((_, short, color)) = label.badge {
+        spans.push(badge(short, color));
+        spans.push(Span::raw(" "));
+    }
+    let right = if app.i2p_mode { " I2P " } else { "" };
+    let room = width.saturating_sub(spans.iter().map(|s| s.width()).sum::<usize>() + right.len());
+    if tab.input_mode == InputMode::Normal {
+        let place = if app.tabs.len() > 1 {
+            format!("{}/{} ", app.active_tab_index + 1, app.tabs.len())
+        } else {
+            String::new()
+        };
+        let title = format!("{}{}", place, sanitize_for_terminal(&tab.page_title));
+        spans.push(Span::styled(fit(&title, room), Style::default().add_modifier(Modifier::BOLD)));
+    } else {
+        let body: String = body.spans.iter().map(|s| s.content.as_ref()).collect();
+        spans.push(Span::raw(fit(&body, room)));
+    }
+    let used: usize = spans.iter().map(|s| s.width()).sum();
+    spans.push(Span::raw(" ".repeat(width.saturating_sub(used + right.len()))));
+    spans.push(Span::styled(right, Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)));
+    // Underlined, so it reads as apart from the page without colour
+    f.render_widget(Paragraph::new(Line::from(spans)).style(Style::default().add_modifier(Modifier::UNDERLINED)), area);
+}
+
+/// The compact layout's last row: the status line, then where the selected link goes
+fn render_compact_footer(f: &mut Frame, tab: &crate::app::BrowserTab, area: Rect) {
+    let status = sanitize_for_terminal(&tab.status_message).into_owned();
+    let mut spans =
+        vec![Span::styled(fit(&status, area.width as usize), Style::default().add_modifier(Modifier::BOLD))];
+    spans.extend(link_preview(tab).spans);
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
+}
+
+/// The address bar's label and contents for the tab's mode, fitted to `width`
+fn url_bar_parts(active_tab: &crate::app::BrowserTab, width: usize) -> (BarLabel, Line<'static>) {
+    let key = |text: &'static str| Span::styled(text, Style::default().add_modifier(Modifier::BOLD));
 
     let (label, body): (BarLabel, Line) = match active_tab.input_mode {
         InputMode::Search => {
@@ -245,17 +323,7 @@ fn render_url_bar(f: &mut Frame, app: &App, area: Rect) {
             (label, line)
         }
     };
-
-    let (title, network) = bar_title(&label, app.i2p_mode, width);
-    let border = match active_tab.input_mode {
-        InputMode::Visual => Style::default().fg(Color::Cyan),
-        InputMode::Editing => Style::default().fg(Color::Yellow),
-        InputMode::Search => Style::default().fg(Color::Magenta),
-        InputMode::FormEdit => Style::default().fg(Color::Green),
-        InputMode::Normal => Style::default(),
-    };
-    let block = Block::default().borders(Borders::ALL).border_style(border).title(title).title(network.right_aligned());
-    f.render_widget(Paragraph::new(body).block(block), area);
+    (label, body)
 }
 
 /// Apply visual mode selection highlighting to content lines
@@ -642,26 +710,33 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
         overlay_hints(&mut viewport_content, hints, &active_tab.link_regions, start_index);
     }
 
-    let content = Paragraph::new(viewport_content).scroll((0, 0)).block(
-        Block::default()
+    f.render_widget(Clear, area);
+    // Where the page's text goes: inside the border, or in compact mode between a column's margin
+    // either side (pages are laid out for the same width either way)
+    let inner = if compact() {
+        Rect { x: area.x + 1, y: area.y, width: area.width.saturating_sub(2), height: area.height }
+    } else {
+        let block = Block::default()
             .borders(Borders::ALL)
             .title(status_title(
                 &sanitize_for_terminal(&active_tab.status_message),
                 area.width.saturating_sub(2) as usize,
             ))
-            .title_bottom(link_preview(active_tab)),
-    );
-
-    f.render_widget(Clear, area);
-    f.render_widget(content, area);
-    render_inline_images(f, app, area, start_index, end_index);
+            .title_bottom(link_preview(active_tab));
+        let inner = block.inner(area);
+        f.render_widget(block, area);
+        inner
+    };
+    f.render_widget(Paragraph::new(viewport_content), inner);
+    render_inline_images(f, app, inner, start_index, end_index);
     render_download_overlay(f, app, area);
     render_download_prompt(f, app);
     render_tool_prompt(f, app);
     render_image_viewer(f, app, area);
 }
 
-/// Draw the page's loaded images over the space reserved for them, when it's entirely on screen
+/// Draw the page's loaded images over the space reserved for them, when it's entirely on screen;
+/// `area` is where the page's text is drawn
 fn render_inline_images(f: &mut Frame, app: &App, area: Rect, start: usize, end: usize) {
     let tab = &app.tabs[app.active_tab_index];
     for block in &tab.image_blocks {
@@ -671,10 +746,9 @@ fn render_inline_images(f: &mut Frame, app: &App, area: Rect, start: usize, end:
         }
         let Some(image) = tab.page_images.get(block.image) else { continue };
         let url = crate::network::resolve_url(tab.link_base(), &image.src);
-        // Inside the page's border
         let rect = Rect {
-            x: area.x + 1 + block.x as u16,
-            y: area.y + 1 + (block.line_index - start) as u16,
+            x: area.x + block.x as u16,
+            y: area.y + (block.line_index - start) as u16,
             width: block.columns,
             height: block.rows,
         }
@@ -713,6 +787,19 @@ fn render_image_viewer(f: &mut Frame, app: &App, area: Rect) {
 }
 
 pub fn ui(f: &mut Frame, app: &App) {
+    if compact() {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(0), Constraint::Length(1)])
+            .split(f.area());
+        render_compact_header(f, app, chunks[0]);
+        render_browser_content(f, app, chunks[1]);
+        render_compact_footer(f, &app.tabs[app.active_tab_index], chunks[2]);
+        if app.glasses || app.settings.monochrome() {
+            without_colour(f.buffer_mut());
+        }
+        return;
+    }
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([

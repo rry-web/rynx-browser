@@ -57,6 +57,10 @@ since the microphone hears the voice too.
 
 - **No colour**: what colour marked (the selected link, matches, modes) is drawn in reverse video,
   for monochrome displays. (`colour = off` in settings, or `NO_COLOR`, does this in ordinary mode.)
+- **A compact layout**: one row at the top for the mode and the page's title (or the address
+  being typed), the page, and one row at the bottom for the status line and where the selected
+  link goes. The tab bar, address bar and border took eight rows; at 80×30 the page gets 28
+  rows instead of 22.
 - **Reader mode** in every tab: only a page's main text.
 - **An 80×30 screen**, asked of the terminal (what a 640×480 display with an 8×16 font shows);
   terminals that don't allow it keep their size.

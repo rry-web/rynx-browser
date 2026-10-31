@@ -111,8 +111,8 @@ computer and battery likely ride in a pocket, wired or wireless to the glasses.
 
 First step (ready): the prototype on a laptop, `scripts/rynx-glasses` (glasses/README.md). Using it
 for a while shows whether browsing by voice feels good, and what's missing, before buying hardware.
-Then: a compact layout for short displays (the tab bar and address bar take six rows now), and
-the voice controller on a Raspberry Pi.
+The compact layout is done (glasses mode: a title row and a status row). Then: the voice
+controller on a Raspberry Pi, and checking every page and box at 80×30 and less.
 
 ## Process notes
 

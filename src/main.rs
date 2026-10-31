@@ -342,6 +342,7 @@ async fn run(
     app.check_for_updates_if_due();
     if glasses {
         app.glasses = true;
+        rynx::ui::set_compact(true);
         app.current_tab().reader_mode = true;
     }
     #[cfg(unix)]

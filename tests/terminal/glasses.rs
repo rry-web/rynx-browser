@@ -69,7 +69,16 @@ fn glass_01_glasses_mode_driven_through_the_socket() {
     // No colour anywhere, and the page in reader mode
     assert_eq!(rynx.coloured_cells(), vec![], "{}", rynx.screen());
     assert!(rynx.screen().contains("READER"), "{}", rynx.screen());
+    // The compact layout: the title on the first row, the page from the second, the status line
+    // on the last; no tab bar, address bar or border
+    let rows = rynx.rows();
+    assert!(rows[0].contains("Alpha") && rows[0].contains("READER"), "{}", rynx.screen());
+    assert!(rows[1].contains("Alpha page"), "{}", rynx.screen());
+    assert!(!rynx.screen().contains("┌"), "{}", rynx.screen());
+    rynx.keys("j");
+    rynx.wait_for("Some words about alpha");
     let status = control.send("status");
+    assert!(rynx.rows().last().unwrap().contains(status["message"].as_str().unwrap()), "{}", rynx.screen());
     assert_eq!(status["title"], "Alpha", "{status}");
     assert!(status["address"].as_str().unwrap().ends_with("/a"), "{status}");
 
@@ -79,11 +88,17 @@ fn glass_01_glasses_mode_driven_through_the_socket() {
     // The links as f numbers them: the second is gamma
     control.send("hints");
     rynx.wait_for("Follow which link");
+    rynx.wait_for("1o to beta");
     assert_eq!(control.send("status")["mode"], "Hints");
     assert_eq!(control.send("follow 2")["ok"], true);
     rynx.wait_for("Gamma page");
     assert_eq!(control.send("follow 9")["ok"], false, "no link 9");
 
+    control.send("back");
+    rynx.wait_for("Alpha page");
+    // A click lands on the link under it, with the page a row from the top
+    rynx.click_text("Go to beta");
+    rynx.wait_for("Beta page");
     control.send("back");
     rynx.wait_for("Alpha page");
     control.send("find beta");

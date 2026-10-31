@@ -318,7 +318,7 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | NAV-11 | Link hints: links and fields on screen numbered (f, ; for a new tab), a number opens one, Esc or another key cancels | browsing::nav_11_link_hints; `hints` (all) |
 | NET-01 | Encrypted DNS through each provider, local names still refused, ECH hiding the site's name | encrypted_dns (live, weekly); ech (HPKE, RFC 9180 vector); settings::dns_setting_is_checked |
 | NET-03 | The system's proxy ignored unless system_proxy is on (it would look names up past the local-network check) | system_proxy (all) |
-| GLASS-01 | Glasses mode: no colour, reader mode; the control socket's commands, a second rynx refused, a stale socket replaced | glasses::glass_01_glasses_mode_driven_through_the_socket |
+| GLASS-01 | Glasses mode: no colour, reader mode, the compact layout (rows, clicks); the control socket's commands, a second rynx refused, a stale socket replaced | glasses::glass_01_glasses_mode_driven_through_the_socket |
 | GLASS-02 | Voice: phrases to commands, numbers, commands said together, the bare-number guard; spoken commands recognised (macOS, with VOSK_MODEL) | glasses/test_voice.py |
 | CACHE-01 | Back is instant | browsing::cache_01_back_is_instant |
 | CACHE-02 | I2P site gone | i2p::cache_02_i2p_site_gone |

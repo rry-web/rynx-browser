@@ -469,7 +469,7 @@ impl App {
     pub(super) fn update_image_sizes(&mut self, index: usize) {
         let available = self.terminal_width.saturating_sub(4);
         // No taller than the screen, with a line for its caption
-        let max_rows = self.terminal_height.saturating_sub(crate::constants::UI_HEIGHT_OFFSET + 1);
+        let max_rows = self.terminal_height.saturating_sub(crate::ui::chrome_rows() + 1);
         let font = self.images.picker.font_size();
         let font = (font.width, font.height);
         let mut sizes = HashMap::new();

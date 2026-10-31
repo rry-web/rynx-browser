@@ -14,8 +14,9 @@
   progress bars) is drawn in reverse video; links stay underlined and headings bold. `colour =
   on` keeps colour even when `NO_COLOR` is set. Images keep their own colours.
 - Glasses mode, for monochrome AR glasses (or trying the idea on a laptop): `rynx --glasses` turns
-  colour off, opens pages in reader mode, asks the terminal for 80×30, and opens the control
-  socket. `scripts/rynx-glasses` starts it with voice control: `glasses/voice.py` recognises a
+  colour off, opens pages in reader mode, uses a compact layout (a title row and a status row
+  instead of the tab bar, address bar and border: 28 rows of page at 80×30 rather than 22), asks
+  the terminal for 80×30, and opens the control socket. `scripts/rynx-glasses` starts it with voice control: `glasses/voice.py` recognises a
   fixed list of commands on your computer with Vosk (nothing is sent anywhere), so you say
   "links", then "follow three"; "go to", "search" and "find" take free words after them, and
   "read" reads the page aloud. See `glasses/README.md`.

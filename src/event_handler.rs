@@ -1,6 +1,6 @@
 use crate::app::{App, HintResult};
+use crate::constants::MOUSE_SCROLL_LINES;
 use crate::constants::*;
-use crate::constants::{MOUSE_SCROLL_LINES, UI_HEIGHT_OFFSET, UI_ROW_OFFSET};
 use crate::models::{DownloadStatus, InputMode};
 use crate::network::NetworkResponse;
 
@@ -23,9 +23,10 @@ fn is_downloadable_file(url: &str) -> bool {
     file_name.rsplit_once('.').is_some_and(|(_, ext)| BINARY_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
 }
 
-/// Rows available for page content: tab bar (3) + URL bar (3) + content borders (2) are subtracted
+/// Rows available for page content: tab bar (3) + URL bar (3) + content borders (2) are
+/// subtracted, or the compact layout's header and status rows
 fn viewport_height(terminal_height: u16) -> usize {
-    terminal_height.saturating_sub(UI_HEIGHT_OFFSET) as usize
+    terminal_height.saturating_sub(crate::ui::chrome_rows()) as usize
 }
 
 pub fn handle_key_event(app: &mut App, key: KeyEvent, terminal_width: u16, terminal_height: u16) -> Result<bool> {
@@ -703,9 +704,9 @@ pub fn handle_mouse_event(app: &mut App, mouse: MouseEvent, terminal_width: u16,
                 tab.download_prompt = Some(prompt);
             }
             // 1. Determine which line was clicked
-            if mouse.row >= UI_ROW_OFFSET {
-                // UI_ROW_OFFSET is the UI offset
-                let visual_line = (mouse.row - UI_ROW_OFFSET) as usize;
+            let top = crate::ui::page_top_row();
+            if mouse.row >= top {
+                let visual_line = (mouse.row - top) as usize;
                 let real_line_idx = visual_line + tab.scroll;
                 let click_x = (mouse.column as usize).saturating_sub(1);
 

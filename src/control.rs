@@ -212,7 +212,7 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
             handle_action(app, find, width, height).map_err(failed)?;
             type_text(app, rest, width, height).map_err(failed)?;
             handle_key_event(app, KeyEvent::from(KeyCode::Enter), width, height).map_err(failed)?;
-            let rows = height.saturating_sub(crate::constants::UI_HEIGHT_OFFSET) as usize;
+            let rows = height.saturating_sub(crate::ui::chrome_rows()) as usize;
             let tab = app.current_tab();
             if let Some(line) = tab.search_state.as_ref().and_then(|s| s.matches.first()).map(|m| m.line_index) {
                 tab.scroll_to_line(line, rows);
