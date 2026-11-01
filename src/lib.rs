@@ -1,5 +1,6 @@
 #![deny(unsafe_code)]
 
+pub mod altcha;
 pub mod anubis;
 pub mod app;
 pub mod bookmarks;

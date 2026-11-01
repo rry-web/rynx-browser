@@ -285,6 +285,7 @@ async fn fetch_web(
         // An Anubis "making sure you're not a bot" page: do its proof of work natively and load
         // what it was guarding. If that fails, the check's page is shown with the reason.
         let mut problem = None;
+        let mut check = "Anubis";
         if anubis_tried && (status.is_client_error() || status.is_server_error()) {
             problem = Some(String::from("the site didn't accept rynx's answer"));
         } else if class == ContentClass::Html
@@ -307,12 +308,34 @@ async fn fetch_web(
                     Err(e) => problem = Some(e),
                 }
             }
+        // An ALTCHA proof of work, likewise (the anubis setting covers both)
+        } else if class == ContentClass::Html
+            && let Some(challenge) = crate::altcha::detect(&body)
+        {
+            check = "ALTCHA";
+            if anubis_tried {
+                problem = Some(String::from("the site didn't accept rynx's answer"));
+            } else if !request.solve_anubis {
+                problem = Some(String::from("passing them is turned off in settings.conf"));
+            } else {
+                anubis_tried = true;
+                let host = Url::parse(&url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+                let note = format!("Passing {}'s bot check (ALTCHA proof of work), without JavaScript...", host);
+                let _ = tx.send(NetworkResponse::Info(id, note)).await;
+                match crate::altcha::pass(client, &url, challenge, request.i2p_mode).await {
+                    Ok(next) => {
+                        response = next;
+                        continue;
+                    }
+                    Err(e) => problem = Some(e),
+                }
+            }
         }
         // A bot check's page or an MCP server's notice isn't worth keeping
         let endpoint = crate::mcp::is_endpoint_answer(content_type.as_deref(), &body);
         let cache = cache.filter(|_| problem.is_none() && !cloudflare && !endpoint);
         let note = match problem {
-            Some(p) => Some(format!("This is a bot check (Anubis), and {}", p)),
+            Some(p) => Some(format!("This is a bot check ({}), and {}", check, p)),
             None if cloudflare => Some(String::from(
                 "This is a bot check (Cloudflare) that needs JavaScript; A opens the Internet Archive's copy",
             )),

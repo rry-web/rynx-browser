@@ -257,6 +257,7 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | SET-15 | I2P lock | settings::set_15_network_lock |
 | SET-16 | Archived copy | tests/live_sites::set_16_archived_copy |
 | SET-17 | Monochrome: NO_COLOR or colour = off draws nothing in colour, the selected link reversed; colour = on overrides NO_COLOR | settings::set_17_monochrome; tests/settings.rs (parsing) |
+| SET-18 | ALTCHA proof of work passed without JavaScript: the challenge read from the page, the number found, the answer posted to the same site, only the pass kept and sent back; a refused answer shows the check, not retried | tests/altcha.rs |
 | SET-07 | Session history | settings::set_07_session_history |
 | SET-08 | Saved history | i2p::set_08_i2p_visits_never_reach_history_txt; settings::set_08_09_saved_and_cleared_history |
 | SET-09 | Clearing history | settings::set_08_09_saved_and_cleared_history |

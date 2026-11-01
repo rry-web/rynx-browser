@@ -130,14 +130,16 @@ history, the disk cache, images, colour, updates, the browser's identity, names 
 network, and whether to use the system's proxy (off by default).
 
 rynx introduces itself as Safari on a Mac, the identity millions of visitors send, so it doesn't
-stand out (the `user_agent` setting changes it). When a bot wall shows an Anubis check, rynx does
-its proof of work itself, without JavaScript.
+stand out (the `user_agent` setting changes it). When a bot wall shows an Anubis check or an
+ALTCHA proof of work, rynx does the work itself, without JavaScript. Checks that inspect the
+browser rather than ask for work (Cloudflare's, DDoS-Guard's) aren't passed: that would mean
+pretending to be a browser rynx isn't.
 
 ## Security and privacy
 
 - **No JavaScript, no tracking:** no scripts, storage or `Referer` (except a site's own address
   on an I2P address-helper link followed from that site, which the router asks for); no cookies
-  except Anubis's passes and those of sites you choose to stay signed in to, sent only to them.
+  except bot checks' passes (Anubis's, ALTCHA's) and those of sites you choose to stay signed in to, sent only to them.
   History and the disk cache are off unless you turn them on. In I2P mode rynx sends a generic
   identity, and every request goes through the I2P router, except addresses on your own computer
   (like the router's console at 127.0.0.1:7070), which you type, and which I2P sites can't link to.

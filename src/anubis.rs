@@ -341,10 +341,32 @@ pub struct Cookies {
 const MAX_COOKIES: usize = 64;
 const MAX_VALUE: usize = 4096;
 
-/// Whether a cookie belongs to Anubis: set by its own addresses, or named like its cookies (the
-/// name prefix is configurable, but the endings aren't)
+/// Addresses other bot checks (ALTCHA's) were just sent an answer at: the cookies they set are
+/// passes, kept like Anubis's
+static PASS_ADDRESSES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Keep the cookies `url` sets in answer to a bot check
+pub fn expect_pass_from(url: &Url) {
+    let mut addresses = PASS_ADDRESSES.lock().unwrap_or_else(|e| e.into_inner());
+    let address = address_without_query(url);
+    if !addresses.contains(&address) {
+        addresses.push(address);
+        if addresses.len() > MAX_COOKIES {
+            addresses.remove(0);
+        }
+    }
+}
+
+fn address_without_query(url: &Url) -> String {
+    format!("{}{}", url.origin().ascii_serialization(), url.path())
+}
+
+/// Whether a cookie belongs to a bot check: set by Anubis's own addresses or another check's
+/// answer address, or named like Anubis's cookies (the name prefix is configurable, but the
+/// endings aren't)
 fn is_anubis_cookie(name: &str, url: &Url) -> bool {
     url.path().contains(ANUBIS_PATH)
+        || PASS_ADDRESSES.lock().unwrap_or_else(|e| e.into_inner()).contains(&address_without_query(url))
         || name.to_ascii_lowercase().contains("anubis")
         || name.ends_with("-cookie-verification")
         || name.ends_with("-original-referer")

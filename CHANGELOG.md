@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- ALTCHA proof-of-work checks ("verifying your browser... solving a quick proof-of-work") are
+  passed without JavaScript, like Anubis's: rynx finds the number the page asks for, posts it to
+  the same site as the page's script would, and keeps only the pass it's given. The `anubis`
+  setting covers both.
 - Link hints: `f` numbers every link and field on screen, and typing a number opens it (with
   twelve links, `7` opens at once and `1` waits for a second digit; Enter takes it as it is).
   `;` does the same for links, opening them in a new tab. The numbers are drawn in reverse

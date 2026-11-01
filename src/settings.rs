@@ -116,8 +116,8 @@ const DOCUMENTED: &[Documented] = &[
     },
     Documented {
         key: "anubis",
-        about: "Anubis bot checks (\"Making sure you're not a bot\") are passed by doing their proof of work\n\
-                natively, without JavaScript. Turn it off to see the check's page instead.",
+        about: "Anubis bot checks (\"Making sure you're not a bot\") and ALTCHA proofs of work are passed by\n\
+                doing their work natively, without JavaScript. Turn it off to see the check's page instead.",
         examples: &["off"],
     },
     Documented {

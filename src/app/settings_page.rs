@@ -238,7 +238,7 @@ impl App {
         html.push_str(&checkbox(
             "anubis",
             s.solve_anubis,
-            "Pass Anubis bot checks by doing their proof of work, without JavaScript",
+            "Pass Anubis and ALTCHA bot checks by doing their proof of work, without JavaScript",
         ));
         html.push_str(
             "<p><input type=\"submit\" value=\"Save settings\"> \
