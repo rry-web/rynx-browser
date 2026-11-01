@@ -58,6 +58,17 @@ fn smoke_01_key_bindings() {
     rynx.wait_for("<h1>Alpha page</h1>");
     rynx.keys("V");
     rynx.wait_gone("<h1>");
+    // A page sent as one long line is wrapped in source view, so its end shows too
+    let long = format!("<title>Long</title><h1>Long page</h1><p>{}</p><p>The end of the line</p>", "word ".repeat(80));
+    site.page("/long", &long);
+    rynx.open(&site.url("/long"));
+    rynx.wait_for("Long page");
+    rynx.keys("V");
+    rynx.wait_for("The end of the line");
+    rynx.keys("V");
+    rynx.wait_gone("<h1>");
+    rynx.keys("H");
+    rynx.wait_for("Alpha page");
     // Copy mode (v), left with Esc (y would write the real clipboard)
     rynx.keys("v");
     rynx.wait_for("COPY MODE");

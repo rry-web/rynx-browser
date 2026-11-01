@@ -118,11 +118,35 @@ pub struct ImageBlock {
     pub rows: u16,
 }
 
+/// A line of source cut into rows of at most `width` columns (wide characters kept whole)
+fn wrap_source_line(line: &str, width: usize) -> Vec<String> {
+    let mut rows = vec![String::new()];
+    let mut used = 0;
+    for c in line.chars() {
+        let w = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+        if used + w > width && used > 0 {
+            rows.push(String::new());
+            used = 0;
+        }
+        rows.last_mut().expect("a row").push(c);
+        used += w;
+    }
+    rows
+}
+
 /// Parse and lay out a page. Pure and thread-safe: the UI runs it on a background thread, so a
 /// page that is slow to parse never freezes input or drawing.
 pub fn render_page(job: &RenderJob) -> RenderedPage {
     if job.source_view {
-        let lines = job.source.lines().map(|l| Line::from(sanitize_for_terminal(l).into_owned())).collect();
+        // Wrapped at the page's width: a page sent as one long line (minified) showed only its
+        // first screenful of characters
+        let width = (job.width as usize).saturating_sub(crate::ui::side_columns()).max(1);
+        let lines = job
+            .source
+            .lines()
+            .flat_map(|l| wrap_source_line(&sanitize_for_terminal(l), width))
+            .map(Line::from)
+            .collect();
         return RenderedPage {
             lines,
             links: Vec::new(),

@@ -63,6 +63,8 @@
   the network protections. I2P mode always goes through the I2P router, as before.
 
 ### Fixed
+- Source view (`V`) wraps long lines: a page sent as one long line showed only its first
+  screenful of characters.
 - The terminal tests could crash on static musl builds (which failed the 0.3.6 release build, so
   0.3.6 was never published): the library running rynx in a pseudo-terminal looked up the shell
   with `getpwuid`, which isn't thread-safe, from tests starting at once.
