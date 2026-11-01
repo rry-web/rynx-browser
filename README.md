@@ -102,7 +102,7 @@ them (`reload = F5` adds a key, `reload = F5 only` replaces them, `reload = none
 | `t`, `x` (or `w`), `X` | New tab, close tab, reopen the tab closed last |
 | `F` or `Ctrl`+click, `J` / `K` (or `[` / `]`) | Open the link in a new tab; previous / next tab |
 | `/`, `n` / `N` (or `>` / `<`) | Find on the page, next / previous match |
-| `v` (then `y`) | Copy mode: select text and copy it |
+| `v` (then `y`) | Copy mode: select text (`h` `j` `k` `l`, `G` / `g` to the end / start, `0` / `$`) and copy it |
 | `R`, `Shift+V` | Reader mode, page source |
 | `I`, `i`, `+` / `-` | Load the page's images, view one full screen, draw them larger / smaller |
 | `d` | Download the selected link |

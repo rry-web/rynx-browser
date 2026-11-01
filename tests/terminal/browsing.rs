@@ -65,6 +65,15 @@ fn smoke_01_key_bindings() {
     rynx.wait_for("Long page");
     rynx.keys("V");
     rynx.wait_for("The end of the line");
+    // Copy mode's G takes the selection to the end, so v G y copies the rest of the page
+    rynx.keys("v");
+    rynx.wait_for("COPY MODE");
+    rynx.keys("G");
+    rynx.settle();
+    let (end_row, _) = rynx.find("The end of the line").expect("the end shows");
+    assert!(rynx.reversed_cells().iter().any(|(row, _)| *row == end_row), "{}", rynx.screen());
+    rynx.keys("\u{1b}");
+    rynx.wait_gone("COPY MODE");
     rynx.keys("V");
     rynx.wait_gone("<h1>");
     rynx.keys("H");

@@ -720,6 +720,44 @@ fn handle_visual_mode(app: &mut App, key: KeyEvent, terminal_height: u16) -> Res
                 sel.end_char = tab.cursor_char;
             }
         }
+        // JUMPS: the page's end and start, the line's start and end, a screen down or up (the
+        // selection follows, so v G y copies everything from the cursor on)
+        KeyCode::Char('G')
+        | KeyCode::End
+        | KeyCode::Char('g')
+        | KeyCode::Home
+        | KeyCode::Char('0')
+        | KeyCode::Char('$')
+        | KeyCode::PageDown
+        | KeyCode::PageUp => {
+            let rows = viewport_height(terminal_height);
+            let tab = app.current_tab();
+            let last = tab.rendered_content.len().saturating_sub(1);
+            let width = |tab: &crate::app::BrowserTab, line: usize| {
+                tab.rendered_content.get(line).map(crate::renderer::display_width).unwrap_or(0)
+            };
+            let (line, char) = match code {
+                KeyCode::Char('G') | KeyCode::End => (last, width(tab, last)),
+                KeyCode::Char('g') | KeyCode::Home => (0, 0),
+                KeyCode::Char('0') => (tab.cursor_line, 0),
+                KeyCode::Char('$') => (tab.cursor_line, width(tab, tab.cursor_line)),
+                KeyCode::PageDown => {
+                    let line = (tab.cursor_line + rows).min(last);
+                    (line, tab.cursor_char.min(width(tab, line)))
+                }
+                _ => {
+                    let line = tab.cursor_line.saturating_sub(rows);
+                    (line, tab.cursor_char.min(width(tab, line)))
+                }
+            };
+            tab.cursor_line = line;
+            tab.cursor_char = char;
+            tab.scroll_to_line(line, rows);
+            if let Some(ref mut sel) = tab.selection {
+                sel.end_line = line;
+                sel.end_char = char;
+            }
+        }
 
         // YANK (Copy)
         KeyCode::Char('y') => {

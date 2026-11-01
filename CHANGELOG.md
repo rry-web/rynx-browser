@@ -63,6 +63,9 @@
   the network protections. I2P mode always goes through the I2P router, as before.
 
 ### Fixed
+- Copy mode (`v`) moves by more than a character or line: `G`/End and `g`/Home to the end and
+  start of the page, `0` and `$` to the line's start and end, PageUp and PageDown. `v G y` copies
+  the rest of the page.
 - Source view (`V`) wraps long lines: a page sent as one long line showed only its first
   screenful of characters.
 - The terminal tests could crash on static musl builds (which failed the 0.3.6 release build, so
