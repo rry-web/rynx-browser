@@ -322,7 +322,7 @@ fn glass_07_talking_and_typing_by_voice() {
     let begun = control.send("begin fill");
     assert_eq!(begun["ok"], true, "{begun}");
     assert_eq!(control.send("status")["mode"], "FormEdit");
-    assert!(!rynx.screen().contains("old words"), "{}", rynx.screen());
+    rynx.wait_gone("old words");
     // In a field Space types; Ctrl+Space talks
     rynx.keys(" ");
     rynx.keys("\x00");
@@ -330,6 +330,7 @@ fn glass_07_talking_and_typing_by_voice() {
     control.send("talk off");
     control.send("type potatoes and leeks");
     assert_eq!(control.send("erase 10")["ok"], true);
+    rynx.wait_for("potatoes");
     rynx.wait_gone("and leeks");
     assert!(rynx.screen().contains("[ potatoes"), "{}", rynx.screen());
     control.send("key Enter");
