@@ -459,6 +459,12 @@ async fn run_app<B: Backend<Error = io::Error>>(
         if frame.area.width != drawn_size.width || frame.area.height != drawn_size.height {
             exact.reset();
             drawn_size = ratatui::layout::Size::new(frame.area.width, frame.area.height);
+            // A resize before input was first read sends no event; lay the pages out here instead
+            let drawn = screen(drawn_size.width, drawn_size.height);
+            if drawn != size {
+                size = drawn;
+                app.resize(size.width, size.height);
+            }
         }
         let rewrite = exact.cells_to_rewrite(frame.buffer);
         if !rewrite.is_empty() {
