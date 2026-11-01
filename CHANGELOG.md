@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.7]
 
 ### Added
 - ALTCHA proof-of-work checks ("verifying your browser... solving a quick proof-of-work") are
