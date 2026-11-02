@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- A window resized just as rynx started could leave the page laid out for the old width until
+  the next resize.
+- The start page lists copy mode's `G` / `g` and `0` / `$`.
+
 ## [0.3.7]
 
 ### Added
