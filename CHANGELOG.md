@@ -2,7 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+- SVG images, drawn to pixels with resvg (pure Rust): Wikipedia's maths formulas, logos and
+  diagrams. Text in them uses the system's fonts (read the first time an SVG needs them); nothing
+  an SVG refers to is loaded, neither files on this computer nor addresses, and pictures embedded
+  in one are left out.
+
 ### Fixed
+- Black bars under or beside images: an image is now drawn filling exactly the cells the page
+  gives it, which keep its shape to within half a cell, so no padding shows (coloured text blocks,
+  as in macOS Terminal, drew the padding black).
+- Transparent images (Wikipedia's diagrams, maps and flags) are drawn on white, as the page shows
+  them, instead of on black in coloured text blocks, or with their black lines lost on a dark
+  terminal's background.
 - A window resized just as rynx started could leave the page laid out for the old width until
   the next resize.
 - The start page lists copy mode's `G` / `g` and `0` / `$`.

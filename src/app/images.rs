@@ -5,12 +5,15 @@
 //!
 //! Images are fetched like pages (HTTPS, redirect checks, I2P through the proxy, the cache), but
 //! a public page can never load images from the local network, where a request can make a router
-//! or printer act. They're decoded off the UI thread by memory-safe decoders with limits on size,
-//! and big ones are scaled down.
+//! or printer act. They're decoded off the UI thread (see decode.rs), and drawn filling exactly
+//! the cells the page gives them, so no strip of padding shows beside or below one.
+
+mod decode;
 
 use super::*;
 use crate::renderer::PageImage;
 use crate::settings::{ImageDisplay, ImageLoading, ImageProtocol};
+use decode::decode;
 use image::DynamicImage;
 use ratatui_image::picker::Picker;
 use ratatui_image::protocol::StatefulProtocol;
@@ -19,11 +22,6 @@ use std::sync::Mutex;
 
 /// Largest image fetched (big comic pages and photos); the cache keeps those up to its own limit
 const MAX_IMAGE_BYTES: u64 = 32 * 1024 * 1024;
-/// Largest picture decoded, in pixels per side (a long comic strip is tall); and how far big
-/// ones are scaled down: to this width, and this many pixels in all
-const MAX_DECODE_SIDE: u32 = 30_000;
-const MAX_KEPT_SIDE: u32 = 2048;
-const MAX_KEPT_PIXELS: u64 = 2048 * 4096;
 /// Images fetched at once
 const PARALLEL_FETCHES: usize = 6;
 /// The width pages are designed for, in CSS pixels: an image a page draws this wide fills the
@@ -59,7 +57,7 @@ pub struct Images {
     pending: HashMap<usize, usize>,
     fetches: Arc<tokio::sync::Semaphore>,
     /// Drawing state per image address; the UI draws through a shared reference
-    pub drawn: Mutex<HashMap<String, StatefulProtocol>>,
+    pub drawn: Mutex<HashMap<String, Drawn>>,
     /// How much larger or smaller than the page sizes them the page's images are drawn (+ and -)
     pub zoom: f64,
     /// The image open in the full-screen viewer: its address and description
@@ -77,6 +75,9 @@ pub struct Images {
     /// address and description
     viewer_wanted: Option<(usize, String, String)>,
 }
+
+/// An image's drawing state, and the cells (columns and rows) it was made to fill
+type Drawn = ((u16, u16), StatefulProtocol);
 
 /// Where the viewer is in its image
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -143,7 +144,20 @@ impl std::fmt::Debug for Images {
 
 /// The memory a decoded image takes
 fn image_bytes(image: &DynamicImage) -> usize {
-    image.width() as usize * image.height() as usize * 4
+    image.as_bytes().len()
+}
+
+/// An image stretched to fill exactly `cells` of a terminal whose cells are `font` pixels. Drawn
+/// in a larger box, ratatui-image pads it with transparent black, which shows as a black bar
+/// where the terminal can't draw transparency; the page's boxes keep an image's shape to within
+/// half a cell, so the stretch doesn't show.
+fn fill_cells(image: &DynamicImage, cells: (u16, u16), font: ratatui_image::FontSize) -> DynamicImage {
+    let width = (cells.0 as u32 * font.width as u32).max(1);
+    let height = (cells.1 as u32 * font.height as u32).max(1);
+    if (image.width(), image.height()) == (width, height) {
+        return image.clone();
+    }
+    image.resize_exact(width, height, image::imageops::FilterType::Triangle)
 }
 
 impl Images {
@@ -256,26 +270,6 @@ fn same_site(image: &Url, page: &Url) -> bool {
     image == page || image.ends_with(&format!(".{}", page))
 }
 
-/// Decode an image within limits, scaling big ones down
-fn decode(data: &[u8]) -> Result<DynamicImage, String> {
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(data))
-        .with_guessed_format()
-        .map_err(|e| format!("unreadable image: {}", e))?;
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(MAX_DECODE_SIDE);
-    limits.max_image_height = Some(MAX_DECODE_SIDE);
-    limits.max_alloc = Some(512 * 1024 * 1024);
-    reader.limits(limits);
-    let image = reader.decode().map_err(|e| format!("couldn't decode the image: {}", e))?;
-    let (width, height) = (image.width() as f64, image.height() as f64);
-    let scale = (MAX_KEPT_SIDE as f64 / width).min((MAX_KEPT_PIXELS as f64 / (width * height)).sqrt());
-    Ok(if scale < 1.0 {
-        image.thumbnail(((width * scale) as u32).max(1), ((height * scale) as u32).max(1))
-    } else {
-        image
-    })
-}
-
 /// Fetch an image's bytes, from the cache if it has them
 async fn fetch(
     client: &reqwest::Client,
@@ -300,10 +294,6 @@ async fn fetch(
     if !response.status().is_success() {
         return Err(format!("the site answered {}", response.status()));
     }
-    let kind = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
-    if kind.starts_with("image/svg") {
-        return Err("SVG images can't be shown yet".to_string());
-    }
     let keep = crate::cache::freshness(response.headers(), crate::cache::now()).is_some();
     let data = Arc::new(crate::network::read_bytes_limited(response, MAX_IMAGE_BYTES).await?);
     if keep && data.len() as u64 <= crate::cache::MAX_FILE_BYTES {
@@ -315,7 +305,8 @@ async fn fetch(
 /// The columns and rows to draw an image of `size` pixels in, which the page draws `declared`
 /// CSS pixels wide and high (its width and height attributes, if any): its share of the page's
 /// width, times `zoom`, within `available` columns and `max_rows` rows, keeping its shape on a
-/// terminal whose character cells are `font` pixels
+/// terminal whose character cells are `font` pixels. The side that follows from the other is
+/// rounded to the nearest cell, so stretching the image to fill them changes its shape least.
 fn cells_for(
     size: (u32, u32),
     declared: (Option<u32>, Option<u32>),
@@ -333,11 +324,11 @@ fn cells_for(
         (None, None) => iw,
     };
     let mut columns = (css_width / PAGE_PIXELS * available * zoom).ceil().clamp(1.0, available);
-    let mut rows = (columns * fw * ih / iw / fh).ceil().max(1.0);
+    let mut rows = (columns * fw * ih / iw / fh).round().max(1.0);
     let max_rows = max_rows.max(1) as f64;
     if rows > max_rows {
         rows = max_rows;
-        columns = (rows * fh * iw / ih / fw).ceil().clamp(1.0, available);
+        columns = (rows * fh * iw / ih / fw).round().clamp(1.0, available);
     }
     (columns as u16, rows as u16)
 }
@@ -705,7 +696,7 @@ impl App {
         let mut state = self.images.viewer_state.lock().unwrap_or_else(|e| e.into_inner());
         if state.as_ref().is_none_or(|(drawn, _)| *drawn != crop) {
             let (x, y, w, h) = pixels;
-            let part = image.crop_imm(x, y, w, h);
+            let part = fill_cells(&image.crop_imm(x, y, w, h), cells, font);
             *state = Some((crop, self.images.picker.new_resize_protocol(part)));
         }
         if let Some((_, protocol)) = state.as_mut() {
@@ -750,9 +741,15 @@ impl App {
         }
     }
 
-    /// The drawing state for an image in the page, made on first use. An image that was dropped
-    /// from memory is noted, to be decoded again after this frame.
-    pub fn with_drawn_image<R>(&self, url: &str, draw: impl FnOnce(&mut StatefulProtocol) -> R) -> Option<R> {
+    /// The drawing state for an image in the page filling `cells`, made on first use (and again
+    /// when its size changes). An image that was dropped from memory is noted, to be decoded again
+    /// after this frame.
+    pub fn with_drawn_image<R>(
+        &self,
+        url: &str,
+        cells: (u16, u16),
+        draw: impl FnOnce(&mut StatefulProtocol) -> R,
+    ) -> Option<R> {
         let Some(image) = self.images.decoded.get(url) else {
             if self.images.dimensions.contains_key(url) {
                 self.images.missing.lock().unwrap_or_else(|e| e.into_inner()).insert(url.to_string());
@@ -760,9 +757,13 @@ impl App {
             return None;
         };
         let mut drawn = self.images.drawn.lock().unwrap_or_else(|e| e.into_inner());
-        let state =
-            drawn.entry(url.to_string()).or_insert_with(|| self.images.picker.new_resize_protocol((**image).clone()));
-        Some(draw(state))
+        let picker = &self.images.picker;
+        let made = || (cells, picker.new_resize_protocol(fill_cells(image, cells, picker.font_size())));
+        let entry = drawn.entry(url.to_string()).or_insert_with(made);
+        if entry.0 != cells {
+            *entry = made();
+        }
+        Some(draw(&mut entry.1))
     }
 }
 
@@ -777,7 +778,7 @@ mod tests {
         // it, but no taller than the screen
         assert_eq!(cells_for((250, 188), (Some(180), Some(135)), font, 160, 40, 1.0), (29, 11));
         assert_eq!(cells_for((1200, 400), (Some(1200), None), font, 160, 40, 1.0), (160, 27));
-        assert_eq!(cells_for((800, 1200), (None, None), font, 160, 40, 1.0), (54, 40));
+        assert_eq!(cells_for((800, 1200), (None, None), font, 160, 40, 1.0), (53, 40));
         // Only a height: the width follows from the image's shape
         assert_eq!(cells_for((400, 200), (None, Some(100)), font, 100, 40, 1.0), (20, 5));
         // Zoomed
@@ -785,13 +786,25 @@ mod tests {
     }
 
     #[test]
-    fn long_strips_are_kept_sharp() {
-        let strip = DynamicImage::new_rgb8(800, 12_000);
-        let mut data = std::io::Cursor::new(Vec::new());
-        strip.write_to(&mut data, image::ImageFormat::Png).unwrap();
-        let kept = decode(data.get_ref()).unwrap();
-        assert!(kept.width() >= 600, "{}x{}", kept.width(), kept.height());
-        assert!(kept.width() as u64 * kept.height() as u64 <= MAX_KEPT_PIXELS);
+    fn images_fill_their_cells_without_a_black_bar() {
+        // A Wikipedia thumbnail, white, in the cells the page gives it: drawn, no pixel of it is
+        // padding (transparent black, which text blocks showed as a black bar along the bottom)
+        let font = ratatui_image::FontSize::new(10, 20);
+        let image = DynamicImage::ImageRgb8(image::RgbImage::from_pixel(220, 165, image::Rgb([255, 255, 255])));
+        let cells = cells_for((220, 165), (Some(220), Some(165)), (10, 20), 156, 40, 1.0);
+        let filled = fill_cells(&image, cells, font);
+        let drawn = ratatui_image::Resize::Scale(None).resize(
+            &filled,
+            font,
+            ratatui::layout::Size::new(cells.0, cells.1),
+            None,
+        );
+        let drawn = drawn.to_rgb8();
+        assert_eq!((drawn.width(), drawn.height()), (cells.0 as u32 * 10, cells.1 as u32 * 20));
+        assert!(drawn.pixels().all(|p| p.0 == [255, 255, 255]), "a strip of padding was drawn");
+        // Its shape is kept to within half a cell
+        let shape = (cells.1 as f64 * 20.0) / (cells.0 as f64 * 10.0);
+        assert!((shape - 165.0 / 220.0).abs() * cells.0 as f64 * 10.0 <= 10.0, "{cells:?}");
     }
 
     #[test]

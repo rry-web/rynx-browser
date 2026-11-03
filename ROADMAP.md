@@ -18,10 +18,11 @@ working one. Bugs found in testing come before all of it.
   programs and copied files, not against malware running as the user.
 - **A Windows sandbox.** Linux has Landlock and macOS Seatbelt; Windows has none yet. Candidates:
   AppContainer, or a restricted token with job objects.
-- **Images, together:** SVG (rendered to pixels, e.g. with resvg), drawing images that are only
-  partly on screen, and the larger copy a page offers in srcset on terminals that draw real
-  pixels. (Sizes as the page sizes them, zoom, galleries side by side and a reading viewer are
-  done.) Image work is shared, not something to hand over.
+- **Images, together:** drawing images that are only partly on screen, and the larger copy a
+  page offers in srcset on terminals that draw real pixels (SVGs too: they're drawn at their own
+  size, so a small formula is enlarged on screen). (Sizes as the page sizes them, zoom, galleries
+  side by side, a reading viewer, SVG, and transparent images on white are done.) Image work is
+  shared, not something to hand over.
 - **Captchas and cookies:** a form with a captcha image usually needs a session cookie, which
   rynx doesn't keep for a site until `C`; say so by the form's submit button, rather than letting
   the site answer "wrong captcha". (Found on an I2P imageboard, 10channel.i2p.)

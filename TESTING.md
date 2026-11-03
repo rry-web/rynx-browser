@@ -151,6 +151,10 @@ Items marked **(priority)** haven't been checked by a person yet.
       *Expected:* it fits the width; `j`/`k` and Space scroll, Space at its bottom goes to the
       next image, `n`/`p` step between images, `+`/`-` zoom (`h`/`l` move across), `0` fits the
       width, and the foot says which image of how many, at what zoom.
+- [ ] **IMG-07 SVG and transparent images.** Open https://en.wikipedia.org/wiki/Pythagorean_theorem
+      and press `I`, in macOS Terminal and in a terminal that draws real pixels.
+      *Expected:* the diagrams are drawn on white with their labels, with no black strip below or
+      beside any image; the formulas (SVG) are drawn too, not listed as failed.
 
 ### Encrypted DNS
 - [ ] **NET-02 (priority) Encrypted DNS on your networks.** With the default settings, browse a
@@ -319,6 +323,7 @@ Each check and the test that covers it (`tests/terminal/` unless named otherwise
 | KEY-01 | Changed keys in a real terminal | settings::key_01_changed_keys |
 | KEY-02 | Mistakes in keys.conf | main::a_mistake_in_keys_conf_is_named |
 | IMG-03 | Loading settings | pages::img_03_own_images_load_by_themselves |
+| IMG-08 | Images fill their cells with no padding; transparent images and SVGs on white; SVGs scaled down when big and never reading local files | app::images::tests; app::images::decode::tests |
 | NAV-10 | Meta refreshes followed (noscript too), Back skipping them, loops stopped, countdowns and script redirects as links | `redirects` (all) |
 | NAV-11 | Link hints: links and fields on screen numbered (f, ; for a new tab), a number opens one, Esc or another key cancels | browsing::nav_11_link_hints; `hints` (all) |
 | NET-01 | Encrypted DNS through each provider, local names still refused, ECH hiding the site's name | encrypted_dns (live, weekly); ech (HPKE, RFC 9180 vector); settings::dns_setting_is_checked |

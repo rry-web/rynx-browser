@@ -173,7 +173,7 @@ The longer list, with notes and ideas, is in [ROADMAP.md](ROADMAP.md).
 - **Sign-in for site tools** (OAuth), and servers asking questions while a tool runs
 - **Encryption at rest** for history, the cache and snapshots (cookies are encrypted already)
 - **Session restore** (opt-in): reopen your tabs
-- **SVG images**, drawing images only partly on screen, and the sharper copies pages offer
+- **Drawing images only partly on screen**, and the sharper copies pages offer
 - **Downloads from Gemini and Gopher**, and Gemini client certificates
 - **Finer cookie control** (per cookie, and third-party rules), and history times in your time zone
 - **A Windows sandbox**, and **code-signed** macOS and Windows builds

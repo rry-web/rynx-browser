@@ -87,9 +87,10 @@ impl DomRenderer {
             self.flush_line();
             let prefix = self.prefix_spans();
             let prefix_width: usize = prefix.iter().map(|s| s.width()).sum();
-            // Narrower than it would be (in a table cell, say): fewer rows, keeping its shape
+            // Narrower than it would be (in a table cell, say): fewer rows, keeping its shape (to
+            // the nearest row, as the image is stretched to fill them)
             let narrowed = columns.min(self.max_width.saturating_sub(prefix_width) as u16).max(1);
-            let rows = (rows as u32 * narrowed as u32).div_ceil(columns as u32).max(1) as u16;
+            let rows = ((rows as u32 * narrowed as u32 + columns as u32 / 2) / columns as u32).max(1) as u16;
             let columns = narrowed;
             let line_index = self.lines.len();
             for _ in 0..rows {

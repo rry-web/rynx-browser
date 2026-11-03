@@ -185,9 +185,10 @@ async fn picture_site() -> MockServer {
         .mount(&server)
         .await;
     Mock::given(path("/logo.svg"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw("<svg xmlns='http://www.w3.org/2000/svg'/>", "image/svg+xml"),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='60'><circle cx='30' cy='30' r='20'/></svg>",
+            "image/svg+xml",
+        ))
         .mount(&server)
         .await;
     server
@@ -303,14 +304,17 @@ async fn public_pages_cannot_load_local_network_images() {
 }
 
 #[tokio::test]
-async fn image_bombs_and_svg_are_refused() {
+async fn image_bombs_are_refused_and_svgs_drawn() {
     let server = picture_site().await;
     let mut app = test_app(Settings::default());
     show(&mut app, &format!("{}/", server.uri()), "<img src='/bomb.png' alt='Bomb'><img src='/logo.svg' alt='Logo'>");
     press(&mut app, KeyCode::Char('I'));
     images_arrive(&mut app, 2).await;
-    assert!(app.current_tab().image_blocks.is_empty());
-    assert!(app.current_tab().status_message.contains("couldn't be"), "{}", app.current_tab().status_message);
+    // Only the SVG gets space in the page: the bomb isn't decoded
+    let tab = app.current_tab();
+    assert_eq!(tab.image_blocks.len(), 1, "{:?}", tab.image_blocks);
+    assert_eq!(tab.page_images[tab.image_blocks[0].image].src, "/logo.svg");
+    assert!(tab.status_message.contains("1 couldn't be"), "{}", tab.status_message);
 }
 
 /// The status line names why a page's images failed, even when the image finishing last loaded
@@ -321,12 +325,12 @@ async fn the_reason_images_failed_is_named() {
     show(
         &mut app,
         &format!("{}/", server.uri()),
-        "<img src='/logo.svg' alt='Logo'><img src='/pic.png' alt='A picture'>",
+        "<img src='/bomb.png' alt='Bomb'><img src='/pic.png' alt='A picture'>",
     );
     press(&mut app, KeyCode::Char('I'));
     images_arrive(&mut app, 2).await;
     let status = app.current_tab().status_message.clone();
-    assert!(status.starts_with("Images loaded; 1 couldn't be: SVG images can't be shown yet"), "{status}");
+    assert!(status.starts_with("Images loaded; 1 couldn't be: couldn't decode the image"), "{status}");
 }
 
 #[test]

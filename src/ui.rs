@@ -853,8 +853,8 @@ fn render_inline_images(f: &mut Frame, app: &App, area: Rect, start: usize, end:
             height: block.rows,
         }
         .intersection(area);
-        app.with_drawn_image(&url, |state| {
-            // Scaled to its block, larger than its pixels if the page draws it larger
+        app.with_drawn_image(&url, (rect.width, rect.height), |state| {
+            // Made to fill its block exactly, larger than its pixels if the page draws it larger
             let image = ratatui_image::StatefulImage::default().resize(ratatui_image::Resize::Scale(None));
             f.render_stateful_widget(image, rect, state);
         });
