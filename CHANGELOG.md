@@ -21,6 +21,11 @@
   in one are left out.
 
 ### Fixed
+- Images drawn with Kitty graphics (Ghostty, Kitty, WezTerm) showed as a blank space with one
+  cell of the picture, and blanked the rest of their first row (a border beside them vanished):
+  the rows rynx writes again for text terminals disagree about the width of took the image's
+  first cell for such text, sent the image a second time and wrote blanks over its row. Image
+  cells are now left alone.
 - Black bars under or beside images: an image is now drawn filling exactly the cells the page
   gives it, which keep its shape to within half a cell, so no padding shows (coloured text blocks,
   as in macOS Terminal, drew the padding black).

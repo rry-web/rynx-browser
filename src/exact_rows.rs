@@ -13,7 +13,7 @@
 //! width the terminal gives a cluster, the next cell starts where it should, and nothing stale
 //! is left. (A terminal drawing a cluster wider than it was given clips it; nothing moves.)
 
-use ratatui::buffer::{Buffer, Cell};
+use ratatui::buffer::{Buffer, Cell, CellDiffOption};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use unicode_width::UnicodeWidthStr;
@@ -45,6 +45,14 @@ pub fn uncertain_width(symbol: &str) -> bool {
     )
 }
 
+/// Whether a cell is an image's: image protocols mark theirs (a forced width, or skipped), and
+/// Kitty's first cell carries the whole image, which read as text would be thousands of columns
+/// wide. Rewriting one sent the image again and blanked the rest of its row, so Kitty showed one
+/// cell of it.
+fn is_image_cell(cell: &Cell) -> bool {
+    cell.diff_option != CellDiffOption::None || cell.symbol().starts_with(IMAGE_PLACEHOLDER)
+}
+
 /// What was last written exactly, by row, so unchanged rows aren't written again
 #[derive(Default)]
 pub struct ExactRows {
@@ -64,7 +72,7 @@ impl ExactRows {
         let mut out = Vec::new();
         for y in area.top()..area.bottom() {
             let row: Vec<&Cell> = (area.left()..area.right()).filter_map(|x| buffer.cell((x, y))).collect();
-            if !row.iter().any(|cell| uncertain_width(cell.symbol())) {
+            if !row.iter().any(|cell| !is_image_cell(cell) && uncertain_width(cell.symbol())) {
                 self.written.remove(&y);
                 continue;
             }
@@ -84,7 +92,7 @@ impl ExactRows {
                 let symbol = cell.symbol();
                 let width = symbol.width().max(1);
                 let column = area.left() + x as u16;
-                if symbol.starts_with(IMAGE_PLACEHOLDER) {
+                if is_image_cell(cell) {
                     x += 1;
                     continue;
                 }
@@ -146,6 +154,31 @@ mod tests {
         assert!(!exact.cells_to_rewrite(&buffer).is_empty());
         exact.reset();
         assert!(!exact.cells_to_rewrite(&buffer).is_empty());
+    }
+
+    #[test]
+    fn the_cell_carrying_an_image_is_left_alone() {
+        // Kitty's first image cell carries the whole image ahead of its placeholder, and is
+        // marked one column wide: rewritten, its data was read as text thousands of columns wide,
+        // the rest of its row was blanked, and the image sent again (Kitty then drew one cell)
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 8, 1));
+        let width = ratatui::buffer::CellDiffOption::ForcedWidth(std::num::NonZeroU16::new(1).unwrap());
+        buffer[(1, 0)]
+            .set_symbol("\x1b_Gq=2,i=7,a=T,U=1,f=32,s=4,v=4,m=0;AAAAAAAAAAAAAAAAAAAA\x1b\\\u{10EEEE}\u{305}\u{305}")
+            .set_diff_option(width);
+        for x in 2..5 {
+            buffer[(x, 0)].set_symbol("\u{10EEEE}").set_diff_option(width);
+        }
+        assert!(ExactRows::default().cells_to_rewrite(&buffer).is_empty(), "the image's row was rewritten");
+        // With uncertain text beside it, the text is rewritten and the image's cells aren't
+        buffer.set_string(6, 0, "ம", Style::default());
+        let cells = ExactRows::default().cells_to_rewrite(&buffer);
+        assert!(!cells.is_empty());
+        assert!(
+            cells.iter().all(|(x, _, _)| !(1..5).contains(x)),
+            "{:?}",
+            cells.iter().map(|c| c.0).collect::<Vec<_>>()
+        );
     }
 
     #[test]
