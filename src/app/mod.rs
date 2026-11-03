@@ -33,6 +33,7 @@ mod hints;
 mod images;
 mod menu;
 mod pages;
+mod recipe;
 mod router;
 mod settings_page;
 mod snapshot_pages;
@@ -43,6 +44,7 @@ mod update_page;
 pub use hints::{HintResult, Hints};
 pub use images::draws_images;
 pub use menu::{Menu, MenuAction, MenuItem, MenuKind, MenuResult};
+pub use recipe::{DEMO_PAGE as RECIPE_DEMO_PAGE, RecipeView};
 pub use settings_page::SETTINGS_PAGE;
 pub use tab::BrowserTab;
 
@@ -80,6 +82,8 @@ pub struct App {
     pub snapshots: Arc<crate::snapshots::Snapshots>,
     /// Images: decoded, loading, and how they're drawn on this terminal
     pub images: images::Images,
+    /// A page's recipe shown a step at a time (c)
+    pub recipe_view: Option<RecipeView>,
     /// How this copy was installed (set at startup, before the sandbox), and the newest release
     /// found; where updates are downloaded to; a note from installing one at startup
     pub installed: crate::update::Installed,
@@ -168,6 +172,7 @@ impl App {
             cache: Arc::default(),
             snapshots: Arc::default(),
             images: images::Images::default(),
+            recipe_view: None,
             installed: crate::update::Installed::Elsewhere(String::from("not checked")),
             update_found: None,
             update_dir: None,
@@ -243,10 +248,7 @@ impl App {
             width,
         };
         if !background {
-            tab.apply_render(render_page(&job));
-            self.record_visit_if_pending(tab_index);
-            self.load_images_if_pending(tab_index);
-            self.follow_refresh_if_pending(tab_index);
+            self.apply_render(tab_index, render_page(&job));
             return;
         }
 
@@ -273,14 +275,7 @@ impl App {
             return;
         };
         if version == tab.content_version {
-            tab.apply_render(page);
-            if tab.status_message == RENDERING_STATUS {
-                tab.status_message = String::from("Loaded");
-                self.hint_cookies_for_sign_in(tab_index);
-            }
-            self.record_visit_if_pending(tab_index);
-            self.load_images_if_pending(tab_index);
-            self.follow_refresh_if_pending(tab_index);
+            self.apply_render(tab_index, page);
         }
         let tab = &mut self.tabs[tab_index];
         if tab.render_in_flight == Some(version) {
@@ -289,6 +284,26 @@ impl App {
                 self.render_tab(tab_index, width);
             }
         }
+    }
+
+    /// Show a tab's freshly laid-out page, then what waits for it: noting the visit, loading
+    /// images, following a meta refresh, and saying what the page offers
+    fn apply_render(&mut self, tab_index: usize, page: RenderedPage) {
+        let tab = &mut self.tabs[tab_index];
+        let had_recipe = tab.recipe.clone();
+        tab.apply_render(page);
+        if tab.status_message == RENDERING_STATUS {
+            tab.status_message = String::from("Loaded");
+            self.hint_cookies_for_sign_in(tab_index);
+        }
+        // A recipe the page didn't have (not on a re-layout of the same one)
+        let recipe = self.tabs[tab_index].recipe.as_deref();
+        if recipe.is_some() && recipe != had_recipe.as_deref() {
+            self.hint_recipe(tab_index);
+        }
+        self.record_visit_if_pending(tab_index);
+        self.load_images_if_pending(tab_index);
+        self.follow_refresh_if_pending(tab_index);
     }
 
     /// Whether a background render is running for the tab
@@ -455,6 +470,7 @@ impl App {
             || url == crate::keys::KEYS_PAGE
             || url == crate::cookies::COOKIES_PAGE
             || url == router::I2P_PAGE
+            || url == recipe::DEMO_PAGE
             || url.starts_with(crate::snapshots::SNAPSHOTS_PAGE)
             || url.starts_with(crate::snapshots::SNAPSHOT)
             || url.starts_with(crate::mcp::TOOLS_PAGE);

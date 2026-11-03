@@ -345,3 +345,58 @@ fn glass_07_talking_and_typing_by_voice() {
     assert!(rynx.wait_exit());
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
+
+/// GLASS-08: the demo recipe cooked by voice: opened, stepped through and closed through the
+/// socket as the voice controller does it, in glasses mode's compact layout and without colour
+#[test]
+fn glass_08_cooking_a_recipe_by_voice() {
+    let home = Home::new("glasses-recipe");
+    home.settings("");
+    let path = socket_path("recipe");
+    let program = Path::new(env!("CARGO_BIN_EXE_rynx"));
+    let rynx = Rynx::start_with(program, &home, &["--glasses"], &[("RYNX_CONTROL_SOCKET", path.display().to_string())]);
+    rynx.wait_for("Glasses mode");
+    let mut control = Control::connect(&path);
+
+    // "recipe demo"
+    assert_eq!(control.send("open about:recipe")["ok"], true);
+    rynx.wait_for("has a recipe");
+    // "recipe"
+    let shown = control.send("recipe");
+    assert_eq!((shown["step"].as_u64(), shown["steps"].as_u64()), (Some(0), Some(7)), "{shown}");
+    rynx.wait_for("Ingredients (7 steps)");
+    rynx.wait_for("200g plain flour");
+    assert_eq!(control.send("status")["mode"], "Recipe");
+    assert_eq!(rynx.coloured_cells(), vec![], "{}", rynx.screen());
+    // The title and status rows stay, around the card
+    let rows = rynx.rows();
+    assert!(rows[0].contains("Fluffy pancakes"), "{}", rynx.screen());
+
+    // "next step", and the card's text in the answer
+    let step = control.send("recipe next");
+    assert!(step["text"].as_str().unwrap().starts_with("Step 1 of 7: Put the flour"), "{step}");
+    rynx.wait_for("Step 1 of 7");
+    // "next": the action that steps through links steps through the recipe
+    control.send("next_link");
+    rynx.wait_for("Step 2 of 7");
+    // "step five", "ingredients"
+    control.send("recipe step 5");
+    rynx.wait_for("Step 5 of 7");
+    let missing = control.send("recipe step 9");
+    assert_eq!(missing["ok"], false, "{missing}");
+    assert!(missing["message"].as_str().unwrap().contains("this recipe has 7"), "{missing}");
+    control.send("recipe ingredients");
+    rynx.wait_for("Ingredients (7 steps)");
+
+    // Another command (here "links") closes the recipe first, and works on the page (which has
+    // no links to number)
+    control.send("hints");
+    rynx.wait_for("A demo of rynx's recipe mode");
+    assert_ne!(control.send("status")["mode"], "Recipe");
+    // "back" closes it rather than leaving the page
+    control.send("recipe");
+    rynx.wait_for("Ingredients (7 steps)");
+    control.send("back");
+    rynx.wait_gone("Ingredients (7 steps)");
+    assert_eq!(control.send("status")["address"], "about:recipe");
+}

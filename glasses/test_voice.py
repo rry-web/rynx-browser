@@ -30,6 +30,10 @@ class Phrases(unittest.TestCase):
         self.assertEqual(voice.understand("go to"), "@dictate open")
         self.assertEqual(voice.understand("menu"), "menu")
         self.assertEqual(voice.understand("choose three"), "choose 3")
+        self.assertEqual(voice.understand("next step"), "recipe next")
+        self.assertEqual(voice.understand("ingredients"), "recipe ingredients")
+        self.assertEqual(voice.understand("step four"), "recipe step 4")
+        self.assertEqual(voice.understand("recipe demo"), "open about:recipe")
         self.assertIsNone(voice.understand("follow zero"))
         self.assertIsNone(voice.understand("follow banana"))
         self.assertIsNone(voice.understand("delete everything"))
@@ -100,11 +104,30 @@ class Controller(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir="/tmp") as folder:
             rynx = FakeRynx(Path(folder) / "s.sock")
             controller = voice.Controller(voice.Rynx(Path(folder) / "s.sock", print), voice.Speaker(False), lambda m: None)
-            for mode in ["Normal", "Hints", "Menu"]:
+            for mode in ["Normal", "Hints", "Menu", "Recipe"]:
                 rynx.mode = mode
                 controller.heard("three")
             sent = [c for c in rynx.commands if not c.startswith(("heard", "status"))]
-            self.assertEqual(sent, ["follow 3", "choose 3"])
+            self.assertEqual(sent, ["follow 3", "choose 3", "recipe step 3"])
+
+    def test_cooking_by_voice(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as folder:
+            rynx, controller = controller_for(folder)
+            for said in ["recipe demo", "recipe", "next step", "next step", "previous step", "ingredients", "step five", "close recipe"]:
+                controller.heard(said)
+            self.assertEqual(
+                sent(rynx),
+                [
+                    "open about:recipe",
+                    "recipe",
+                    "recipe next",
+                    "recipe next",
+                    "recipe previous",
+                    "recipe ingredients",
+                    "recipe step 5",
+                    "recipe close",
+                ],
+            )
 
 
 def controller_for(folder):

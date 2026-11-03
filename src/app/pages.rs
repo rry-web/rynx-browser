@@ -35,6 +35,7 @@ impl App {
                 return true;
             }
             HELP_PAGE | "about:home" => ("Start", include_str!("../../assets/help.html").to_string()),
+            recipe::DEMO_PAGE => ("Fluffy pancakes (rynx recipe demo)", recipe::DEMO_HTML.to_string()),
             _ => return false,
         };
         self.show_generated_page(self.active_tab_index, address, title, html);

@@ -67,6 +67,23 @@ next, previous, choose, back, with `m` and Space on two more.
 No microphone, or just checking the commands? `scripts/rynx-glasses --text` starts rynx alone,
 and in a second terminal `python3 glasses/voice.py --text` takes what you'd say, typed.
 
+## Cooking a recipe
+
+Most recipe sites describe their recipe for search engines (schema.org data), whatever the page
+around it looks like. rynx reads that, so on such a page the status line says **This page has a
+recipe**, and saying **"recipe"** (or `c`) shows it a card at a time, in place of the page: first
+what it makes, its times and its ingredients, then one card for each step, with the step's
+picture where the site gives one. Say **"next step"** and **"previous step"** (or just "next" and
+"back a step"), **"step four"**, or **"ingredients"**; while a recipe is shown, a number alone goes
+to that step. **"close recipe"** (or "back", or Esc) returns to the page, and any other command
+closes it first.
+
+The four buttons work it too: next and previous link step, open steps on, and back closes. Keys:
+`n` / `p`, `j` / `k` to scroll a long card, `i` for the ingredients, a digit for that step.
+
+**"recipe demo"** opens a recipe built into rynx (`about:recipe`, fluffy pancakes, with a line
+drawing for each step), which works without a network: the quickest way to show it off.
+
 ## What to say
 
 | Say | Does |
@@ -89,13 +106,18 @@ and in a second terminal `python3 glasses/voice.py --text` takes what you'd say,
 | read, stop | Read the page aloud from the top of the screen; stop reading |
 | where am i | Say the page's title and the status line |
 | cancel | As Esc |
+| recipe, show recipe | The page's recipe, a step at a time |
+| next step, previous step, back a step, step *N*, *N* (in a recipe), ingredients | Move through the recipe |
+| close recipe | Back to the page |
+| recipe demo | The built-in demo recipe |
 | reader mode, bookmarks, bookmark this, history, load images, show keys | As their keys |
 | quit browser | Quit rynx |
 | help | A short reminder, spoken |
 
 Commands said one after another without a pause ("links follow three") are taken in turn. A
-number on its own only follows a link while the links are numbered, or chooses from the menu
-while it's open, so a stray word heard as "two" can't do either. While rynx's answer is being read aloud, only "stop" is listened for,
+number on its own only follows a link while the links are numbered, chooses from the menu while
+it's open, or goes to that step of a recipe being shown, so a stray word heard as "two" can't do
+any of them. While rynx's answer is being read aloud, only "stop" is listened for,
 since the microphone hears the voice too.
 
 ## Glasses mode
@@ -168,6 +190,7 @@ macOS, `~/.config/rynx-browser` on Linux), in a folder only you can open, or whe
 | `talk on`, `talk off` | Push-to-talk on (as Space does), or off quietly (once a command is heard); `status` says `listening` |
 | `begin open`, `begin find`, `begin fill` | Start typing an address or search, words to find, or into the page's text field (emptied); then `type`, and `key Enter` or `key Esc` |
 | `erase 5` | Take back the last 5 characters typed |
+| `recipe`, `recipe next`, `recipe previous`, `recipe ingredients`, `recipe step 3`, `recipe close` | The page's recipe a step at a time; the answer has the `step` shown (0 is the ingredients), the `steps`, and the card's `text`, and `status` says mode `Recipe` |
 
 ```sh
 echo "open wikipedia.org" | nc -U ~/Library/Application\ Support/rynx-browser/control/rynx.sock

@@ -127,6 +127,15 @@ impl Menu {
         Menu { kind, title, items, selected: 0, typed: String::new() }
     }
 
+    /// The page has a recipe: showing it comes first. (Previous link makes room, so every item
+    /// can still be chosen with one digit.)
+    pub fn add_recipe(&mut self) {
+        self.items.insert(0, run("Recipe, step by step", "recipe"));
+        if self.items.len() > 9 {
+            self.items.retain(|item| !matches!(item.action, MenuAction::Run("previous_link")));
+        }
+    }
+
     pub fn step(&mut self, forward: bool) {
         let n = self.items.len();
         self.selected = if forward { (self.selected + 1) % n } else { (self.selected + n - 1) % n };
@@ -165,7 +174,10 @@ impl App {
     /// Show a menu (m, for the main one)
     pub fn show_menu(&mut self, kind: MenuKind, rows: usize) {
         let link = self.selected_on_screen(rows);
-        let menu = Menu::new(kind, link.as_ref(), self.talk_enabled);
+        let mut menu = Menu::new(kind, link.as_ref(), self.talk_enabled);
+        if kind == MenuKind::Main && self.tabs[self.active_tab_index].recipe.is_some() {
+            menu.add_recipe();
+        }
         let tab = self.current_tab();
         tab.hints = None;
         tab.status_message = format!("{}: its number, or step to it and choose (Esc closes)", menu.title);

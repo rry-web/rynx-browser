@@ -132,6 +132,12 @@ fn handle_key(
         return Ok(false);
     }
 
+    // The recipe view covers the page: its own keys move between its cards
+    if app.recipe_open() {
+        handle_recipe_key(app, key, translate);
+        return Ok(false);
+    }
+
     // Link hints take every key until a link is chosen: digits choose, anything else cancels
     if app.current_tab().hints.is_some() {
         return handle_hint_key(app, key, terminal_width, terminal_height);
@@ -169,6 +175,42 @@ fn is_talk_key(app: &App, key: KeyEvent, translate: bool) -> bool {
         InputMode::Editing | InputMode::Search | InputMode::FormEdit
     );
     !(typing && key.code == KeyCode::Char(' ') && !key.modifiers.contains(KeyModifiers::CONTROL))
+}
+
+/// A key typed in the recipe view. The keys bound to the next and previous link, open and back
+/// work too, so a remote's four buttons (or the glasses') step through a recipe.
+fn handle_recipe_key(app: &mut App, key: KeyEvent, translate: bool) {
+    let action = if translate { app.keymap.translate(key) } else { Some(key) };
+    match (key.code, action.map(|a| a.code)) {
+        (KeyCode::Char('n' | ']' | 'l') | KeyCode::Right | KeyCode::PageDown, _) => {
+            app.recipe_step(1);
+        }
+        (KeyCode::Char('p' | '[' | 'h' | 'N') | KeyCode::Left | KeyCode::PageUp, _) => {
+            app.recipe_step(-1);
+        }
+        (KeyCode::Char('j') | KeyCode::Down, _) => app.recipe_scroll(2),
+        (KeyCode::Char('k') | KeyCode::Up, _) => app.recipe_scroll(-2),
+        (KeyCode::Char('i' | 'g' | '0') | KeyCode::Home, _) => {
+            app.recipe_go(0);
+        }
+        (KeyCode::Char('G') | KeyCode::End, _) => {
+            let last = app.recipe_view.as_ref().map_or(0, |v| v.cards() - 1);
+            app.recipe_go(last);
+        }
+        (KeyCode::Char(c @ '1'..='9'), _) => {
+            app.recipe_go(c as usize - '0' as usize);
+        }
+        (KeyCode::Esc | KeyCode::Char('q'), _) | (_, Some(KeyCode::Backspace | KeyCode::Char('c'))) => {
+            app.close_recipe()
+        }
+        (_, Some(KeyCode::Tab | KeyCode::Enter)) => {
+            app.recipe_step(1);
+        }
+        (_, Some(KeyCode::BackTab)) => {
+            app.recipe_step(-1);
+        }
+        _ => app.current_tab().status_message = String::from("Recipe: n next, p previous, i ingredients, Esc closes"),
+    }
 }
 
 /// A key typed while the links on screen are numbered
@@ -580,6 +622,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent, terminal_width: u16, termina
         KeyCode::Char('I') => app.load_images(app.active_tab_index, true),
         KeyCode::Char('U') => app.follow_link(crate::update::UPDATE_PAGE.to_string()),
         KeyCode::Char('i') => app.view_image(viewport_height(terminal_height)),
+        KeyCode::Char('c') => app.toggle_recipe(),
         KeyCode::Char('+') => app.zoom_images(1),
         KeyCode::Char('-') => app.zoom_images(-1),
         KeyCode::Char('Z') => app.open_snapshots(),

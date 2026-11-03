@@ -80,6 +80,9 @@ in a field, **Backspace** goes back, and **`q`** quits. **`?`** shows every key,
   for monochrome AR glasses or a laptop: press Space, say "links", then "three". Releases have
   a glasses package for macOS and Linux that starts this way. Other programs can drive rynx
   through its control socket by naming actions. See [glasses/](glasses/README.md)
+- Recipe mode (`c`): on a recipe site, the recipe a step at a time, with each step's picture,
+  read from the data sites publish for search engines; by voice in glasses mode ("next step").
+  `about:recipe` is a demo built in
 - Changeable keys (`keys.conf`), settings in the browser (`S`) or in `settings.conf`
 - Signed updates, checked daily and installed when you agree (`U`)
 

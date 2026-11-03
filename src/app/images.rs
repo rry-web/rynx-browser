@@ -151,7 +151,7 @@ fn image_bytes(image: &DynamicImage) -> usize {
 /// in a larger box, ratatui-image pads it with transparent black, which shows as a black bar
 /// where the terminal can't draw transparency; the page's boxes keep an image's shape to within
 /// half a cell, so the stretch doesn't show.
-fn fill_cells(image: &DynamicImage, cells: (u16, u16), font: ratatui_image::FontSize) -> DynamicImage {
+pub(super) fn fill_cells(image: &DynamicImage, cells: (u16, u16), font: ratatui_image::FontSize) -> DynamicImage {
     let width = (cells.0 as u32 * font.width as u32).max(1);
     let height = (cells.1 as u32 * font.height as u32).max(1);
     if (image.width(), image.height()) == (width, height) {
@@ -160,9 +160,33 @@ fn fill_cells(image: &DynamicImage, cells: (u16, u16), font: ratatui_image::Font
     image.resize_exact(width, height, image::imageops::FilterType::Triangle)
 }
 
+/// Where an image is: decoded and in memory, loading, failed (and why), or none of those
+pub(super) enum ImageStatus<'a> {
+    Decoded(&'a Arc<DynamicImage>),
+    Loading,
+    Failed(&'a str),
+    /// Decoded once and dropped from memory (to be decoded again), or never asked for
+    Dropped,
+    NotLoaded,
+}
+
 impl Images {
     pub fn is_decoded(&self, url: &str) -> bool {
         self.decoded.contains_key(url)
+    }
+
+    pub(super) fn status(&self, url: &str) -> ImageStatus<'_> {
+        if let Some(image) = self.decoded.get(url) {
+            ImageStatus::Decoded(image)
+        } else if self.loading.contains(url) {
+            ImageStatus::Loading
+        } else if let Some(reason) = self.failed.get(url) {
+            ImageStatus::Failed(reason)
+        } else if self.dimensions.contains_key(url) {
+            ImageStatus::Dropped
+        } else {
+            ImageStatus::NotLoaded
+        }
     }
 
     /// Images decoded and held in memory, and the bytes they take
@@ -278,6 +302,9 @@ async fn fetch(
     safari: bool,
     cache: &crate::cache::Cache,
 ) -> Result<Arc<Vec<u8>>, String> {
+    if let Some(data) = super::recipe::demo_picture(url) {
+        return Ok(Arc::new(data.to_vec()));
+    }
     let private = crate::cache::is_i2p(url, i2p_mode);
     if let Some(data) = cache.get_bytes(url, private) {
         return Ok(data);
@@ -340,7 +367,9 @@ impl App {
         tab.page_images
             .iter()
             .map(|image| (crate::network::resolve_url(tab.link_base(), &image.src), image.clone()))
-            .filter(|(url, _)| url.starts_with("https://") || url.starts_with("http://"))
+            .filter(|(url, _)| {
+                url.starts_with("https://") || url.starts_with("http://") || super::recipe::demo_picture(url).is_some()
+            })
             .collect()
     }
 
@@ -386,7 +415,7 @@ impl App {
         }
     }
 
-    fn fetch_image(&mut self, index: usize, url: String) {
+    pub(super) fn fetch_image(&mut self, index: usize, url: String) {
         self.images.loading.insert(url.clone());
         self.images.failed.remove(&url);
         let tab_id = self.tabs[index].id;
@@ -551,7 +580,10 @@ impl App {
 
     /// Whether the active page may load an image: only from the web, and never a public page's
     /// from the local network
-    fn may_load(&self, url: &str) -> Result<(), &'static str> {
+    pub(super) fn may_load(&self, url: &str) -> Result<(), &'static str> {
+        if super::recipe::demo_picture(url).is_some() {
+            return Ok(());
+        }
         if !url.starts_with("http") {
             return Err("This image can't be loaded");
         }

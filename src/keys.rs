@@ -83,6 +83,7 @@ const ACTIONS: &[Action] = &[
     Action { name: "snapshots", about: "Snapshots of the page", defaults: &["Z"] },
     Action { name: "load_images", about: "Load the page's images", defaults: &["I"] },
     Action { name: "view_image", about: "View an image full screen", defaults: &["i"] },
+    Action { name: "recipe", about: "The page's recipe a step at a time", defaults: &["c"] },
     Action { name: "zoom_in", about: "Draw the page's images larger", defaults: &["+", "="] },
     Action { name: "zoom_out", about: "Draw the page's images smaller", defaults: &["-"] },
     Action { name: "updates", about: "Updates", defaults: &["U"] },

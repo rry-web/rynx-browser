@@ -41,6 +41,8 @@ pub struct BrowserTab {
     /// The displayed page's meta refresh, and how many in a row were followed to reach it
     pub refresh: Option<crate::renderer::Refresh>,
     pub refreshes_followed: u8,
+    /// The recipe the displayed page describes, if any (R shows it a step at a time)
+    pub recipe: Option<Arc<crate::renderer::Recipe>>,
     /// Address bar contents when Edit mode was entered, for history and cancelling
     pub url_before_edit: Option<String>,
     /// Line index of each in-page link target on the displayed page
@@ -290,6 +292,7 @@ impl BrowserTab {
         self.page_images = page.images;
         self.image_blocks = page.image_blocks;
         self.refresh = page.refresh;
+        self.recipe = page.recipe;
         // A re-layout of the same page (e.g. a resize) keeps what was typed
         if self.control_values.len() != page.controls.len() {
             self.control_values = page.controls.iter().map(FormControl::initial_value).collect();
@@ -365,6 +368,7 @@ impl BrowserTab {
             follow_refresh_after_render: false,
             refresh: None,
             refreshes_followed: 0,
+            recipe: None,
             url_before_edit: None,
             anchors: renderer.anchors,
             page_url: None,

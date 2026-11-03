@@ -3,6 +3,18 @@
 ## [Unreleased]
 
 ### Added
+- Recipe mode: on a recipe site, `c` shows the recipe a card at a time in place of the page: what
+  it makes, its times and ingredients, then one card for each step with the step's picture where
+  the site gives one. `n` / `p` step, `i` returns to the ingredients, a digit goes to that step,
+  Esc closes; the keys for the next and previous link, open and back work it too, so four buttons
+  do. It reads the recipe sites describe for search engines (schema.org data in the page, never
+  run), so it works however cluttered the page is, and a page that has one says so when it
+  arrives. Also in the menu (`m`).
+- Cooking by voice in glasses mode: "recipe", "next step", "previous step", "step four",
+  "ingredients", "close recipe" (a number alone goes to that step while a recipe is shown), and
+  the control socket's `recipe` command, whose answer has the card's text.
+- A demo recipe built in, `about:recipe` (say "recipe demo"): fluffy pancakes with a line drawing
+  for each step, working without a network.
 - SVG images, drawn to pixels with resvg (pure Rust): Wikipedia's maths formulas, logos and
   diagrams. Text in them uses the system's fonts (read the first time an SVG needs them); nothing
   an SVG refers to is loaded, neither files on this computer nor addresses, and pictures embedded

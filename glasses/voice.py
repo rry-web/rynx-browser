@@ -104,6 +104,18 @@ PHRASES = {
     "next match": "next_match",
     "previous match": "previous_match",
     "load images": "load_images",
+    # Recipes: the page's recipe a step at a time ("next" and "back" work in it too)
+    "recipe": "recipe",
+    "show recipe": "recipe",
+    "cooking mode": "recipe",
+    "recipe demo": "open about:recipe",
+    "next step": "recipe next",
+    "previous step": "recipe previous",
+    "back a step": "recipe previous",
+    "ingredients": "recipe ingredients",
+    "show ingredients": "recipe ingredients",
+    "step N": "recipe step N",
+    "close recipe": "recipe close",
     "switch network": "i2p",
     "show keys": "help",
     "quit browser": "quit",
@@ -360,11 +372,16 @@ class Controller:
         meaning = understand(text)
         if self.speaker.speaking() and meaning != "@stop":
             return True
-        # A number on its own follows a link while the links are numbered (after "links"), or
-        # chooses from the menu while it's open; otherwise a stray "to", heard as two, would act
+        # A number on its own follows a link while the links are numbered (after "links"), chooses
+        # from the menu while it's open, or goes to that step of a recipe being shown; otherwise
+        # a stray "to", heard as two, would act
         if meaning and meaning.startswith("follow") and number(text.replace("[unk]", "").split()) is not None:
             mode = self.rynx.send("status").get("mode")
-            meaning = {"Hints": meaning, "Menu": meaning.replace("follow", "choose")}.get(mode)
+            meaning = {
+                "Hints": meaning,
+                "Menu": meaning.replace("follow", "choose"),
+                "Recipe": meaning.replace("follow", "recipe step"),
+            }.get(mode)
         if meaning is None or meaning == "@again":
             self.log(f"not a command: {text}")
             self.rynx.send(f"heard {text} (not a command; say help)")
@@ -386,7 +403,10 @@ class Controller:
             self.speaker.say(f"{answer.get('title') or 'No title'}. {answer.get('message', '')}")
             return True
         if meaning == "@help":
-            self.speaker.say("Say links, then a number. Or menu, down, up, back, search, go to, fill, find, read, next tab.")
+            self.speaker.say(
+                "Say links, then a number. Or menu, down, up, back, search, go to, fill, find, read, next tab. "
+                "On a recipe: recipe, next step, previous step, ingredients, step three."
+            )
             return True
         return self.run(meaning)
 

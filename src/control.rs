@@ -26,6 +26,9 @@
 //! - `erase 5`: the last 5 characters typed taken back
 //! - `talk on`, `talk off`: push-to-talk, as the talk key (Space) turns it on; `status` says
 //!   `listening`
+//! - `recipe`: the page's recipe a step at a time (c); then `recipe next`, `recipe previous`,
+//!   `recipe ingredients`, `recipe step 3`, `recipe close`. The answer has the `step` shown (0
+//!   for the ingredients), the `steps`, and the card's `text`; `status` says mode `Recipe`
 
 use crate::app::App;
 use crate::event_handler::{follow_hint, handle_action, handle_key_event, run_menu_item};
@@ -162,6 +165,7 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
         "status" => {
             let mode = format!("{:?}", app.current_tab().input_mode);
             let (tabs, index, listening) = (app.tabs.len(), app.active_tab_index, app.listening);
+            let recipe = app.recipe_open();
             let tab = app.current_tab();
             Ok((
                 json!({
@@ -169,7 +173,9 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
                     "message": tab.status_message,
                     "title": tab.page_title,
                     "address": tab.page_url.clone().unwrap_or_else(|| tab.url_input.clone()),
-                    "mode": if tab.hints.is_some() {
+                    "mode": if recipe {
+                        "Recipe".to_string()
+                    } else if tab.hints.is_some() {
                         "Hints".to_string()
                     } else if tab.menu.is_some() {
                         "Menu".to_string()
@@ -260,6 +266,37 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
             }
             done(app, false)
         }
+        "recipe" => {
+            let (what, number) = rest.split_once(' ').map(|(w, n)| (w, n.trim())).unwrap_or((rest, ""));
+            if what == "close" {
+                app.close_recipe();
+                return done(app, false);
+            }
+            if !app.recipe_open() {
+                back_to_browsing(app, width, height).map_err(failed)?;
+                app.open_recipe();
+                if !app.recipe_open() {
+                    return Err(app.current_tab().status_message.clone());
+                }
+            }
+            let moved = match what {
+                "" | "open" => true,
+                "next" => app.recipe_step(1),
+                "previous" => app.recipe_step(-1),
+                "ingredients" => app.recipe_go(0),
+                "step" => app.recipe_go(number.parse::<usize>().map_err(|_| "recipe step needs a number".to_string())?),
+                _ => return Err("recipe, or recipe next, previous, ingredients, step N, close".into()),
+            };
+            if !moved {
+                return Err(app.current_tab().status_message.clone());
+            }
+            let view = app.recipe_view.as_ref().expect("open");
+            let (step, steps, text) = (view.card, view.recipe.steps.len(), view.describe());
+            Ok((
+                json!({ "ok": true, "message": app.current_tab().status_message, "step": step, "steps": steps, "text": text }),
+                false,
+            ))
+        }
         "erase" => {
             let count = rest.parse::<usize>().map_err(|_| "erase needs a number".to_string())?;
             let tab = app.current_tab();
@@ -311,8 +348,11 @@ fn command(app: &mut App, line: &str, width: u16, height: u16) -> Result<(Value,
         }
         action => {
             let key = crate::keys::action_key(action).ok_or_else(|| format!("unknown command \"{action}\""))?;
-            // With the menu open, the actions that step through links and choose work it
-            if app.current_tab().menu.is_none() || !MENU_ACTIONS.contains(&action) {
+            // With the menu open, the actions that step through links and choose work it; with a
+            // recipe open, those that step and scroll work that
+            let keeps = (app.current_tab().menu.is_some() && MENU_ACTIONS.contains(&action))
+                || (app.recipe_open() && RECIPE_ACTIONS.contains(&action));
+            if !keeps {
                 back_to_browsing(app, width, height).map_err(failed)?;
             }
             let quit = handle_action(app, key, width, height).map_err(failed)?;
@@ -350,9 +390,30 @@ fn text_field(app: &mut App, rows: usize) -> Option<usize> {
 const MENU_ACTIONS: &[&str] =
     &["next_link", "previous_link", "open", "back", "menu", "scroll_down", "scroll_up", "cursor_down", "cursor_up"];
 
-/// Leave typing, find, copy mode, the menu or the numbered links, as Esc would, so an action does what it
-/// does while browsing. Boxes asking a question (downloads, tools) stay until answered.
+/// Actions the open recipe takes as its own (stepping, scrolling, closing), rather than closing first
+const RECIPE_ACTIONS: &[&str] = &[
+    "next_link",
+    "previous_link",
+    "open",
+    "back",
+    "scroll_down",
+    "scroll_up",
+    "cursor_down",
+    "cursor_up",
+    "page_down",
+    "page_up",
+    "top",
+    "bottom",
+    "recipe",
+];
+
+/// Leave typing, find, copy mode, the menu, the numbered links or the recipe, as Esc would, so an
+/// action does what it does while browsing. Boxes asking a question (downloads, tools) stay until
+/// answered.
 fn back_to_browsing(app: &mut App, width: u16, height: u16) -> std::io::Result<()> {
+    if app.recipe_open() {
+        app.close_recipe();
+    }
     let tab = app.current_tab();
     if tab.input_mode != InputMode::Normal || tab.hints.is_some() || tab.menu.is_some() {
         handle_key_event(app, KeyEvent::from(KeyCode::Esc), width, height)?;

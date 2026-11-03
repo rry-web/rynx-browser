@@ -18,10 +18,12 @@ mod images;
 mod menus;
 mod plain;
 mod reader;
+mod recipe;
 mod redirects;
 mod tables;
 
 use menus::{looks_like_menu, menu_items};
+pub use recipe::{Recipe, RecipeStep};
 pub use redirects::Refresh;
 
 /// Make untrusted text safe to draw. Control characters are dropped because a terminal acts on
@@ -94,6 +96,8 @@ pub struct RenderedPage {
     pub image_blocks: Vec<ImageBlock>,
     /// A meta refresh sending the page on to another address
     pub refresh: Option<Refresh>,
+    /// The recipe the page describes (as schema.org data), to show a step at a time
+    pub recipe: Option<Arc<Recipe>>,
 }
 
 /// An image on the page: its address as written, its description, and the width and height the
@@ -158,16 +162,19 @@ pub fn render_page(job: &RenderJob) -> RenderedPage {
             images: Vec::new(),
             image_blocks: Vec::new(),
             refresh: None,
+            recipe: None,
         };
     }
     let mut renderer = DomRenderer::new(job.width as usize);
     renderer.image_sizes = Arc::clone(&job.image_sizes);
     let mut reader_found = None;
     let mut refresh = None;
+    let mut recipe = None;
     let title = match job.kind {
         PageKind::Html => {
             let document = Html::parse_document(&job.source);
             refresh = redirects::meta_refresh(&document);
+            recipe = recipe::find_recipe(&document).map(Arc::new);
             if job.reader {
                 reader_found = Some(renderer.render_reader(&document));
             } else {
@@ -202,6 +209,7 @@ pub fn render_page(job: &RenderJob) -> RenderedPage {
         images: renderer.images,
         image_blocks: renderer.image_blocks,
         refresh,
+        recipe,
     }
 }
 

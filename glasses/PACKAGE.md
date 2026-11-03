@@ -53,6 +53,8 @@ shows **TALK** while it's listening.
 | down, up, back, forward | Scroll, and history |
 | next, previous, select | Step through links, and open the one selected |
 | read, stop | Read the page aloud, and stop |
+| recipe demo | A built-in recipe to try cooking with |
+| recipe, next step, previous step, step *N*, ingredients, close recipe | On a recipe site: the recipe a step at a time, with each step's picture |
 | help | A short spoken reminder |
 
 The keyboard does everything too. The few keys that reach everything:
@@ -65,6 +67,7 @@ The keyboard does everything too. The few keys that reach everything:
 | Up, Down, `PageUp`, `PageDown` | Scroll |
 | `Backspace` | Back |
 | `e` | Type an address or search |
+| `c` | On a recipe site, the recipe a step at a time (`n` / `p` step, Esc closes) |
 | `?` | All the keys |
 | `q` | Quit |
 

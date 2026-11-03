@@ -123,6 +123,9 @@ feels good, and what's missing, before buying hardware.
 The compact layout is done (glasses mode: a title row and a status row), drawn in a screen of the
 display's size set in `glasses.conf`, so layouts for other displays can be tried on a laptop. Then:
 the voice controller on a Raspberry Pi, and checking every page and box at 80×30 and less.
+Recipe mode is the first demo made for it (`about:recipe`, "recipe demo"): a recipe a step at a
+time with pictures, by voice or four buttons. Next for it: reading each step aloud as it's shown
+(hands busy), and timers from the steps ("cook for 2 minutes").
 
 ## Process notes
 

@@ -328,12 +328,15 @@ fn render_menu(f: &mut Frame, tab: &crate::app::BrowserTab, area: Rect) {
     f.render_widget(Paragraph::new(lines).block(block), popup);
 }
 
-/// The compact layout's last row: the status line, then where the selected link goes
-fn render_compact_footer(f: &mut Frame, tab: &crate::app::BrowserTab, area: Rect) {
+/// The compact layout's last row: the status line, then where the selected link goes (unless
+/// something covers the page, as a recipe does)
+fn render_compact_footer(f: &mut Frame, tab: &crate::app::BrowserTab, area: Rect, page_covered: bool) {
     let status = sanitize_for_terminal(&tab.status_message).into_owned();
     let mut spans =
         vec![Span::styled(fit(&status, area.width as usize), Style::default().add_modifier(Modifier::BOLD))];
-    spans.extend(link_preview(tab).spans);
+    if !page_covered {
+        spans.extend(link_preview(tab).spans);
+    }
     f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
@@ -827,11 +830,15 @@ fn render_browser_content(f: &mut Frame, app: &App, area: Rect) {
         inner
     };
     f.render_widget(Paragraph::new(viewport_content), inner);
-    render_inline_images(f, app, inner, start_index, end_index);
+    let recipe_open = app.recipe_view.as_ref().is_some_and(|v| v.is_on_tab(active_tab.id));
+    if !recipe_open {
+        render_inline_images(f, app, inner, start_index, end_index);
+    }
     render_menu(f, active_tab, inner);
     render_download_overlay(f, app, area);
     render_download_prompt(f, app);
     render_tool_prompt(f, app);
+    app.draw_recipe(f, area);
     render_image_viewer(f, app, area);
 }
 
@@ -902,7 +909,7 @@ pub fn ui(f: &mut Frame, app: &App) {
         }
         render_browser_content(f, app, chunks[1]);
         if layout.status_row {
-            render_compact_footer(f, &app.tabs[app.active_tab_index], chunks[2]);
+            render_compact_footer(f, &app.tabs[app.active_tab_index], chunks[2], app.recipe_open());
         }
         draw_screen_edge(f, screen);
         if !layout.colour || app.settings.monochrome() {
